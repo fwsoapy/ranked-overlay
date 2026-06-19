@@ -32,7 +32,7 @@ Each design comes in any color: purple, red, blue, green, orange, or whatever yo
 
 ## Requirements
 
-- Python 3.8 or later
+- Python 3 or later
 - Windows (the `.bat` files are Windows only; Mac/Linux users can run `python server.py` directly)
 - OBS Studio with a Browser Source
 - Your Epic Account ID (find it at [olitracker.com](https://olitracker.com) by searching your username)
