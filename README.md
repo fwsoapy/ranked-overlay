@@ -35,7 +35,7 @@ Each design comes in any color: purple, red, blue, green, orange, or whatever yo
 - Python 3 or later
 - Windows (the `.bat` files are Windows only; Mac/Linux users can run `python server.py` directly)
 - OBS Studio with a Browser Source
-- Your Epic Account ID (find it at [olitracker.com](https://olitracker.com) by searching your username)
+- Your Epic Account ID
 
 ---
 
@@ -47,7 +47,7 @@ Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on
 
 ### 2. Find your Epic Account ID
 
-Double-click `GET_ACCOUNT_ID.bat` from the repo. It will print your account ID in the console window. Copy it.
+Double-click `accound-id.bat` from the repo. It will print your account ID in the console window. Copy it.
 
 ### 3. Add your account ID to the server file
 
@@ -62,9 +62,9 @@ Replace both values with your username and account ID. Save the file.
 
 ### 4. Start the overlay
 
-Double-click `START_OVERLAY.bat`. A window will briefly appear confirming it started, then close itself. The overlay is now running in the background.
+Double-click `start.bat`. A window will briefly appear confirming it started, then close itself. The overlay is now running in the background.
 
-To stop it, double-click `STOP_OVERLAY.bat`.
+To stop it, double-click `stop.bat`.
 
 ### 5. Add it to OBS
 
@@ -90,13 +90,13 @@ The overlay shows mode buttons (BR, Reload, Boxfights) below the widget. Click a
 OliTracker may be slow to respond. Wait 30 seconds, and if it still does not load, check that your Account ID in `server.py` is correct.
 
 **Port already in use error**
-Something else is using port 8888. Run `STOP_OVERLAY.bat` first, then start it again. If the issue persists, change `PORT = 8888` to another number like `8889` in `server.py` and update the OBS URL to match.
+Something else is using port 8888. Run `stop.bat` first, then start it again. If the issue persists, change `PORT = 8888` to another number like `8889` in `server.py` and update the OBS URL to match.
 
 **Stats look wrong after switching modes**
 Give it one poll cycle (about 10 seconds) after clicking a mode button. The server fetches fresh data on each cycle.
 
 **OBS shows a black box instead of the overlay**
-Make sure `START_OVERLAY.bat` has been run first. The browser source needs the local server to be running. Also check that the URL in OBS is exactly `http://localhost:8888/overlay`.
+Make sure `start.bat` has been run first. The browser source needs the local server to be running. Also check that the URL in OBS is exactly `http://localhost:8888/overlay`.
 
 ---
 
