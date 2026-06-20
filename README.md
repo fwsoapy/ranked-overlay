@@ -12,7 +12,7 @@ A live ranked overlay for Fortnite streamers. Pulls real-time ELO, rank, and sea
 - Non-Unreal ranks: shows promotion progress % and percent gained today (`53% TO GOLD III`)
 - Mode switcher buttons for BR, Reload, and Boxfights, each with their own independent stats
 - Season stats (K/D, Win%, Kills, Wins) accurate per game mode
-- 5 overlay designs to choose from, any accent color you want
+- 7 overlay designs to choose from, any accent color you want
 
 ---
 
@@ -20,12 +20,13 @@ A live ranked overlay for Fortnite streamers. Pulls real-time ELO, rank, and sea
 
 | Name | Description |
 |------|-------------|
-| **Minimal** | Clean and compact. Everything you need, nothing extra. |
-| **Classic** | Simple dark card with a bold colored left border. |
-| **Sharp** | Stacked sections with a strong accent color. Feels structured and aggressive. |
-| **Wide** | Spread out horizontally with a thick left bar. Great for wider stream layouts. |
+| **Minimal** | Clean single-row card with rank and ELO side-by-side and a bold colored left border. |
+| **Classic** | A timeless dark card with a thin top accent line and subtle dividers between sections. |
+| **Sharp** | Stacked sections with a strong accent color and clipped corners. Feels structured and aggressive. |
+| **Wide** | Spread out horizontally with a glowing accent bar on the left. Great for wider stream layouts. |
 | **Slash** | A diagonal cut splits the rank and ELO into two panels. Stands out on any stream. |
-| **Glow** | Animated rainbow rank text and a glowing ELO value. High energy. |
+| **Rainbow** | Animated rainbow rank text and a shimmering ELO value. High energy. |
+| **Modern** | Sleek card with a soft radial glow accent and a bold colored left border. |
 
 Each design works in any color. Open `server.py`, find the hex color value in the CSS near the top of `OVERLAY_HTML`, and swap it for whatever you want. Use [coolors.co](https://coolors.co) to pick one.
 
