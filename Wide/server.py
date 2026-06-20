@@ -572,6 +572,11 @@ def snapshot(window="session", mode_key=None):
     elif is_unreal and nxt:
         s["next_gap"] = None
         s["next_pos"] = str(nxt)
+    elif not is_unreal and progression is not None:
+        div = _num(mode.get("division")) if mode is not None else None
+        next_div_name = division_name(div + 1) if (div is not None and (div + 1) in DIVISION_NAMES) else None
+        s["next_gap"] = f"{100 - progression}%"
+        s["next_pos"] = next_div_name or "NEXT RANK"
     else:
         s["next_gap"] = None
         s["next_pos"] = None
@@ -945,7 +950,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
                 <div class="mid-row">
                     <span class="next-value hidden" id="nextRow">
-                        NEXT <span class="hl" id="nextGap">-</span> ELO → <span class="hl" id="nextPos">#-</span>
+                        <span id="nextLabel">NEXT</span> <span class="hl" id="nextGap">-</span><span id="nextUnit"> ELO</span> <span id="nextArrow">&rarr;</span> <span class="hl" id="nextPos">#-</span>
                     </span>
                     <div class="stats-row">
                         <div class="stat-chip">
@@ -1036,8 +1041,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
                 var hasGap = d.next_gap && d.next_pos;
                 if (hasGap) {
-                    $('#nextGap').textContent = d.next_gap;
-                    $('#nextPos').textContent = '#' + d.next_pos;
+                    $('#nextLabel').textContent = 'NEXT';
+                    $('#nextGap').textContent   = d.next_gap;
+                    $('#nextUnit').textContent  = ' ELO';
+                    $('#nextArrow').textContent = '→';
+                    $('#nextPos').textContent   = '#' + d.next_pos;
                     nextRow.classList.remove('hidden');
                 } else {
                     nextRow.classList.add('hidden');
@@ -1052,7 +1060,17 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 sess2.textContent = d.session_text || '+0% TODAY';
                 sess2.className   = 'session-pill session-' + (d.session_sign || 'zero');
                 progGroup.classList.add('visible');
-                nextRow.classList.add('hidden');
+
+                if (d.next_gap && d.next_pos) {
+                    $('#nextLabel').textContent = '';
+                    $('#nextGap').textContent   = d.next_gap;
+                    $('#nextUnit').textContent  = '';
+                    $('#nextArrow').textContent = 'TO';
+                    $('#nextPos').textContent   = d.next_pos;
+                    nextRow.classList.remove('hidden');
+                } else {
+                    nextRow.classList.add('hidden');
+                }
             }
 
             $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
