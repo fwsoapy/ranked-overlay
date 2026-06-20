@@ -547,8 +547,8 @@ def refresh_once():
         })
 
     sess   = compute_windowed_stats(data, "session", mode_key)
-    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "—"
-    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "—"
+    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "-"
+    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "-"
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     elo_str = f"{elo} ELO" if elo is not None else label
     print(f"[overlay] {ts}  {elo_str}  |  session {session_delta:+d}")
@@ -606,7 +606,7 @@ def snapshot(window="session", mode_key=None):
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
     s["prog_delta"]      = prog_delta if not is_unreal else None
-    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "—")
+    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
     s["elo_text"]        = f"{elo} ELO" if (is_unreal and elo is not None) else None
 
     if is_unreal and nxt and gap is not None:
@@ -621,7 +621,7 @@ def snapshot(window="session", mode_key=None):
 
     if is_unreal:
         if window == "season":
-            s["session_text"] = f"+{elo} ALL SEASON" if elo is not None else "— ALL SEASON"
+            s["session_text"] = f"+{elo} ALL SEASON" if elo is not None else "- ALL SEASON"
             s["session_sign"] = "pos" if elo is not None else "zero"
         elif window in ("12h", "24h"):
             wd = windowed_elo_delta(raw, window, elo, resolved_key or None)
@@ -899,12 +899,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             <!-- Rank -->
             <div class="rank-row">
-                <div class="rank-label unreal-rainbow" id="rankText">#— UNREAL</div>
+                <div class="rank-label unreal-rainbow" id="rankText">#- UNREAL</div>
             </div>
 
             <!-- ELO + session delta -->
             <div class="stat-row" id="rightSection">
-                <div class="elo-val" id="eloText">—— ELO</div>
+                <div class="elo-val" id="eloText">-- ELO</div>
                 <div class="sep"></div>
                 <span class="session-delta session-zero" id="sessionText">+0 TODAY</span>
             </div>
@@ -922,9 +922,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             <!-- next leaderboard position -->
             <div class="next-row" id="leftSubRow">
-                <span class="next-gap-val" id="nextGap">—</span>
+                <span class="next-gap-val" id="nextGap">-</span>
                 <span class="next-to" id="nextToLabel">TO</span>
-                <span class="next-hash" id="nextPos">#—</span>
+                <span class="next-hash" id="nextPos">#-</span>
                 <span class="ad-tag">Use Code YourCode #ad</span>
             </div>
         </div>
@@ -980,7 +980,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             var leftSubRow   = $('#leftSubRow');
 
             if (d.is_unreal) {
-                var eloStr = d.elo_text || '—— ELO';
+                var eloStr = d.elo_text || '-- ELO';
                 var eloEl  = $('#eloText');
                 eloEl.textContent = eloStr;
                 rightSection.style.display = '';
@@ -993,8 +993,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     posEl.textContent = '#' + d.next_pos;
                     leftSubRow.style.visibility = 'visible';
                 } else {
-                    gapEl.textContent = '—';
-                    posEl.textContent = '#—';
+                    gapEl.textContent = '-';
+                    posEl.textContent = '#-';
                     leftSubRow.style.visibility = 'hidden';
                 }
 
@@ -1015,9 +1015,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     $('#nextPos').textContent = '';
                     $('#nextToLabel').textContent = '';
                 } else {
-                    $('#nextGap').textContent     = '—';
+                    $('#nextGap').textContent     = '-';
                     $('#nextToLabel').textContent = 'TO';
-                    $('#nextPos').textContent     = '#—';
+                    $('#nextPos').textContent     = '#-';
                 }
                 leftSubRow.style.visibility = 'visible';
 
@@ -1096,9 +1096,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"Fortnite Ranked Overlay — port {PORT}")
+    print(f"Fortnite Ranked Overlay - port {PORT}")
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
-    print(f"Polling OliTracker every {POLL_SECONDS}s — Ctrl+C to stop\n")
+    print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
     threading.Thread(target=poll_loop, daemon=True).start()
 
