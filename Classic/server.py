@@ -13,11 +13,11 @@ EPIC_USERNAME    = "YourUsername"
 EPIC_ACCOUNT_ID  = "your-account-id-here"
 API_BASE         = "https://olitracker.com/api"
 PORT             = 8888
-POLL_SECONDS     = 15
-OVERLAY_POLL_MS  = 15000
+POLL_SECONDS     = 10
+OVERLAY_POLL_MS  = 10000
 
-RANKED_MODE_HINT  = ""
-RANKED_MODE_KEY   = ""
+RANKED_MODE_HINT   = ""
+RANKED_MODE_KEY    = ""
 ENABLE_NEXT_LOOKUP = True
 
 SESSION_START = int(time.time())
@@ -33,22 +33,25 @@ BROWSER_HEADERS = {
     "Referer":         "https://olitracker.com/",
 }
 
-_lock       = threading.Lock()
-_start_elos = {}
-_last_raw   = None
-_last_modes = []
+_lock              = threading.Lock()
+_start_elos        = {}
+_start_progressions = {}
+_last_raw          = None
+_last_modes        = []
 
 STATE = {
-    "ok":            False,
-    "username":      EPIC_USERNAME,
-    "rank_number":   None,
-    "rank_label":    None,
-    "elo":           None,
-    "next_position": None,
-    "elo_to_next":   None,
-    "session_delta": 0,
-    "updated_at":    None,
-    "error":         "starting up",
+    "ok":              False,
+    "username":        EPIC_USERNAME,
+    "rank_number":     None,
+    "rank_label":      None,
+    "elo":             None,
+    "is_unreal":       False,
+    "next_position":   None,
+    "elo_to_next":     None,
+    "session_delta":   0,
+    "updated_at":      None,
+    "error":           "starting up",
+    "active_mode_key": "",
     "modes_available": [],
 }
 
@@ -70,22 +73,16 @@ MODE_LABELS = {
     "ranked-squareclub":       "Boxfights",
 }
 
-def _mode_label(key):
-    if key in MODE_LABELS:
-        return MODE_LABELS[key]
-    lower = key.lower()
-    if "squareclub" in lower or "boxfight" in lower:
-        return "Boxfights"
-    if "blastberry" in lower or "reload" in lower:
-        return "Reload"
-    if "br-combined" in lower or "br_combined" in lower:
-        return "BR"
-    return key
-
-_WINDOW_SECS = {
-    "12h": 43200,
-    "24h": 86400,
+MODE_STAT_PATH = {
+    "ranked-br-combined":      ("ranked",),
+    "ranked_blastberry_build": ("reload",),
+    "ranked_squareclub":       None,
+    "ranked-squareclub":       None,
 }
+
+MODES_WITHOUT_SEASONAL_BLOCK = {"ranked_squareclub", "ranked-squareclub"}
+
+_WINDOW_SECS = {"12h": 43200, "24h": 86400}
 
 _EMPTY_STATS = {
     "wins": 0, "losses": 0, "kills": 0,
@@ -120,6 +117,19 @@ def division_name(div):
     if div is None:
         return None
     return DIVISION_NAMES.get(div, f"DIVISION {div}")
+
+
+def _mode_label(key):
+    if key in MODE_LABELS:
+        return MODE_LABELS[key]
+    lower = key.lower()
+    if "squareclub" in lower or "boxfight" in lower:
+        return "Boxfights"
+    if "blastberry" in lower or "reload" in lower:
+        return "Reload"
+    if "br-combined" in lower or "br_combined" in lower:
+        return "BR"
+    return key
 
 
 def _looks_like_ranked_mode(d):
@@ -177,23 +187,14 @@ def pick_best_mode(modes):
         _, obj = item
         elo    = _num(obj.get("elo"))
         placed = _num(obj.get("unreal_placement"))
-        return (
-            1 if elo    is not None else 0,
-            1 if placed is not None else 0,
-            elo or 0,
-        )
+        return (1 if elo is not None else 0, 1 if placed is not None else 0, elo or 0)
+
     return max(modes, key=rank_key)
 
 
 def extract_elo(mode_obj):
     v = _num(mode_obj.get("elo"))
     return v if v is not None else _num(mode_obj.get("promotion_progression"))
-
-
-def extract_progression(mode_obj):
-    if _num(mode_obj.get("unreal_placement")) is not None:
-        return None
-    return _num(mode_obj.get("promotion_progression"))
 
 
 def extract_label(mode_obj):
@@ -204,6 +205,12 @@ def extract_label(mode_obj):
 
 def extract_placement(mode_obj):
     return _num(mode_obj.get("unreal_placement"))
+
+
+def extract_progression(mode_obj):
+    if _num(mode_obj.get("unreal_placement")) is not None:
+        return None
+    return _num(mode_obj.get("promotion_progression"))
 
 
 def _detect_ranking_id(data, preferred_mode_key=None):
@@ -222,6 +229,72 @@ def _detect_ranking_id(data, preferred_mode_key=None):
     return max(tally, key=tally.get) if tally else None
 
 
+def _stat_block(data, timeframe, ranking_id):
+    path_key = MODE_STAT_PATH.get(ranking_id or "", ("ranked",))
+    if path_key is None:
+        return None
+    try:
+        block = data["stats"][timeframe]
+        for k in path_key:
+            block = block[k]
+        return block["both"]["overall"]
+    except (KeyError, TypeError):
+        try:
+            return data["stats"][timeframe]["ranked"]["both"]["overall"]
+        except (KeyError, TypeError):
+            return None
+
+
+def _stats_from_history(data, ranking_id):
+    total_wins = total_matches = total_kills = 0
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if rd.get("ranking_id") != ranking_id:
+                continue
+            total_wins    += int(grp.get("wins",    0) or 0)
+            total_matches += int(grp.get("matches", 0) or 0)
+            total_kills   += int(grp.get("kills",   0) or 0)
+    losses = total_matches - total_wins
+    kd = round(total_kills / losses, 2) if losses > 0 else None
+    wr = round(total_wins / total_matches * 100, 1) if total_matches > 0 else None
+    return {"wins": total_wins, "losses": losses, "kills": total_kills, "matches": total_matches, "kd": kd, "wr": wr}
+
+
+def _seasonal_ranked_stats(data, ranking_id=None):
+    if ranking_id in MODES_WITHOUT_SEASONAL_BLOCK:
+        return _stats_from_history(data, ranking_id)
+    try:
+        blk = _stat_block(data, "seasonal", ranking_id)
+        if blk is None:
+            return _stats_from_history(data, ranking_id) if ranking_id else dict(_EMPTY_STATS)
+        wins    = int(blk.get("wins",           0) or 0)
+        matches = int(blk.get("matches_played", 0) or 0)
+        kills   = int(blk.get("kills",          0) or 0)
+        losses  = matches - wins
+        kd = round(kills / losses, 2) if losses > 0 else None
+        wr = round(wins / matches * 100, 1) if matches > 0 else None
+        return {"wins": wins, "losses": losses, "kills": kills, "matches": matches, "kd": kd, "wr": wr}
+    except Exception:
+        return dict(_EMPTY_STATS)
+
+
+def _lifetime_ranked_stats(data, ranking_id=None):
+    try:
+        blk = _stat_block(data, "lifetime", ranking_id)
+        if blk is None:
+            return dict(_EMPTY_STATS)
+        wins    = int(blk.get("wins",           0) or 0)
+        matches = int(blk.get("matches_played", 0) or 0)
+        kills   = int(blk.get("kills",          0) or 0)
+        losses  = matches - wins
+        kd = round(kills / losses, 2) if losses > 0 else None
+        wr = round(wins / matches * 100, 1) if matches > 0 else None
+        return {"wins": wins, "losses": losses, "kills": kills, "matches": matches, "kd": kd, "wr": wr}
+    except Exception:
+        return dict(_EMPTY_STATS)
+
+
 def compute_windowed_stats(data, window_spec, ranking_id=None):
     if data is None:
         return dict(_EMPTY_STATS)
@@ -231,10 +304,7 @@ def compute_windowed_stats(data, window_spec, ranking_id=None):
         return _lifetime_ranked_stats(data, ranking_id)
 
     now = int(time.time())
-    if window_spec == "session":
-        cutoff = SESSION_START
-    else:
-        cutoff = now - _WINDOW_SECS.get(window_spec, 86400)
+    cutoff = SESSION_START if window_spec == "session" else now - _WINDOW_SECS.get(window_spec, 86400)
 
     rid = _detect_ranking_id(data, ranking_id)
     total_wins = total_matches = total_kills = 0
@@ -254,81 +324,6 @@ def compute_windowed_stats(data, window_spec, ranking_id=None):
     kd = round(total_kills / losses, 2) if losses > 0 else None
     wr = round(total_wins / total_matches * 100, 1) if total_matches > 0 else None
     return {"wins": total_wins, "losses": losses, "kills": total_kills, "matches": total_matches, "kd": kd, "wr": wr}
-
-
-MODE_STAT_PATH = {
-    "ranked-br-combined":      ("ranked",),
-    "ranked_blastberry_build": ("reload",),
-    "ranked_squareclub":       None,
-    "ranked-squareclub":       None,
-}
-
-MODES_WITHOUT_SEASONAL_BLOCK = {"ranked_squareclub", "ranked-squareclub"}
-
-def _stat_block(data, timeframe, ranking_id):
-    path_key = MODE_STAT_PATH.get(ranking_id or "", ("ranked",))
-    if path_key is None:
-        return None
-    try:
-        block = data["stats"][timeframe]
-        for k in path_key:
-            block = block[k]
-        return block["both"]["overall"]
-    except (KeyError, TypeError):
-        try:
-            return data["stats"][timeframe]["ranked"]["both"]["overall"]
-        except (KeyError, TypeError):
-            return None
-
-
-def _seasonal_ranked_stats(data, ranking_id=None):
-    if ranking_id in MODES_WITHOUT_SEASONAL_BLOCK:
-        return _stats_from_history(data, ranking_id)
-    try:
-        blk = _stat_block(data, "seasonal", ranking_id)
-        if blk is None:
-            return _stats_from_history(data, ranking_id)
-        wins    = int(blk.get("wins",           0) or 0)
-        matches = int(blk.get("matches_played", 0) or 0)
-        kills   = int(blk.get("kills",          0) or 0)
-        losses  = matches - wins
-        kd = round(kills / losses, 2) if losses > 0 else None
-        wr = round(wins / matches * 100, 1) if matches > 0 else None
-        return {"wins": wins, "losses": losses, "kills": kills, "matches": matches, "kd": kd, "wr": wr}
-    except Exception:
-        return dict(_EMPTY_STATS)
-
-
-def _stats_from_history(data, ranking_id):
-    total_wins = total_matches = total_kills = 0
-    for day in (data.get("match_history") or []):
-        for grp in (day.get("matches") or []):
-            rd = grp.get("ranked_data") or {}
-            if rd.get("ranking_id") != ranking_id:
-                continue
-            total_wins    += int(grp.get("wins",    0) or 0)
-            total_matches += int(grp.get("matches", 0) or 0)
-            total_kills   += int(grp.get("kills",   0) or 0)
-    losses = total_matches - total_wins
-    kd = round(total_kills / losses, 2) if losses > 0 else None
-    wr = round(total_wins / total_matches * 100, 1) if total_matches > 0 else None
-    return {"wins": total_wins, "losses": losses, "kills": total_kills, "matches": total_matches, "kd": kd, "wr": wr}
-
-
-def _lifetime_ranked_stats(data, ranking_id=None):
-    try:
-        blk     = _stat_block(data, "lifetime", ranking_id)
-        if blk is None:
-            return dict(_EMPTY_STATS)
-        wins    = int(blk.get("wins",           0) or 0)
-        matches = int(blk.get("matches_played", 0) or 0)
-        kills   = int(blk.get("kills",          0) or 0)
-        losses  = matches - wins
-        kd = round(kills / losses, 2) if losses > 0 else None
-        wr = round(wins / matches * 100, 1) if matches > 0 else None
-        return {"wins": wins, "losses": losses, "kills": kills, "matches": matches, "kd": kd, "wr": wr}
-    except Exception:
-        return dict(_EMPTY_STATS)
 
 
 class _LeaderboardParser(HTMLParser):
@@ -437,7 +432,7 @@ def _set_error(msg):
 
 
 def refresh_once():
-    global _start_elos, _last_raw, _last_modes
+    global _start_elos, _start_progressions, _last_raw, _last_modes
     url = f"{API_BASE}/stats/{EPIC_ACCOUNT_ID}"
     try:
         data = _http_get_json(url)
@@ -459,17 +454,15 @@ def refresh_once():
     modes_available = []
     for path, obj in modes:
         key = _path_str(path)
-        modes_available.append({
-            "key":   key,
-            "label": _mode_label(key),
-        })
+        modes_available.append({"key": key, "label": _mode_label(key)})
 
     path, mode = pick_best_mode(modes)
-    mode_key  = _path_str(path) if path else ""
-    elo       = extract_elo(mode)
-    label     = extract_label(mode)
-    placement = extract_placement(mode)
-    is_unreal = (label == "UNREAL")
+    mode_key    = _path_str(path) if path else ""
+    elo         = extract_elo(mode)
+    label       = extract_label(mode)
+    placement   = extract_placement(mode)
+    progression = extract_progression(mode)
+    is_unreal   = (label == "UNREAL")
 
     next_pos    = (placement - 1) if (is_unreal and placement and placement > 1) else None
     elo_to_next = None
@@ -481,8 +474,11 @@ def refresh_once():
     with _lock:
         if elo is not None and mode_key not in _start_elos:
             _start_elos[mode_key] = elo
-
         session_delta = (elo - _start_elos[mode_key]) if (elo is not None and mode_key in _start_elos) else 0
+
+        if progression is not None and mode_key not in _start_progressions:
+            _start_progressions[mode_key] = progression
+        prog_delta = (progression - _start_progressions[mode_key]) if (progression is not None and mode_key in _start_progressions) else 0
 
         STATE.update({
             "ok":               True,
@@ -493,6 +489,7 @@ def refresh_once():
             "next_position":    next_pos,
             "elo_to_next":      elo_to_next,
             "session_delta":    session_delta,
+            "prog_delta":       prog_delta,
             "updated_at":       int(time.time()),
             "error":            None,
             "active_mode_key":  mode_key,
@@ -531,10 +528,7 @@ def snapshot(window="session", mode_key=None):
         if mode is None:
             path, mode = pick_best_mode(mds)
     else:
-        if mds:
-            path, mode = pick_best_mode(mds)
-        else:
-            path, mode = None, None
+        path, mode = pick_best_mode(mds) if mds else (None, None)
 
     if mode is not None:
         resolved_key = _path_str(path) if path else ""
@@ -545,10 +539,11 @@ def snapshot(window="session", mode_key=None):
         is_unreal   = (label == "UNREAL")
         nxt         = (placement - 1) if (is_unreal and placement and placement > 1) else None
         gap         = s.get("elo_to_next") if resolved_key == s.get("active_mode_key") else None
-
         with _lock:
-            start = _start_elos.get(resolved_key)
-        delta = (elo - start) if (elo is not None and start is not None) else 0
+            start      = _start_elos.get(resolved_key)
+            start_prog = _start_progressions.get(resolved_key)
+        delta      = (elo - start) if (elo is not None and start is not None) else 0
+        prog_delta = (progression - start_prog) if (progression is not None and start_prog is not None) else 0
     else:
         resolved_key = ""
         elo         = s.get("elo")
@@ -559,14 +554,16 @@ def snapshot(window="session", mode_key=None):
         nxt         = s.get("next_position")
         gap         = s.get("elo_to_next")
         delta       = s.get("session_delta", 0) or 0
+        prog_delta  = s.get("prog_delta", 0) or 0
 
     stats        = compute_windowed_stats(raw, "session", resolved_key or None)
     season_stats = compute_windowed_stats(raw, "season",  resolved_key or None)
 
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
+    s["prog_delta"]      = prog_delta if not is_unreal else None
     s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "—")
-    s["elo_text"]     = f"{elo} ELO" if (is_unreal and elo is not None) else None
+    s["elo_text"]        = f"{elo} ELO" if (is_unreal and elo is not None) else None
 
     s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "—"
     s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "—%"
@@ -588,8 +585,11 @@ def snapshot(window="session", mode_key=None):
         s["session_text"] = f"{sign}{delta} ELO TODAY"
         s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
     else:
-        s["session_text"] = None
-        s["session_sign"] = "zero"
+        pct_left = (100 - progression) if progression is not None else None
+        s["pct_to_next"]  = pct_left
+        sign = "+" if prog_delta >= 0 else ""
+        s["session_text"] = f"{sign}{prog_delta}% TODAY" if prog_delta != 0 else "+0% TODAY"
+        s["session_sign"] = "pos" if prog_delta > 0 else ("neg" if prog_delta < 0 else "zero")
 
     s["session_start"] = SESSION_START
     s["window"]        = window
@@ -643,15 +643,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fortnite Rank Overlay</title>
-    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             background: transparent;
-            font-family: 'Barlow', sans-serif;
+            font-family: 'Inter', sans-serif;
             display: flex;
-            flex-direction: column;
             justify-content: flex-start;
             align-items: flex-start;
             height: 100vh;
@@ -662,194 +661,163 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            gap: 12px;
+            gap: 0;
         }
 
         .overlay-container {
             display: flex;
             flex-direction: column;
-            background: rgba(8, 4, 4, 0.88);
-            backdrop-filter: blur(14px);
-            border: 1px solid rgba(220, 38, 38, 0.22);
-            border-left: 5px solid #dc2626;
+            gap: 10px;
+            background: rgba(6, 10, 20, 0.82);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 139, 255, 0.18);
+            border-top: 5px solid #3b82f6;
+            padding: 16px 24px 16px 20px;
             min-width: 400px;
-            overflow: hidden;
-            position: relative;
+            user-select: none;
         }
 
-        .overlay-container::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0;
-            width: 90px; height: 90px;
-            background: radial-gradient(circle at top left, rgba(220,38,38,0.18) 0%, transparent 70%);
-            pointer-events: none;
-        }
-
-        .header-band {
+        .main-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 13px 20px 11px 18px;
-            background: rgba(220, 38, 38, 0.10);
-            border-bottom: 1px solid rgba(220, 38, 38, 0.18);
+            gap: 32px;
         }
 
         .rank-text {
-            font-family: 'Barlow Condensed', sans-serif;
             font-size: 32px;
             font-weight: 900;
-            color: #ffffff;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
-            line-height: 1;
+            letter-spacing: 0.04em;
         }
 
-        .header-right {
+        .rank-text .rank-name { color: #f0f6ff; }
+        .rank-text .rank-num  { color: #3b82f6; }
+
+        .main-row-right {
             display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 5px;
+            align-items: center;
+            gap: 12px;
         }
-
-        .elo-pill {
-            background: rgba(220, 38, 38, 0.20);
-            border: 1px solid rgba(220, 38, 38, 0.45);
-            border-radius: 4px;
-            padding: 3px 12px;
-            display: none;
-        }
-
-        .elo-pill.visible { display: block; }
 
         .elo-text {
-            font-family: 'Barlow Condensed', sans-serif;
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 700;
-            color: #fca5a5;
-            letter-spacing: 0.04em;
-            line-height: 1;
+            color: #3b82f6;
+            letter-spacing: 0.02em;
         }
 
-        .prog-bar-wrap {
+        .prog-inline {
             display: none;
-            flex-direction: row;
             align-items: center;
             gap: 10px;
         }
 
-        .prog-bar-wrap.visible { display: flex; }
+        .prog-inline.visible { display: flex; }
 
-        .prog-label {
-            font-family: 'Barlow Condensed', sans-serif;
+        .prog-pct {
             font-size: 22px;
             font-weight: 700;
-            letter-spacing: 0.04em;
-            color: rgba(255, 220, 220, 0.95);
-            line-height: 1;
-            min-width: 44px;
+            color: #3b82f6;
+            letter-spacing: 0.02em;
+            min-width: 48px;
             text-align: right;
         }
 
         .prog-track {
             width: 80px;
             height: 7px;
-            background: rgba(255, 255, 255, 0.10);
+            background: rgba(56, 139, 255, 0.15);
             border-radius: 4px;
             overflow: hidden;
         }
 
         .prog-fill {
             height: 100%;
-            background: #dc2626;
+            background: #3b82f6;
             border-radius: 4px;
             transition: width 0.4s ease;
         }
 
-        .mid-row {
-            display: none;
-            justify-content: space-between;
-            align-items: center;
-            padding: 7px 20px 7px 18px;
-            border-bottom: 1px solid rgba(220, 38, 38, 0.10);
+        .divider {
+            height: 1px;
+            background: rgba(56, 139, 255, 0.12);
         }
 
-        .mid-row.visible { display: flex; }
+        .sub-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 18px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: rgba(185, 205, 245, 0.95);
+            visibility: visible;
+        }
+
+        .sub-row.hidden { visibility: hidden; }
 
         .next-target {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: rgba(255, 200, 200, 0.80);
+            gap: 5px;
         }
 
-        .next-target .arrow { color: rgba(220, 38, 38, 0.85); font-size: 12px; }
-        .next-target .hi    { color: rgba(255, 230, 230, 1.0); }
+        .next-target .hi { color: rgba(220, 235, 255, 1.0); }
 
-        .session-pos  { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #4ade80; }
-        .session-neg  { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #f87171; }
-        .session-zero { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255, 210, 210, 0.80); }
+        .session-pos  { font-size: 18px; color: #22c55e; }
+        .session-neg  { font-size: 18px; color: #ef4444; }
+        .session-zero { font-size: 18px; color: rgba(185, 205, 245, 0.95); }
+
+        .divider-mid {
+            height: 1px;
+            background: rgba(56, 139, 255, 0.12);
+            visibility: visible;
+        }
+
+        .divider-mid.hidden { visibility: hidden; }
 
         .stats-row {
             display: flex;
-            padding: 10px 20px 11px 18px;
+            gap: 18px;
         }
 
         .stat {
             display: flex;
             flex-direction: column;
-            gap: 3px;
-            flex: 1;
-            position: relative;
+            gap: 2px;
         }
-
-        .stat + .stat::before {
-            content: '';
-            position: absolute;
-            left: 0; top: 3px; bottom: 3px;
-            width: 1px;
-            background: rgba(220, 38, 38, 0.14);
-        }
-
-        .stat + .stat { padding-left: 18px; }
 
         .stat-label {
-            font-size: 11px;
+            font-size: 9px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: rgba(255, 180, 180, 0.85);
-            line-height: 1;
+            letter-spacing: 0.1em;
+            color: rgba(170, 195, 245, 0.95);
         }
 
         .stat-value {
-            font-family: 'Barlow Condensed', sans-serif;
-            font-size: 24px;
+            font-size: 17px;
             font-weight: 700;
-            color: #fff5f5;
-            line-height: 1;
-            letter-spacing: 0.02em;
+            color: #d8e8ff;
         }
 
         .mode-bar {
             display: flex;
             flex-direction: column;
             gap: 7px;
-            margin-top: 10px;
             width: 100%;
+            margin-top: 50px;
         }
 
         .mode-btn {
-            font-family: 'Barlow', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 14px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: rgba(220, 220, 220, 0.60);
+            letter-spacing: 0.10em;
+            color: rgba(220, 220, 220, 0.55);
             background: rgba(20, 20, 20, 0.90);
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
@@ -877,34 +845,37 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 <body>
     <div class="wrap">
         <div class="overlay-container">
-            <div class="header-band">
+
+            <div class="main-row">
                 <div class="rank-text" id="rankText">— LOADING</div>
-                <div class="header-right">
-                    <div class="elo-pill" id="eloPill">
-                        <div class="elo-text" id="eloText"></div>
-                    </div>
-                    <div class="prog-bar-wrap" id="progWrap">
+                <div class="main-row-right">
+                    <div class="elo-text" id="eloText" style="display:none"></div>
+                    <div class="prog-inline" id="progInline">
                         <div class="prog-track">
                             <div class="prog-fill" id="progFill" style="width:0%"></div>
                         </div>
-                        <div class="prog-label" id="progLabel">0%</div>
+                        <div class="prog-pct" id="progPct">0%</div>
                     </div>
                 </div>
             </div>
 
-            <div class="mid-row" id="midRow">
+            <div class="divider"></div>
+
+            <div class="sub-row hidden" id="subRow">
                 <div class="next-target">
-                    <span>NEXT</span>
+                    <span id="nextLabel">NEXT</span>
                     <span class="hi" id="nextGap">—</span>
-                    <span class="arrow">▶</span>
+                    <span id="nextArrow">→</span>
                     <span class="hi" id="nextPos">#—</span>
                 </div>
                 <span class="session-zero" id="sessionText">+0 TODAY</span>
             </div>
 
+            <div class="divider-mid hidden" id="divider2"></div>
+
             <div class="stats-row">
                 <div class="stat">
-                    <div class="stat-label">K/D</div>
+                    <div class="stat-label">KD</div>
                     <div class="stat-value" id="seasonKd">—</div>
                 </div>
                 <div class="stat">
@@ -920,6 +891,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     <div class="stat-value" id="seasonWins">—</div>
                 </div>
             </div>
+
         </div>
 
         <div class="mode-bar" id="modeBar"></div>
@@ -954,39 +926,78 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             });
         }
 
+        function renderRankText(rankDisplay, isUnreal) {
+            var el = $('#rankText');
+            if (!rankDisplay || rankDisplay === '—') {
+                el.innerHTML = '<span class="rank-name">—</span>';
+                return;
+            }
+            if (isUnreal) {
+                // "#79 UNREAL" → blue #79, white UNREAL
+                var m = rankDisplay.match(/^(#\d+)\s+(.+)$/);
+                if (m) {
+                    el.innerHTML = '<span class="rank-num">' + m[1] + '</span> <span class="rank-name">' + m[2] + '</span>';
+                } else {
+                    el.innerHTML = '<span class="rank-name">' + rankDisplay + '</span>';
+                }
+            } else {
+                // "GOLD II" or "ELITE III" → white name, blue numeral
+                var m2 = rankDisplay.match(/^(.+?)\s+(I{1,3}|IV|V?I{0,3})$/);
+                if (m2 && m2[2]) {
+                    el.innerHTML = '<span class="rank-name">' + m2[1] + '</span> <span class="rank-num">' + m2[2] + '</span>';
+                } else {
+                    el.innerHTML = '<span class="rank-name">' + rankDisplay + '</span>';
+                }
+            }
+        }
+
         function applyData(d) {
             if (!d || !d.rank_display) return;
 
-            $('#rankText').textContent = d.rank_display;
+            renderRankText(d.rank_display, d.is_unreal);
 
-            var pill     = $('#eloPill');
-            var progWrap = $('#progWrap');
-            var midRow   = $('#midRow');
+            var eloEl    = $('#eloText');
+            var progEl   = $('#progInline');
+            var subRow   = $('#subRow');
+            var divider2 = $('#divider2');
 
             if (d.is_unreal && d.elo_text) {
-                $('#eloText').textContent = d.elo_text;
-                pill.classList.add('visible');
-                progWrap.classList.remove('visible');
+                eloEl.textContent    = d.elo_text;
+                eloEl.style.display  = '';
+                progEl.classList.remove('visible');
             } else if (!d.is_unreal && d.progression_pct !== null && d.progression_pct !== undefined) {
-                var pct = d.progression_pct;
-                $('#progLabel').textContent = pct + '%';
-                $('#progFill').style.width  = pct + '%';
-                progWrap.classList.add('visible');
-                pill.classList.remove('visible');
+                $('#progFill').style.width = d.progression_pct + '%';
+                $('#progPct').textContent  = d.progression_pct + '%';
+                progEl.classList.add('visible');
+                eloEl.style.display = 'none';
             } else {
-                pill.classList.remove('visible');
-                progWrap.classList.remove('visible');
+                eloEl.style.display = 'none';
+                progEl.classList.remove('visible');
             }
 
-            if (d.is_unreal && (d.next_pos || d.session_text)) {
-                $('#nextGap').textContent = d.next_gap ? d.next_gap + ' ELO' : '—';
-                $('#nextPos').textContent = d.next_pos ? '#' + d.next_pos : '#—';
+            if (d.is_unreal) {
+                $('#nextLabel').textContent = 'NEXT';
+                $('#nextGap').textContent   = d.next_gap ? d.next_gap + ' ELO' : '—';
+                $('#nextArrow').textContent = '→';
+                $('#nextPos').textContent   = d.next_pos ? '#' + d.next_pos : '#—';
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 TODAY';
                 sessEl.className   = 'session-' + (d.session_sign || 'zero');
-                midRow.classList.add('visible');
+                subRow.classList.remove('hidden');
+                divider2.classList.remove('hidden');
+            } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
+                $('#nextLabel').textContent = '';
+                $('#nextGap').textContent   = d.pct_to_next + '% TO NEXT RANK';
+                $('#nextArrow').textContent = '';
+                $('#nextPos').textContent   = '';
+                var sessEl = $('#sessionText');
+                sessEl.textContent = d.session_text || '+0% TODAY';
+                sessEl.className   = 'session-' + (d.session_sign || 'zero');
+                subRow.classList.remove('hidden');
+                divider2.classList.remove('hidden');
             } else {
-                midRow.classList.remove('visible');
+                subRow.classList.add('hidden');
+                divider2.classList.add('hidden');
             }
 
             $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '—';
@@ -1050,19 +1061,15 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("", "/overlay"):
             html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
             self._send(200, html, "text/html; charset=utf-8")
-
         elif path == "/data":
             w = _p("window", _p("stats_window", "session"))
             m = _p("mode", "")
             self._send(200, json.dumps(snapshot(w, m or None)), "application/json")
-
         elif path == "/raw":
             body = json.dumps(_last_raw, indent=2, default=str) if _last_raw else "{}"
             self._send(200, body, "application/json")
-
         elif path == "/debug":
             self._send(200, debug_report(), "text/plain; charset=utf-8")
-
         else:
             self._send(404, "not found", "text/plain")
 
