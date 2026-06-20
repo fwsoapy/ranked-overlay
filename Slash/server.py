@@ -498,8 +498,8 @@ def refresh_once():
         })
 
     sess   = compute_windowed_stats(data, "session", mode_key)
-    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "—"
-    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "—"
+    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "-"
+    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "-"
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     elo_str = f"{elo} ELO" if elo is not None else label
     print(f"[overlay] {ts}  {elo_str}  |  session {session_delta:+d}")
@@ -557,11 +557,11 @@ def snapshot(window="session", mode_key=None):
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
     s["prog_delta"]      = prog_delta if not is_unreal else None
-    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "—")
+    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
     s["elo_text"]        = f"{elo} ELO" if (is_unreal and elo is not None) else None
 
-    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "—"
-    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "—%"
+    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
+    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "-%"
     s["season_wins"]  = season_stats["wins"]
     s["season_kills"] = season_stats["kills"]
 
@@ -923,12 +923,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             <div class="slash-header">
                 <div class="slash-left">
                     <div class="rank-label-small">RANK</div>
-                    <div class="rank-value" id="rankValue">#— UNREAL</div>
+                    <div class="rank-value" id="rankValue">#- UNREAL</div>
                 </div>
                 <div class="slash-blade"></div>
                 <div class="slash-right">
                     <div class="elo-label-small" id="rightLabel">ELO</div>
-                    <div class="elo-value" id="eloValue" style="display:block">——</div>
+                    <div class="elo-value" id="eloValue" style="display:block">--</div>
                     <div class="prog-row" id="progRow">
                         <div class="prog-value" id="progPct">0%</div>
                         <div class="prog-track">
@@ -939,26 +939,26 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             </div>
 
             <div class="mid-band" id="midBand">
-                <span class="next-text" id="nextText">NEXT — ELO → <span class="accent">#—</span></span>
+                <span class="next-text" id="nextText">NEXT - ELO → <span class="accent">#-</span></span>
                 <span class="session-badge session-zero" id="sessionText">+0 TODAY</span>
             </div>
 
             <div class="stats-band">
                 <div class="stat-block">
                     <div class="s-label">K/D</div>
-                    <div class="s-value" id="seasonKd">—</div>
+                    <div class="s-value" id="seasonKd">-</div>
                 </div>
                 <div class="stat-block">
                     <div class="s-label">WIN%</div>
-                    <div class="s-value" id="seasonWr">—</div>
+                    <div class="s-value" id="seasonWr">-</div>
                 </div>
                 <div class="stat-block">
                     <div class="s-label">KILLS</div>
-                    <div class="s-value" id="seasonKills">—</div>
+                    <div class="s-value" id="seasonKills">-</div>
                 </div>
                 <div class="stat-block">
                     <div class="s-label">WINS</div>
-                    <div class="s-value" id="seasonWins">—</div>
+                    <div class="s-value" id="seasonWins">-</div>
                 </div>
             </div>
 
@@ -1028,7 +1028,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 }
 
                 rightLbl.textContent   = 'ELO';
-                eloEl.textContent      = d.elo_text ? d.elo_text.replace(' ELO','') : '——';
+                eloEl.textContent      = d.elo_text ? d.elo_text.replace(' ELO','') : '--';
                 eloEl.style.display    = 'block';
                 progRow.classList.remove('visible');
 
@@ -1037,7 +1037,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                         'NEXT <span class="hl">' + d.next_gap + ' ELO</span>' +
                         ' \u2192 <span class="accent">#</span><span class="hl">' + d.next_pos + '</span>';
                 } else {
-                    nextText.innerHTML = 'NEXT <span class="hl">— ELO</span> \u2192 <span class="accent">#</span><span class="hl">—</span>';
+                    nextText.innerHTML = 'NEXT <span class="hl">- ELO</span> \u2192 <span class="accent">#</span><span class="hl">-</span>';
                 }
 
                 sessEl.textContent = d.session_text || '+0 TODAY';
@@ -1062,7 +1062,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
                     nextText.innerHTML = '<span class="hl">' + d.pct_to_next + '%</span> TO NEXT';
                 } else {
-                    nextText.textContent = '—';
+                    nextText.textContent = '-';
                 }
 
                 sessEl.textContent = d.session_text || '+0% TODAY';
@@ -1070,10 +1070,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 midBand.classList.remove('hidden');
             }
 
-            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '—';
-            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '—';
-            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '—';
-            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '—';
+            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
@@ -1143,9 +1143,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"Fortnite Ranked Overlay — port {PORT}")
+    print(f"Fortnite Ranked Overlay - port {PORT}")
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
-    print(f"Polling OliTracker every {POLL_SECONDS}s — Ctrl+C to stop\n")
+    print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
     threading.Thread(target=poll_loop, daemon=True).start()
 
