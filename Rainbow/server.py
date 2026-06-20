@@ -9,15 +9,9 @@ live, self-updating overlay that you point an OBS Browser Source at:
     http://localhost:8888/overlay
 
 Other endpoints:
-    /data?stats_window=session&record_window=session   JSON the overlay reads
-    /debug                                             diagnostics
-    /raw                                               raw OliTracker response
-
-Window options: 12h | 24h | session | season
-
-Stats (KD/WR) and Record (W/L) are computed from match_history so ELO
-changes are completely decoupled from win/loss counting — correct for
-Fortnite Ranked where you can gain ELO on a loss via kills.
+    /data?window=session&mode=<key>   JSON the overlay reads
+    /debug                            diagnostics
+    /raw                               raw OliTracker response
 
 Standard library only — no pip install needed. Python 3 required.
 """
@@ -67,20 +61,22 @@ BROWSER_HEADERS = {
 # ---- shared state ----------------------------------------------------------
 _lock = threading.Lock()
 STATE = {
-    "ok":            False,
-    "username":      EPIC_USERNAME,
-    "rank_number":   None,
-    "rank_label":    None,
-    "elo":           None,
-    "next_position": None,
-    "elo_to_next":   None,
-    "session_delta": 0,      # ELO gained / lost since overlay started
-    "updated_at":    None,
-    "error":         "starting up",
+    "ok":              False,
+    "username":        EPIC_USERNAME,
+    "rank_number":     None,
+    "rank_label":      None,
+    "elo":             None,
+    "next_position":   None,
+    "elo_to_next":     None,
+    "session_delta":   0,      # ELO gained / lost since overlay started
+    "updated_at":      None,
+    "error":           "starting up",
+    "active_mode_key": "",
+    "modes_available": [],
 }
-_start_elo  = None    # ELO on first successful fetch (baseline for session delta)
-_last_raw   = None    # full cached API response (re-used for windowed stats)
-_last_modes = []      # ranked-mode candidates (shown in /debug)
+_start_elos = {}       # per-mode ELO on first successful fetch (session baseline)
+_last_raw   = None     # full cached API response
+_last_modes = []       # ranked-mode candidates (BR / Reload / Boxfights, etc.)
 
 
 # ===========================================================================
@@ -164,7 +160,25 @@ def find_ranked_modes(data):
     return modes
 
 
-def pick_br_mode(modes):
+def _mode_label(key):
+    lower = key.lower()
+    if "squareclub" in lower or "boxfight" in lower:
+        return "Boxfights"
+    if "blastberry" in lower or "reload" in lower:
+        return "Reload"
+    if "br-combined" in lower or "br_combined" in lower:
+        return "BR"
+    return key
+
+
+def pick_mode_by_key(modes, mode_key):
+    for path, obj in modes:
+        if _path_str(path) == mode_key.lower():
+            return path, obj
+    return None, None
+
+
+def pick_best_mode(modes):
     """Pick the mode to display — prefers real ELO + Unreal placement."""
     if not modes:
         return None, None
@@ -196,131 +210,6 @@ def extract_label(mode_obj):
 
 def extract_placement(mode_obj):
     return _num(mode_obj.get("unreal_placement"))
-
-
-# ===========================================================================
-#  Windowed stats — computed from match_history on every /data request
-#
-#  WHY match_history and not ELO diffs?
-#  In Fortnite Ranked you can gain ELO on a loss (kill points) or lose ELO
-#  on a win that was uncontested.  ELO delta != W/L.  The match_history
-#  block contains explicit wins/matches/kills per session group, so we read
-#  those directly and derive KD as kills / (matches - wins) — in BR every
-#  non-win ends in exactly one death.
-# ===========================================================================
-_WINDOW_SECS = {
-    "12h": 43200,    # past 12 hours
-    "24h": 86400,    # past 24 hours
-}
-_EMPTY_STATS = {
-    "wins": 0, "losses": 0, "kills": 0,
-    "matches": 0, "kd": None, "wr": None,
-}
-
-
-def _detect_ranking_id(data):
-    """Decide which match_history ranking_id to count games for.
-
-    A manual RANKED_MODE_KEY wins.  Otherwise auto-detect the mode with the
-    most games played — for someone grinding one queue this is exactly the
-    mode shown on the overlay, and it works for ANY account (no hardcoding)."""
-    override = RANKED_MODE_KEY.strip()
-    if override:
-        return override
-    tally = {}
-    for day in (data.get("match_history") or []):
-        for grp in (day.get("matches") or []):
-            rd  = grp.get("ranked_data") or {}
-            rid = rd.get("ranking_id")
-            if rid:
-                tally[rid] = tally.get(rid, 0) + int(grp.get("matches", 0) or 0)
-    return max(tally, key=tally.get) if tally else None
-
-
-def compute_windowed_stats(data, window_spec):
-    """
-    Compute wins / losses / KD / WR for the given time window.
-
-    window_spec: "12h" | "24h" | "session" | "season"  (plus "lifetime" for /debug)
-
-    Returns a dict with keys: wins, losses, kills, matches, kd, wr
-    """
-    if data is None:
-        return dict(_EMPTY_STATS)
-
-    if window_spec == "season":
-        return _seasonal_ranked_stats(data)
-    if window_spec == "lifetime":
-        return _lifetime_ranked_stats(data)
-
-    now = int(time.time())
-    if window_spec == "session":
-        cutoff = SESSION_START
-    else:
-        secs   = _WINDOW_SECS.get(window_spec, 86400)
-        cutoff = now - secs
-
-    ranking_id = _detect_ranking_id(data)
-    total_wins = total_matches = total_kills = 0
-
-    for day in (data.get("match_history") or []):
-        for grp in (day.get("matches") or []):
-            if (grp.get("last_modified") or 0) < cutoff:
-                continue
-            rd = grp.get("ranked_data") or {}
-            if ranking_id and rd.get("ranking_id") != ranking_id:
-                continue
-            total_wins    += int(grp.get("wins",    0) or 0)
-            total_matches += int(grp.get("matches", 0) or 0)
-            total_kills   += int(grp.get("kills",   0) or 0)
-
-    losses = total_matches - total_wins
-    kd = round(total_kills / losses, 2) if losses > 0 else None
-    wr = round(total_wins / total_matches * 100, 1) if total_matches > 0 else None
-
-    return {
-        "wins": total_wins, "losses": losses,
-        "kills": total_kills, "matches": total_matches,
-        "kd": kd, "wr": wr,
-    }
-
-
-def _seasonal_ranked_stats(data):
-    """Pull current-SEASON ranked KD / WR from the API's pre-aggregated block."""
-    try:
-        blk     = data["stats"]["seasonal"]["ranked"]["both"]["overall"]
-        wins    = int(blk.get("wins",           0) or 0)
-        matches = int(blk.get("matches_played", 0) or 0)
-        kills   = int(blk.get("kills",          0) or 0)
-        losses  = matches - wins
-        kd = round(kills / losses, 2) if losses > 0 else None
-        wr = round(wins / matches * 100, 1) if matches > 0 else None
-        return {
-            "wins": wins, "losses": losses,
-            "kills": kills, "matches": matches,
-            "kd": kd, "wr": wr,
-        }
-    except Exception:
-        return dict(_EMPTY_STATS)
-
-
-def _lifetime_ranked_stats(data):
-    """Pull all-time ranked KD / WR from the API's pre-aggregated lifetime block."""
-    try:
-        blk     = data["stats"]["lifetime"]["ranked"]["both"]["overall"]
-        wins    = int(blk.get("wins",           0) or 0)
-        matches = int(blk.get("matches_played", 0) or 0)
-        kills   = int(blk.get("kills",          0) or 0)
-        losses  = matches - wins
-        kd = round(kills / losses, 2) if losses > 0 else None
-        wr = round(wins / matches * 100, 1) if matches > 0 else None
-        return {
-            "wins": wins, "losses": losses,
-            "kills": kills, "matches": matches,
-            "kd": kd, "wr": wr,
-        }
-    except Exception:
-        return dict(_EMPTY_STATS)
 
 
 # ===========================================================================
@@ -435,7 +324,7 @@ def _set_error(msg):
 
 
 def refresh_once():
-    global _start_elo, _last_raw, _last_modes
+    global _start_elos, _last_raw, _last_modes
     url = f"{API_BASE}/stats/{EPIC_ACCOUNT_ID}"
     try:
         data = _http_get_json(url)
@@ -453,7 +342,13 @@ def refresh_once():
         _set_error("no ranked data found in API response — see /raw")
         return
 
-    path, mode = pick_br_mode(modes)
+    modes_available = []
+    for path, obj in modes:
+        key = _path_str(path)
+        modes_available.append({"key": key, "label": _mode_label(key)})
+
+    path, mode = pick_best_mode(modes)
+    mode_key  = _path_str(path) if path else ""
     elo       = extract_elo(mode)
     label     = extract_label(mode)
     placement = extract_placement(mode)
@@ -470,25 +365,24 @@ def refresh_once():
             elo_to_next = nxt - elo
 
     with _lock:
-        if _start_elo is None:
-            _start_elo = elo   # establish session baseline on first fetch
+        if mode_key not in _start_elos:
+            _start_elos[mode_key] = elo   # establish session baseline on first fetch
+        session_delta = elo - _start_elos[mode_key]
 
         STATE.update({
-            "ok":            True,
-            "rank_number":   placement,
-            "rank_label":    label,
-            "elo":           elo,
-            "next_position": next_pos,
-            "elo_to_next":   elo_to_next,
-            "session_delta": elo - _start_elo,
-            "updated_at":    int(time.time()),
-            "error":         None,
+            "ok":               True,
+            "rank_number":      placement,
+            "rank_label":       label,
+            "elo":              elo,
+            "next_position":    next_pos,
+            "elo_to_next":      elo_to_next,
+            "session_delta":    session_delta,
+            "updated_at":       int(time.time()),
+            "error":            None,
+            "active_mode_key":  mode_key,
+            "modes_available":  modes_available,
         })
 
-    # ---- simple stats summary, printed after every parse ----
-    sess = compute_windowed_stats(data, "session")
-    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "—"
-    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "—"
     if elo_to_next is not None and next_pos:
         gap_txt = f"{elo_to_next} ELO to #{next_pos}"
     elif next_pos:
@@ -497,9 +391,7 @@ def refresh_once():
         gap_txt = "top of leaderboard"
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     print(f"[overlay] {ts}  #{placement} {label}  |  {elo} ELO  |  "
-          f"next: {gap_txt}  |  session {elo - _start_elo:+d} ELO")
-    print(f"          session record: {sess['wins']}W / {sess['losses']}L"
-          f"   ·   KD {kd_txt}   ·   WR {wr_txt}   ({sess['matches']} games)")
+          f"next: {gap_txt}  |  session {session_delta:+d} ELO")
 
 
 def poll_loop():
@@ -510,87 +402,41 @@ def poll_loop():
 
 
 # ===========================================================================
-#  Windowed ELO change (for the small ELO slot on the overlay)
-# ===========================================================================
-def _elo_series(data, ranking_id):
-    """Sorted [(timestamp, elo), ...] from match_history for this ranking_id."""
-    pts = []
-    for day in (data.get("match_history") or []):
-        for grp in (day.get("matches") or []):
-            rd = grp.get("ranked_data") or {}
-            if ranking_id and rd.get("ranking_id") != ranking_id:
-                continue
-            e  = _num(rd.get("elo"))
-            ts = grp.get("last_modified")
-            if e is not None and ts:
-                pts.append((int(ts), e))
-    pts.sort()
-    return pts
-
-
-def _earliest_day_start_elo(data, ranking_id):
-    """The 'start' ELO of the oldest day on record (match_history is newest-first)."""
-    for day in reversed(data.get("match_history") or []):
-        ent = (day.get("elo") or {}).get(ranking_id) if ranking_id else None
-        if isinstance(ent, dict):
-            st = _num(ent.get("start"))
-            if st is not None:
-                return st
-    return None
-
-
-def windowed_elo_delta(data, window, current_elo):
-    """ELO change across the past 12h / 24h.  Returns an int, or None."""
-    if current_elo is None or data is None:
-        return None
-    secs = _WINDOW_SECS.get(window)
-    if secs is None:
-        return None
-    cutoff     = int(time.time()) - secs
-    ranking_id = _detect_ranking_id(data)
-    pts        = _elo_series(data, ranking_id)
-    if not pts:
-        return None
-    # Baseline = the ELO as it stood just before the window began
-    baseline = None
-    for ts, e in pts:
-        if ts <= cutoff:
-            baseline = e
-        else:
-            break
-    if baseline is None:                      # whole history is inside the window
-        baseline = _earliest_day_start_elo(data, ranking_id)
-        if baseline is None:
-            baseline = pts[0][1]
-    return current_elo - baseline
-
-
-# ===========================================================================
 #  Snapshot — builds display strings for the overlay (accepts window params)
 # ===========================================================================
-def snapshot(window="session"):
+def snapshot(mode_key=None):
     with _lock:
         s   = dict(STATE)
-        raw = _last_raw
+        mds = list(_last_modes)
 
-    elo       = s.get("elo")
-    placement = s.get("rank_number")
-    label     = s.get("rank_label") or ""
-    delta     = s.get("session_delta", 0) or 0
-    nxt       = s.get("next_position")
-    gap       = s.get("elo_to_next")
+    if mode_key and mds:
+        path, mode = pick_mode_by_key(mds, mode_key)
+        if mode is None:
+            path, mode = pick_best_mode(mds)
+    else:
+        path, mode = pick_best_mode(mds) if mds else (None, None)
 
-    # One window drives W/L, KD and WR together
-    stats = compute_windowed_stats(raw, window)
+    if mode is not None:
+        resolved_key = _path_str(path) if path else ""
+        elo       = extract_elo(mode)
+        label     = extract_label(mode)
+        placement = extract_placement(mode)
+        nxt       = (placement - 1) if (placement and placement > 1) else None
+        gap       = s.get("elo_to_next") if resolved_key == s.get("active_mode_key") else None
+        with _lock:
+            start = _start_elos.get(resolved_key)
+        delta = (elo - start) if (elo is not None and start is not None) else 0
+    else:
+        elo       = s.get("elo")
+        placement = s.get("rank_number")
+        label     = s.get("rank_label") or ""
+        nxt       = s.get("next_position")
+        gap       = s.get("elo_to_next")
+        delta     = s.get("session_delta", 0) or 0
 
     s["rank_display"]  = (f"#{placement} {label}".strip() if placement
                           else (label or "—"))
     s["elo_text"]      = (f"{elo} ELO" if elo is not None else "—— ELO")
-    s["kd_text"]       = (f"{stats['kd']:.2f}"  if stats["kd"] is not None else "—")
-    s["winrate_text"]  = (f"{stats['wr']:.1f}%" if stats["wr"] is not None else "—%")
-    s["wl_wins"]       = stats["wins"]
-    s["wl_losses"]     = stats["losses"]
-    s["stat_matches"]  = stats["matches"]
 
     # ELO-to-next — expose parts separately for styled rendering
     if nxt and gap is not None:
@@ -606,35 +452,11 @@ def snapshot(window="session"):
         s["next_gap"]  = None
         s["next_pos"]  = None
 
-    # ELO-change slot — follows the selected window
-    if window == "season":
-        s["session_text"] = f"+{elo} ALL SEASON" if elo is not None else "— ALL SEASON"
-        s["session_sign"] = "pos" if elo is not None else "zero"
-    elif window == "12h":
-        wd = windowed_elo_delta(raw, "12h", elo)
-        if wd is None:
-            s["session_text"] = "+0 ELO PAST 12H"
-            s["session_sign"] = "zero"
-        else:
-            sign = "+" if wd >= 0 else ""
-            s["session_text"] = f"{sign}{wd} ELO PAST 12H"
-            s["session_sign"] = "pos" if wd > 0 else ("neg" if wd < 0 else "zero")
-    elif window == "24h":
-        wd = windowed_elo_delta(raw, "24h", elo)
-        if wd is None:
-            s["session_text"] = "+0 ELO PAST 24H"
-            s["session_sign"] = "zero"
-        else:
-            sign = "+" if wd >= 0 else ""
-            s["session_text"] = f"{sign}{wd} ELO PAST 24H"
-            s["session_sign"] = "pos" if wd > 0 else ("neg" if wd < 0 else "zero")
-    else:  # session
-        sign = "+" if delta >= 0 else ""
-        s["session_text"] = f"{sign}{delta} ELO TODAY"
-        s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
+    sign = "+" if delta >= 0 else ""
+    s["session_text"] = f"{sign}{delta} ELO TODAY"
+    s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
 
     s["session_start"] = SESSION_START
-    s["window"]        = window
     return s
 
 
@@ -654,19 +476,6 @@ def debug_report():
               "next_position", "elo_to_next", "updated_at", "error"):
         out.append(f"  {k}: {s.get(k)}")
     out.append("")
-    out.append("STATS ranking_id (auto-detected from match_history)")
-    out.append(f"  {_detect_ranking_id(_last_raw) if _last_raw else None}")
-    out.append("")
-    out.append("SESSION WINDOWED STATS (from match_history)")
-    sess = compute_windowed_stats(_last_raw, "session")
-    for k, v in sess.items():
-        out.append(f"  {k}: {v}")
-    out.append("")
-    out.append("ALL-SEASON RANKED STATS")
-    seas = compute_windowed_stats(_last_raw, "season")
-    for k, v in seas.items():
-        out.append(f"  {k}: {v}")
-    out.append("")
     out.append(f"ranked-mode candidates: {len(_last_modes)}")
     for path, obj in _last_modes:
         out.append(
@@ -674,7 +483,7 @@ def debug_report():
             + f"  div={obj.get('division')} ({division_name(_num(obj.get('division')))})"
             + f"  unreal={obj.get('unreal_placement')}  elo={obj.get('elo')}")
     if _last_modes:
-        cp, _ = pick_br_mode(_last_modes)
+        cp, _ = pick_best_mode(_last_modes)
         out.append("  chosen: " + ("/".join(map(str, cp)) if cp else "None"))
     out.append("")
     out.append("Raw JSON: /raw")
@@ -841,101 +650,121 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .session-neg  { color: #ff4757; text-shadow: 0 0 10px rgba(255,71,87,0.2); }
         .session-zero { color: #ffffff; }
 
+        .wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+        }
+
         /* =========================================================
-           CONTROL BUTTONS  (browser only — hidden by OBS crop)
+           MODE SWITCHER  (browser only — hidden by OBS crop)
            ========================================================= */
-        .controls-panel {
-            margin-top: 100px;        /* 100px below the overlay */
-            text-align: center;
+        .mode-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            width: 100%;
+            margin-top: 50px;
         }
 
-        .ctrl-obs-note {
-            display: block;
-            color: #6f6f7a;           /* readable reminder on a light page */
-            font-size: 11px; font-weight: 700;
-            letter-spacing: 0.5px; text-transform: uppercase;
-            margin-bottom: 16px;
-        }
-
-        /* buttons centered, spaced apart, plain text (no background) */
-        .btn-row {
-            display: flex; align-items: center; justify-content: center;
-            gap: 30px; flex-wrap: wrap;
-        }
-
-        .ctrl-btn {
-            background: none;
-            border: none;
-            padding: 4px 2px;
-            color: #3a3340;           /* dark — clearly visible on the page */
+        .mode-btn {
             font-family: 'Montserrat', sans-serif;
-            font-weight: 800; font-size: 15px;
-            letter-spacing: 0.5px; text-transform: uppercase;
-            cursor: pointer; outline: none;
-            transition: color 0.12s ease;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(220, 220, 220, 0.55);
+            background: rgba(20, 20, 20, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 13px 18px;
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+            text-align: center;
+            transition: color 0.12s, background 0.12s, border-color 0.12s;
         }
-        .ctrl-btn:hover  { color: #000000; }
-        .ctrl-btn.active { color: #8b3ff2; }   /* vivid purple = selected */
+
+        .mode-btn:hover {
+            color: rgba(255, 255, 255, 0.90);
+            background: rgba(40, 40, 40, 0.95);
+            border-color: rgba(255, 255, 255, 0.20);
+        }
+
+        .mode-btn.active {
+            color: #ffffff;
+            background: rgba(55, 55, 55, 0.98);
+            border-color: rgba(255, 255, 255, 0.30);
+        }
     </style>
 </head>
 <body>
+    <div class="wrap">
 
-    <!-- ===== OVERLAY CARD (OBS browser source points here) ===== -->
-    <div class="overlay-container" style="flex-direction: column; align-items: stretch;">
-        <div style="display:flex; align-items:center;">
-            <div class="section left-section">
-                <div class="main-text unreal-rainbow" id="rankText">#— UNREAL</div>
-                <div class="sub-text left-sub">
-                    <span id="nextContainer" style="display:inline-flex;align-items:center;gap:5px;">
-                        <span class="next-gap-val" id="nextGap">—</span>
-                        <span class="next-to">TO</span>
-                        <span class="next-hash" id="nextPos">#—</span>
-                    </span>
+        <!-- ===== OVERLAY CARD (OBS browser source points here) ===== -->
+        <div class="overlay-container" style="flex-direction: column; align-items: stretch;">
+            <div style="display:flex; align-items:center;">
+                <div class="section left-section">
+                    <div class="main-text unreal-rainbow" id="rankText">#— UNREAL</div>
+                    <div class="sub-text left-sub">
+                        <span id="nextContainer" style="display:inline-flex;align-items:center;gap:5px;">
+                            <span class="next-gap-val" id="nextGap">—</span>
+                            <span class="next-to">TO</span>
+                            <span class="next-hash" id="nextPos">#—</span>
+                        </span>
+                    </div>
+                </div>
+                <div class="divider"></div>
+                <div class="section right-section">
+                    <div class="main-text elo-container" id="eloText" data-text="—— ELO">—— ELO</div>
+                    <div class="right-sub">
+                        <span class="session-zero" id="sessionText">+0 ELO TODAY</span>
+                    </div>
                 </div>
             </div>
-            <div class="divider"></div>
-            <div class="section right-section">
-                <div class="main-text elo-container" id="eloText" data-text="—— ELO">—— ELO</div>
-                <div class="right-sub">
-                    <span class="session-zero" id="sessionText">+0 ELO TODAY</span>
-                </div>
+            <div class="bottom-row">
+                <span class="code-ad">Use Code YourCode :) #ad</span>
             </div>
         </div>
-        <div class="bottom-row">
-            <span class="code-ad">Use Code YourCode :) #ad</span>
-        </div>
-    </div>
 
-    <!-- ===== CONTROL BUTTONS (open in your browser; OBS won't see this) ===== -->
-    <div class="controls-panel">
-        <span class="ctrl-obs-note">&#128250; OBS: set browser source height ~90 px to hide these buttons</span>
-
-        <div class="btn-row" id="windowButtons">
-            <button class="ctrl-btn" data-window="12h">Past 12 Hours</button>
-            <button class="ctrl-btn" data-window="24h">Past 24 Hours</button>
-            <button class="ctrl-btn" data-window="session">Session</button>
-            <button class="ctrl-btn" data-window="season">All Season</button>
-        </div>
+        <!-- ===== MODE SWITCHER (open in your browser; OBS won't see this if cropped) ===== -->
+        <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
-        var POLL_MS = __POLL_MS__;
-
-        // Persist chosen window across page reloads
-        var curWin = localStorage.getItem('fn_ov_window') || 'session';
+        var POLL_MS      = __POLL_MS__;
+        var activeMode   = '';
+        var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
 
-        // ---- highlight the active button ----
-        function syncUI() {
-            document.querySelectorAll('#windowButtons .ctrl-btn').forEach(function(b) {
-                b.classList.toggle('active', b.dataset.window === curWin);
+        function buildModeBar(modes) {
+            if (modeBarBuilt) return;
+            modeBarBuilt = true;
+            var bar = $('#modeBar');
+            bar.innerHTML = '';
+            modes.forEach(function(m) {
+                var btn = document.createElement('button');
+                btn.className   = 'mode-btn';
+                btn.textContent = m.label;
+                btn.dataset.key = m.key;
+                btn.addEventListener('click', function() {
+                    if (activeMode === m.key) return;
+                    activeMode = m.key;
+                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                        b.classList.toggle('active', b.dataset.key === activeMode);
+                    });
+                    tick();
+                });
+                bar.appendChild(btn);
             });
         }
 
         // ---- fetch data and update overlay ----
         function tick() {
-            fetch('/data?window=' + curWin, { cache: 'no-store' })
+            var url = '/data?window=session' + (activeMode ? '&mode=' + encodeURIComponent(activeMode) : '');
+            fetch(url, { cache: 'no-store' })
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (!d || (d.ok === false && !d.elo_text)) return;
@@ -955,26 +784,25 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     gapEl.textContent = gapStr;
                     posEl.textContent = posStr;
 
-                    // Window-driven ELO delta (right sub)
                     var sessEl = $('#sessionText');
                     sessEl.textContent = d.session_text || '+0 ELO TODAY';
                     sessEl.className   = 'session-' + (d.session_sign || 'zero');
+
+                    var modes = d.modes_available;
+                    if (modes && modes.length > 0) {
+                        if (!activeMode) {
+                            activeMode = d.active_mode_key || modes[0].key;
+                        }
+                        buildModeBar(modes);
+                        document.querySelectorAll('.mode-btn').forEach(function(b) {
+                            b.classList.toggle('active', b.dataset.key === activeMode);
+                        });
+                    }
                 })
                 .catch(function() { /* keep last values on a network blip */ });
         }
 
-        // ---- button clicks ----
-        document.querySelectorAll('#windowButtons .ctrl-btn').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                curWin = this.dataset.window;
-                localStorage.setItem('fn_ov_window', curWin);
-                syncUI();
-                tick();
-            });
-        });
-
         // ---- init ----
-        syncUI();
         tick();
         setInterval(function() { tick(); }, POLL_MS);
     </script>
@@ -1016,8 +844,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, html, "text/html; charset=utf-8")
 
         elif path == "/data":
-            w = _p("window", _p("stats_window", "session"))
-            self._send(200, json.dumps(snapshot(w)), "application/json")
+            m = _p("mode", "")
+            self._send(200, json.dumps(snapshot(m or None)), "application/json")
 
         elif path == "/raw":
             body = json.dumps(_last_raw, indent=2, default=str) if _last_raw else "{}"
