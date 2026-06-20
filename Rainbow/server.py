@@ -488,6 +488,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :root {
+            --accent: #c080ff;
+            --accent-rgb: 192, 128, 255;
+        }
+
         body {
             background: transparent;
             font-family: 'Montserrat', sans-serif;
@@ -550,7 +555,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             content: attr(data-text);
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: linear-gradient(90deg,
-                transparent 40%,#c080ff 47%,#8855ef 50%,#c080ff 53%,transparent 60%)
+                transparent 40%,var(--accent) 47%,color-mix(in srgb, var(--accent) 80%, black) 50%,var(--accent) 53%,transparent 60%)
                 no-repeat;
             background-size: 400% 100%; background-position: 100% 0%;
             -webkit-background-clip: text; background-clip: text;
@@ -571,7 +576,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             content: attr(data-text);
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: linear-gradient(90deg,
-                transparent 43%,#c080ff 48%,#9966ff 50%,#c080ff 52%,transparent 57%)
+                transparent 43%,var(--accent) 48%,color-mix(in srgb, var(--accent) 85%, white) 50%,var(--accent) 52%,transparent 57%)
                 no-repeat;
             background-size: 500% 100%; background-position: 100% 0%;
             -webkit-background-clip: text; background-clip: text;
@@ -598,7 +603,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                         letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
         .next-to   { font-size: 18px; font-weight: 700; color: #b8b8c4;
                      letter-spacing: 0.5px; text-transform: uppercase; }
-        .next-hash { font-size: 26px; font-weight: 800; color: #b066fe;
+        .next-hash { font-size: 26px; font-weight: 800; color: var(--accent);
                      letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
 
         /* Right sub: single ELO delta line - same font as .sub-text */
@@ -640,6 +645,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         /* mode switcher - browser only, hidden by the OBS crop */
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
+        }
+
         .mode-bar {
             display: flex;
             flex-direction: column;
@@ -709,12 +723,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         </div>
 
         <!-- mode switcher: open in your browser, OBS won't see this if cropped -->
+        <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
         var POLL_MS      = __POLL_MS__;
-        var activeMode   = '';
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
@@ -732,6 +761,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 btn.addEventListener('click', function() {
                     if (activeMode === m.key) return;
                     activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
                     document.querySelectorAll('.mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
@@ -747,7 +777,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             fetch(url, { cache: 'no-store' })
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
-                    if (!d || (d.ok === false && !d.elo_text)) return;
+                    if (!d) return;
+
+                    var errEl = $('#errorText');
+                    if (errEl) {
+                        if (d.error) {
+                            errEl.textContent = d.error;
+                            errEl.style.display = 'block';
+                        } else {
+                            errEl.style.display = 'none';
+                        }
+                    }
+
+                    if (d.ok === false && !d.elo_text) return;
 
                     $('#rankText').textContent = d.rank_display || '#- UNREAL';
 

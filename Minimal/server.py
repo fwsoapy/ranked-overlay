@@ -648,6 +648,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :root {
+            --accent: #ac46ff;
+            --accent-rgb: 172, 70, 255;
+        }
+
         body {
             background: transparent;
             font-family: 'Plus Jakarta Sans', sans-serif;
@@ -671,7 +676,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             flex-direction: column;
             background: rgba(12, 10, 16, 0.85);
             backdrop-filter: blur(8px);
-            border-left: 6px solid #ac46ff;
+            border-left: 6px solid var(--accent);
             padding: 18px 20px;
             min-width: 560px;
             letter-spacing: -0.02em;
@@ -692,12 +697,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             text-transform: uppercase;
         }
 
-        .rank-text .purple { color: #ac46ff; }
+        .rank-text .purple { color: var(--accent); }
 
         .elo-text {
             font-weight: 800;
             font-size: 44px;
-            color: #ac46ff;
+            color: var(--accent);
             text-transform: uppercase;
         }
 
@@ -723,7 +728,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .next-target .highlight { color: #ffffff; }
-        .next-target .purple    { color: #ac46ff; }
+        .next-target .purple    { color: var(--accent); }
 
         .session-delta { font-weight: 700; }
         .session-pos  { color: #2ed573; }
@@ -742,6 +747,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .stat-item span {
             font-weight: 700;
             color: rgba(255, 255, 255, 0.90);
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
         }
 
         .mode-bar {
@@ -811,12 +825,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             </div>
         </div>
 
+        <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
         var POLL_MS      = __POLL_MS__;
-        var activeMode   = '';
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
@@ -846,6 +875,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 btn.addEventListener('click', function() {
                     if (activeMode === m.key) return;
                     activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
                     document.querySelectorAll('.mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
@@ -857,6 +887,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function applyData(d) {
             if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
 
             var rankEl    = $('#rankText');
             var eloRight  = $('#eloRight');

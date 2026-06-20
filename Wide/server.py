@@ -648,6 +648,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :root {
+            --accent: #38bdf8;
+            --accent-rgb: 56, 189, 248;
+        }
+
         body {
             background: transparent;
             font-family: 'Barlow Condensed', sans-serif;
@@ -675,7 +680,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             overflow: hidden;
             background: rgba(4, 10, 18, 0.90);
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(56, 189, 248, 0.18);
+            border: 1px solid rgba(var(--accent-rgb), 0.18);
             box-shadow:
                 0 0 0 1px rgba(0,0,0,0.6),
                 0 4px 32px rgba(0,0,0,0.5),
@@ -684,7 +689,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .accent-bar {
             width: 7px;
-            background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
+            background: linear-gradient(180deg, var(--accent) 0%, #0ea5e9 100%);
             flex-shrink: 0;
         }
 
@@ -720,7 +725,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .top-divider {
             font-weight: 300;
             font-size: 34px;
-            color: rgba(56, 189, 248, 0.4);
+            color: rgba(var(--accent-rgb), 0.4);
             align-self: center;
         }
 
@@ -740,7 +745,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .rank-number {
             font-weight: 900;
             font-size: 42px;
-            color: #38bdf8;
+            color: var(--accent);
             letter-spacing: -0.01em;
             line-height: 1;
         }
@@ -760,10 +765,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             letter-spacing: 0.02em;
             line-height: 1;
             text-transform: uppercase;
-            color: #38bdf8;
+            color: var(--accent);
             text-shadow:
-                0 0 20px rgba(56, 189, 248, 0.7),
-                0 0 40px rgba(56, 189, 248, 0.3);
+                0 0 20px rgba(var(--accent-rgb), 0.7),
+                0 0 40px rgba(var(--accent-rgb), 0.3);
         }
 
         .prog-group {
@@ -778,25 +783,25 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .prog-pct {
             font-weight: 900;
             font-size: 38px;
-            color: #38bdf8;
+            color: var(--accent);
             letter-spacing: 0.02em;
             line-height: 1;
             text-shadow:
-                0 0 20px rgba(56, 189, 248, 0.7),
-                0 0 40px rgba(56, 189, 248, 0.3);
+                0 0 20px rgba(var(--accent-rgb), 0.7),
+                0 0 40px rgba(var(--accent-rgb), 0.3);
         }
 
         .prog-track {
             width: 90px;
             height: 8px;
-            background: rgba(56, 189, 248, 0.15);
+            background: rgba(var(--accent-rgb), 0.15);
             border-radius: 4px;
             overflow: hidden;
         }
 
         .prog-fill {
             height: 100%;
-            background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+            background: linear-gradient(90deg, var(--accent), #0ea5e9);
             border-radius: 4px;
             transition: width 0.4s ease;
         }
@@ -805,8 +810,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             width: 100%;
             height: 1px;
             background: linear-gradient(90deg,
-                rgba(56,189,248,0.5) 0%,
-                rgba(56,189,248,0.1) 60%,
+                rgba(var(--accent-rgb),0.5) 0%,
+                rgba(var(--accent-rgb),0.1) 60%,
                 transparent 100%);
             margin-bottom: 8px;
         }
@@ -879,7 +884,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .stat-sep {
             width: 1px;
             height: 30px;
-            background: rgba(56,189,248,0.2);
+            background: rgba(var(--accent-rgb),0.2);
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
         }
 
         .mode-bar {
@@ -978,12 +992,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             </div>
         </div>
 
+        <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
         var POLL_MS      = __POLL_MS__;
-        var activeMode   = '';
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
@@ -1001,6 +1030,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 btn.addEventListener('click', function() {
                     if (activeMode === m.key) return;
                     activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
                     document.querySelectorAll('.mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
@@ -1021,6 +1051,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function applyData(d) {
             if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
 
             var parts = splitRankDisplay(d.rank_display, d.is_unreal);
             $('#rankNumber').textContent = parts.num;

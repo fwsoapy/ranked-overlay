@@ -647,6 +647,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :root {
+            --accent: #2dff91;
+            --accent-rgb: 45, 255, 145;
+        }
+
         body {
             background: transparent;
             font-family: 'Inter', sans-serif;
@@ -670,12 +675,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             align-items: center;
             gap: 22px;
             background: linear-gradient(135deg, rgba(5,16,11,0.95), rgba(2,8,6,0.97));
-            border: 1px solid rgba(45,255,145,0.28);
+            border: 1px solid rgba(var(--accent-rgb),0.28);
             clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
             padding: 22px 28px;
             min-width: 460px;
             user-select: none;
-            box-shadow: 0 0 0 1px rgba(45,255,145,0.05), 0 12px 32px rgba(0,0,0,0.55);
+            box-shadow: 0 0 0 1px rgba(var(--accent-rgb),0.05), 0 12px 32px rgba(0,0,0,0.55);
         }
 
         .corner {
@@ -686,14 +691,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
         .corner-tl {
             top: -1px; left: -1px;
-            border-top: 2px solid #2dff91;
-            border-left: 2px solid #2dff91;
+            border-top: 2px solid var(--accent);
+            border-left: 2px solid var(--accent);
             clip-path: polygon(0 0, 60% 0, 0 60%);
         }
         .corner-br {
             bottom: -1px; right: -1px;
-            border-bottom: 2px solid #2dff91;
-            border-right: 2px solid #2dff91;
+            border-bottom: 2px solid var(--accent);
+            border-right: 2px solid var(--accent);
             clip-path: polygon(100% 100%, 40% 100%, 100% 40%);
         }
 
@@ -708,13 +713,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .ring-track {
             fill: none;
-            stroke: rgba(45, 255, 145, 0.12);
+            stroke: rgba(var(--accent-rgb), 0.12);
             stroke-width: 9;
         }
 
         .ring-progress {
             fill: none;
-            stroke: #2dff91;
+            stroke: var(--accent);
             stroke-width: 9;
             stroke-linecap: round;
             stroke-dasharray: 364.4;
@@ -722,7 +727,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             transform: rotate(-90deg);
             transform-origin: 61px 61px;
             transition: stroke-dashoffset 0.5s ease;
-            filter: drop-shadow(0 0 5px rgba(45,255,145,0.65));
+            filter: drop-shadow(0 0 5px rgba(var(--accent-rgb),0.65));
         }
 
         .ring-spin {
@@ -737,7 +742,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .ring-tick {
             fill: none;
-            stroke: rgba(45, 255, 145, 0.35);
+            stroke: rgba(var(--accent-rgb), 0.35);
             stroke-width: 1;
             stroke-dasharray: 1.5 7.5;
         }
@@ -766,7 +771,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-size: 9px;
             font-weight: 700;
             letter-spacing: 0.14em;
-            color: rgba(45, 255, 145, 0.70);
+            color: rgba(var(--accent-rgb), 0.70);
             text-transform: uppercase;
             margin-top: 3px;
         }
@@ -792,7 +797,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .rank-big .rank-name { color: #eafff2; }
-        .rank-big .rank-num  { color: #2dff91; }
+        .rank-big .rank-num  { color: var(--accent); }
 
         .next-row {
             display: flex;
@@ -810,9 +815,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-row.hidden { visibility: hidden; }
 
         .next-row .hi { color: #eafff2; font-weight: 700; }
-        .next-row .br { color: rgba(45, 255, 145, 0.5); }
+        .next-row .br { color: rgba(var(--accent-rgb), 0.5); }
 
-        .session-pos  { color: #2dff91; }
+        .session-pos  { color: var(--accent); }
         .session-neg  { color: #ff5c5c; }
         .session-zero { color: rgba(210, 255, 230, 0.85); }
 
@@ -821,7 +826,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             grid-template-columns: repeat(4, auto);
             gap: 16px;
             padding-top: 9px;
-            border-top: 1px solid rgba(45, 255, 145, 0.14);
+            border-top: 1px solid rgba(var(--accent-rgb), 0.14);
         }
 
         .stat {
@@ -836,7 +841,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.10em;
-            color: rgba(45, 255, 145, 0.5);
+            color: rgba(var(--accent-rgb), 0.5);
         }
 
         .stat-value {
@@ -844,6 +849,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-size: 18px;
             font-weight: 700;
             color: #eafff2;
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
         }
 
         .mode-bar {
@@ -875,13 +889,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .mode-btn:hover {
             color: rgba(255, 255, 255, 0.90);
             background: rgba(40, 40, 40, 0.95);
-            border-color: rgba(45, 255, 145, 0.30);
+            border-color: rgba(var(--accent-rgb), 0.30);
         }
 
         .mode-btn.active {
-            color: #2dff91;
+            color: var(--accent);
             background: rgba(18, 48, 35, 0.95);
-            border-color: rgba(45, 255, 145, 0.55);
+            border-color: rgba(var(--accent-rgb), 0.55);
         }
     </style>
 </head>
@@ -936,12 +950,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             </div>
         </div>
 
+        <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
         var POLL_MS      = __POLL_MS__;
-        var activeMode   = '';
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
         var modeBarBuilt = false;
         var RING_CIRC    = 364.4;
 
@@ -966,6 +995,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 btn.addEventListener('click', function() {
                     if (activeMode === m.key) return;
                     activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
                     document.querySelectorAll('.mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
@@ -1000,6 +1030,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function applyData(d) {
             if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
 
             renderRankText(d.rank_display, d.is_unreal);
 

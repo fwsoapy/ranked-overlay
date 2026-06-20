@@ -665,6 +665,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :root {
+            --accent: #dc2626;
+            --accent-rgb: 220, 38, 38;
+        }
+
         body {
             background: transparent;
             font-family: 'Barlow', sans-serif;
@@ -688,8 +693,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             flex-direction: column;
             background: rgba(8, 4, 4, 0.88);
             backdrop-filter: blur(14px);
-            border: 1px solid rgba(220, 38, 38, 0.22);
-            border-left: 5px solid #dc2626;
+            border: 1px solid rgba(var(--accent-rgb), 0.22);
+            border-left: 5px solid var(--accent);
             min-width: 400px;
             overflow: hidden;
             position: relative;
@@ -700,7 +705,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             position: absolute;
             top: 0; left: 0;
             width: 90px; height: 90px;
-            background: radial-gradient(circle at top left, rgba(220,38,38,0.18) 0%, transparent 70%);
+            background: radial-gradient(circle at top left, rgba(var(--accent-rgb),0.18) 0%, transparent 70%);
             pointer-events: none;
         }
 
@@ -709,8 +714,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             justify-content: space-between;
             align-items: center;
             padding: 13px 20px 11px 18px;
-            background: rgba(220, 38, 38, 0.10);
-            border-bottom: 1px solid rgba(220, 38, 38, 0.18);
+            background: rgba(var(--accent-rgb), 0.10);
+            border-bottom: 1px solid rgba(var(--accent-rgb), 0.18);
         }
 
         .rank-text {
@@ -731,8 +736,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .elo-pill {
-            background: rgba(220, 38, 38, 0.20);
-            border: 1px solid rgba(220, 38, 38, 0.45);
+            background: rgba(var(--accent-rgb), 0.20);
+            border: 1px solid rgba(var(--accent-rgb), 0.45);
             border-radius: 4px;
             padding: 3px 12px;
             display: none;
@@ -779,7 +784,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .prog-fill {
             height: 100%;
-            background: #dc2626;
+            background: var(--accent);
             border-radius: 4px;
             transition: width 0.4s ease;
         }
@@ -789,7 +794,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             justify-content: space-between;
             align-items: center;
             padding: 7px 20px 7px 18px;
-            border-bottom: 1px solid rgba(220, 38, 38, 0.10);
+            border-bottom: 1px solid rgba(var(--accent-rgb), 0.10);
         }
 
         .mid-row.visible { display: flex; }
@@ -805,7 +810,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: rgba(255, 200, 200, 0.80);
         }
 
-        .next-target .arrow { color: rgba(220, 38, 38, 0.85); font-size: 12px; }
+        .next-target .arrow { color: rgba(var(--accent-rgb), 0.85); font-size: 12px; }
         .next-target .hi    { color: rgba(255, 230, 230, 1.0); }
 
         .session-pos  { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #4ade80; }
@@ -830,7 +835,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             position: absolute;
             left: 0; top: 3px; bottom: 3px;
             width: 1px;
-            background: rgba(220, 38, 38, 0.14);
+            background: rgba(var(--accent-rgb), 0.14);
         }
 
         .stat + .stat { padding-left: 18px; }
@@ -851,6 +856,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: #fff5f5;
             line-height: 1;
             letter-spacing: 0.02em;
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
         }
 
         .mode-bar {
@@ -940,12 +954,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             </div>
         </div>
 
+        <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
         var POLL_MS      = __POLL_MS__;
-        var activeMode   = '';
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
@@ -963,6 +992,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 btn.addEventListener('click', function() {
                     if (activeMode === m.key) return;
                     activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
                     document.querySelectorAll('.mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
@@ -974,6 +1004,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function applyData(d) {
             if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
 
             $('#rankText').textContent = d.rank_display;
 

@@ -648,6 +648,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :root {
+            --accent: #a855f7;
+            --accent-rgb: 168, 85, 247;
+        }
+
         body {
             background: transparent;
             font-family: 'Space Grotesk', sans-serif;
@@ -666,7 +671,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .card {
             background: rgba(13, 11, 18, 0.92);
-            border: 1px solid rgba(168, 85, 247, 0.20);
+            border: 1px solid rgba(var(--accent-rgb), 0.20);
             min-width: 480px;
             overflow: hidden;
             position: relative;
@@ -738,7 +743,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             white-space: nowrap;
         }
 
-        .rank-value .accent { color: #a855f7; }
+        .rank-value .accent { color: var(--accent); }
 
         .elo-label-small {
             font-family: 'Space Mono', monospace;
@@ -755,11 +760,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .elo-value {
             font-size: 36px;
             font-weight: 700;
-            color: #a855f7;
+            color: var(--accent);
             letter-spacing: -0.01em;
             line-height: 1;
             text-align: right;
-            text-shadow: 0 0 28px rgba(168, 85, 247, 0.50);
+            text-shadow: 0 0 28px rgba(var(--accent-rgb), 0.50);
         }
 
         .prog-row {
@@ -774,23 +779,23 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .prog-value {
             font-size: 36px;
             font-weight: 700;
-            color: #a855f7;
+            color: var(--accent);
             letter-spacing: -0.01em;
             line-height: 1;
-            text-shadow: 0 0 28px rgba(168, 85, 247, 0.50);
+            text-shadow: 0 0 28px rgba(var(--accent-rgb), 0.50);
         }
 
         .prog-track {
             width: 80px;
             height: 4px;
-            background: rgba(168, 85, 247, 0.18);
+            background: rgba(var(--accent-rgb), 0.18);
             border-radius: 2px;
             overflow: hidden;
         }
 
         .prog-fill {
             height: 100%;
-            background: #a855f7;
+            background: var(--accent);
             border-radius: 2px;
             transition: width 0.4s ease;
         }
@@ -833,7 +838,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .session-pos  { color: #34d399; background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.25); }
         .session-neg  { color: #f87171; background: rgba(248,113,113,0.10); border: 1px solid rgba(248,113,113,0.25); }
-        .session-zero { color: rgba(230,210,255,0.95); background: rgba(168,85,247,0.08); border: 1px solid rgba(168,85,247,0.25); }
+        .session-zero { color: rgba(230,210,255,0.95); background: rgba(var(--accent-rgb),0.08); border: 1px solid rgba(var(--accent-rgb),0.25); }
 
         .stats-band {
             display: flex;
@@ -875,6 +880,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: #f5f0ff;
             line-height: 1;
             letter-spacing: -0.01em;
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
         }
 
         .mode-bar {
@@ -964,12 +978,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         </div>
 
+        <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
         var POLL_MS      = __POLL_MS__;
-        var activeMode   = '';
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
@@ -999,6 +1028,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 btn.addEventListener('click', function() {
                     if (activeMode === m.key) return;
                     activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
                     document.querySelectorAll('.mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
@@ -1010,6 +1040,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function applyData(d) {
             if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
 
             var rankEl   = $('#rankValue');
             var eloEl    = $('#eloValue');

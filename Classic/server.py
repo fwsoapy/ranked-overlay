@@ -647,6 +647,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
+        :root {
+            --accent: #3b82f6;
+            --accent-rgb: 59, 130, 246;
+        }
+
         body {
             background: transparent;
             font-family: 'Inter', sans-serif;
@@ -671,7 +676,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             background: rgba(6, 10, 20, 0.82);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(56, 139, 255, 0.18);
-            border-top: 5px solid #3b82f6;
+            border-top: 5px solid var(--accent);
             padding: 16px 24px 16px 20px;
             min-width: 400px;
             user-select: none;
@@ -692,7 +697,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .rank-text .rank-name { color: #f0f6ff; }
-        .rank-text .rank-num  { color: #3b82f6; }
+        .rank-text .rank-num  { color: var(--accent); }
 
         .main-row-right {
             display: flex;
@@ -703,7 +708,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .elo-text {
             font-size: 28px;
             font-weight: 700;
-            color: #3b82f6;
+            color: var(--accent);
             letter-spacing: 0.02em;
         }
 
@@ -718,7 +723,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .prog-pct {
             font-size: 22px;
             font-weight: 700;
-            color: #3b82f6;
+            color: var(--accent);
             letter-spacing: 0.02em;
             min-width: 48px;
             text-align: right;
@@ -734,7 +739,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .prog-fill {
             height: 100%;
-            background: #3b82f6;
+            background: var(--accent);
             border-radius: 4px;
             transition: width 0.4s ease;
         }
@@ -801,6 +806,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-size: 17px;
             font-weight: 700;
             color: #d8e8ff;
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
         }
 
         .mode-bar {
@@ -894,12 +908,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         </div>
 
+        <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
     <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
         var POLL_MS      = __POLL_MS__;
-        var activeMode   = '';
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
@@ -917,6 +946,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 btn.addEventListener('click', function() {
                     if (activeMode === m.key) return;
                     activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
                     document.querySelectorAll('.mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
@@ -953,6 +983,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function applyData(d) {
             if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
 
             renderRankText(d.rank_display, d.is_unreal);
 
