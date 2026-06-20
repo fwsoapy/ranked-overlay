@@ -33,11 +33,11 @@ BROWSER_HEADERS = {
     "Referer":         "https://olitracker.com/",
 }
 
-_lock              = threading.Lock()
-_start_elos        = {}
+_lock               = threading.Lock()
+_start_elos         = {}
 _start_progressions = {}
-_last_raw          = None
-_last_modes        = []
+_last_raw           = None
+_last_modes         = []
 
 STATE = {
     "ok":              False,
@@ -49,6 +49,7 @@ STATE = {
     "next_position":   None,
     "elo_to_next":     None,
     "session_delta":   0,
+    "prog_delta":      0,
     "updated_at":      None,
     "error":           "starting up",
     "active_mode_key": "",
@@ -456,7 +457,7 @@ def refresh_once():
         key = _path_str(path)
         modes_available.append({"key": key, "label": _mode_label(key)})
 
-    path, mode = pick_best_mode(modes)
+    path, mode  = pick_best_mode(modes)
     mode_key    = _path_str(path) if path else ""
     elo         = extract_elo(mode)
     label       = extract_label(mode)
@@ -499,15 +500,10 @@ def refresh_once():
     sess   = compute_windowed_stats(data, "session", mode_key)
     kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "—"
     wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "—"
-    gap_txt = (
-        f"{elo_to_next} ELO to #{next_pos}" if elo_to_next and next_pos
-        else f"#{next_pos} (gap n/a)" if next_pos
-        else ("top of leaderboard" if is_unreal else "n/a")
-    )
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     elo_str = f"{elo} ELO" if elo is not None else label
-    print(f"[overlay] {ts}  {elo_str}  |  next: {gap_txt}  |  session {session_delta:+d}")
-    print(f"          session: {sess['wins']}W / {sess['losses']}L   KD {kd_txt}   WR {wr_txt}   ({sess['matches']} games)")
+    print(f"[overlay] {ts}  {elo_str}  |  session {session_delta:+d}")
+    print(f"          session: {sess['wins']}W / {sess['losses']}L   KD {kd_txt}   WR {wr_txt}")
 
 
 def poll_loop():
@@ -556,8 +552,7 @@ def snapshot(window="session", mode_key=None):
         delta       = s.get("session_delta", 0) or 0
         prog_delta  = s.get("prog_delta", 0) or 0
 
-    stats        = compute_windowed_stats(raw, "session", resolved_key or None)
-    season_stats = compute_windowed_stats(raw, "season",  resolved_key or None)
+    season_stats = compute_windowed_stats(raw, "season", resolved_key or None)
 
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
@@ -586,10 +581,16 @@ def snapshot(window="session", mode_key=None):
         s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
     else:
         pct_left = (100 - progression) if progression is not None else None
-        s["pct_to_next"]  = pct_left
+        s["pct_to_next"] = pct_left
         sign = "+" if prog_delta >= 0 else ""
         s["session_text"] = f"{sign}{prog_delta}% TODAY" if prog_delta != 0 else "+0% TODAY"
         s["session_sign"] = "pos" if prog_delta > 0 else ("neg" if prog_delta < 0 else "zero")
+        div = _num(mode.get("division")) if mode is not None else None
+        if div is not None:
+            next_div_name = division_name(div + 1) if (div + 1) in DIVISION_NAMES else None
+        else:
+            next_div_name = None
+        s["next_rank_name"] = next_div_name
 
     s["session_start"] = SESSION_START
     s["window"]        = window
@@ -643,18 +644,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fortnite Rank Overlay</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             background: transparent;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             display: flex;
+            flex-direction: column;
             justify-content: flex-start;
             align-items: flex-start;
             height: 100vh;
-            padding: 24px;
+            padding: 16px;
         }
 
         .wrap {
@@ -667,92 +669,48 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .overlay-container {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            background: rgba(6, 10, 20, 0.82);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(56, 139, 255, 0.18);
-            border-top: 5px solid #3b82f6;
-            padding: 16px 24px 16px 20px;
-            min-width: 400px;
+            background: rgba(12, 10, 16, 0.85);
+            backdrop-filter: blur(8px);
+            border-left: 6px solid #ac46ff;
+            padding: 18px 20px;
+            min-width: 560px;
+            letter-spacing: -0.02em;
             user-select: none;
         }
 
         .main-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            gap: 32px;
+            align-items: baseline;
+            margin-bottom: 10px;
         }
 
         .rank-text {
-            font-size: 32px;
-            font-weight: 900;
+            font-weight: 800;
+            font-size: 44px;
+            color: #ffffff;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
         }
 
-        .rank-text .rank-name { color: #f0f6ff; }
-        .rank-text .rank-num  { color: #3b82f6; }
-
-        .main-row-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .rank-text .purple { color: #ac46ff; }
 
         .elo-text {
-            font-size: 28px;
-            font-weight: 700;
-            color: #3b82f6;
-            letter-spacing: 0.02em;
-        }
-
-        .prog-inline {
-            display: none;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .prog-inline.visible { display: flex; }
-
-        .prog-pct {
-            font-size: 22px;
-            font-weight: 700;
-            color: #3b82f6;
-            letter-spacing: 0.02em;
-            min-width: 48px;
-            text-align: right;
-        }
-
-        .prog-track {
-            width: 80px;
-            height: 7px;
-            background: rgba(56, 139, 255, 0.15);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .prog-fill {
-            height: 100%;
-            background: #3b82f6;
-            border-radius: 4px;
-            transition: width 0.4s ease;
-        }
-
-        .divider {
-            height: 1px;
-            background: rgba(56, 139, 255, 0.12);
+            font-weight: 800;
+            font-size: 44px;
+            color: #ac46ff;
+            text-transform: uppercase;
         }
 
         .sub-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 18px;
-            font-weight: 600;
+            font-weight: 700;
+            font-size: 22px;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: rgba(185, 205, 245, 0.95);
+            color: rgba(255, 255, 255, 0.75);
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             visibility: visible;
         }
 
@@ -760,47 +718,30 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .next-target {
             display: flex;
-            align-items: center;
-            gap: 5px;
+            gap: 6px;
+            align-items: baseline;
         }
 
-        .next-target .hi { color: rgba(220, 235, 255, 1.0); }
+        .next-target .highlight { color: #ffffff; }
+        .next-target .purple    { color: #ac46ff; }
 
-        .session-pos  { font-size: 18px; color: #22c55e; }
-        .session-neg  { font-size: 18px; color: #ef4444; }
-        .session-zero { font-size: 18px; color: rgba(185, 205, 245, 0.95); }
+        .session-delta { font-weight: 700; }
+        .session-pos  { color: #2ed573; }
+        .session-neg  { color: #ff4757; }
+        .session-zero { color: #2ed573; }
 
-        .divider-mid {
-            height: 1px;
-            background: rgba(56, 139, 255, 0.12);
-            visibility: visible;
-        }
-
-        .divider-mid.hidden { visibility: hidden; }
-
-        .stats-row {
+        .season-row {
             display: flex;
-            gap: 18px;
+            gap: 24px;
+            margin-top: 12px;
+            font-weight: 500;
+            font-size: 22px;
+            color: rgba(255, 255, 255, 0.75);
         }
 
-        .stat {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .stat-label {
-            font-size: 9px;
+        .stat-item span {
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: rgba(170, 195, 245, 0.95);
-        }
-
-        .stat-value {
-            font-size: 17px;
-            font-weight: 700;
-            color: #d8e8ff;
+            color: rgba(255, 255, 255, 0.90);
         }
 
         .mode-bar {
@@ -812,11 +753,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .mode-btn {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 14px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.10em;
+            letter-spacing: 0.08em;
             color: rgba(220, 220, 220, 0.55);
             background: rgba(20, 20, 20, 0.90);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -845,53 +786,29 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 <body>
     <div class="wrap">
         <div class="overlay-container">
-
             <div class="main-row">
-                <div class="rank-text" id="rankText">— LOADING</div>
-                <div class="main-row-right">
-                    <div class="elo-text" id="eloText" style="display:none"></div>
-                    <div class="prog-inline" id="progInline">
-                        <div class="prog-track">
-                            <div class="prog-fill" id="progFill" style="width:0%"></div>
-                        </div>
-                        <div class="prog-pct" id="progPct">0%</div>
-                    </div>
+                <div class="rank-text" id="rankText">#— UNREAL</div>
+                <div class="elo-text" id="eloRight">—— ELO</div>
+            </div>
+
+            <div class="sub-row" id="subRow">
+                <div class="next-target" id="nextContainer">
+                    <span>Next:</span>
+                    <span class="highlight">—</span>
+                    <span>to</span>
+                    <span class="highlight">#—</span>
+                </div>
+                <div class="session-delta">
+                    <span class="session-zero" id="sessionText">+0 ELO TODAY</span>
                 </div>
             </div>
 
-            <div class="divider"></div>
-
-            <div class="sub-row hidden" id="subRow">
-                <div class="next-target">
-                    <span id="nextLabel">NEXT</span>
-                    <span class="hi" id="nextGap">—</span>
-                    <span id="nextArrow">→</span>
-                    <span class="hi" id="nextPos">#—</span>
-                </div>
-                <span class="session-zero" id="sessionText">+0 TODAY</span>
+            <div class="season-row">
+                <div class="stat-item">KD: <span id="seasonKd">—</span></div>
+                <div class="stat-item">WR: <span id="seasonWr">—%</span></div>
+                <div class="stat-item">KILLS: <span id="seasonKills">—</span></div>
+                <div class="stat-item">WINS: <span id="seasonWins">—</span></div>
             </div>
-
-            <div class="divider-mid hidden" id="divider2"></div>
-
-            <div class="stats-row">
-                <div class="stat">
-                    <div class="stat-label">KD</div>
-                    <div class="stat-value" id="seasonKd">—</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">WIN%</div>
-                    <div class="stat-value" id="seasonWr">—</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">KILLS</div>
-                    <div class="stat-value" id="seasonKills">—</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">WINS</div>
-                    <div class="stat-value" id="seasonWins">—</div>
-                </div>
-            </div>
-
         </div>
 
         <div class="mode-bar" id="modeBar"></div>
@@ -903,6 +820,18 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
+
+        var ROMAN = {'I':true,'II':true,'III':true,'IV':true,'V':true,'VI':true};
+
+        function purpleNumeral(text) {
+            if (!text) return '';
+            var parts = text.split(' ');
+            var last  = parts[parts.length - 1];
+            if (ROMAN[last]) {
+                return parts.slice(0, -1).join(' ') + ' <span class="purple">' + last + '</span>';
+            }
+            return text;
+        }
 
         function buildModeBar(modes) {
             if (modeBarBuilt) return;
@@ -926,78 +855,58 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             });
         }
 
-        function renderRankText(rankDisplay, isUnreal) {
-            var el = $('#rankText');
-            if (!rankDisplay || rankDisplay === '—') {
-                el.innerHTML = '<span class="rank-name">—</span>';
-                return;
-            }
-            if (isUnreal) {
-                // "#79 UNREAL" → blue #79, white UNREAL
-                var m = rankDisplay.match(/^(#\d+)\s+(.+)$/);
-                if (m) {
-                    el.innerHTML = '<span class="rank-num">' + m[1] + '</span> <span class="rank-name">' + m[2] + '</span>';
-                } else {
-                    el.innerHTML = '<span class="rank-name">' + rankDisplay + '</span>';
-                }
-            } else {
-                // "GOLD II" or "ELITE III" → white name, blue numeral
-                var m2 = rankDisplay.match(/^(.+?)\s+(I{1,3}|IV|V?I{0,3})$/);
-                if (m2 && m2[2]) {
-                    el.innerHTML = '<span class="rank-name">' + m2[1] + '</span> <span class="rank-num">' + m2[2] + '</span>';
-                } else {
-                    el.innerHTML = '<span class="rank-name">' + rankDisplay + '</span>';
-                }
-            }
-        }
-
         function applyData(d) {
             if (!d || !d.rank_display) return;
 
-            renderRankText(d.rank_display, d.is_unreal);
-
-            var eloEl    = $('#eloText');
-            var progEl   = $('#progInline');
-            var subRow   = $('#subRow');
-            var divider2 = $('#divider2');
-
-            if (d.is_unreal && d.elo_text) {
-                eloEl.textContent    = d.elo_text;
-                eloEl.style.display  = '';
-                progEl.classList.remove('visible');
-            } else if (!d.is_unreal && d.progression_pct !== null && d.progression_pct !== undefined) {
-                $('#progFill').style.width = d.progression_pct + '%';
-                $('#progPct').textContent  = d.progression_pct + '%';
-                progEl.classList.add('visible');
-                eloEl.style.display = 'none';
-            } else {
-                eloEl.style.display = 'none';
-                progEl.classList.remove('visible');
-            }
+            var rankEl    = $('#rankText');
+            var eloRight  = $('#eloRight');
+            var subRow    = $('#subRow');
+            var nextCont  = $('#nextContainer');
+            var sessEl    = $('#sessionText');
 
             if (d.is_unreal) {
-                $('#nextLabel').textContent = 'NEXT';
-                $('#nextGap').textContent   = d.next_gap ? d.next_gap + ' ELO' : '—';
-                $('#nextArrow').textContent = '→';
-                $('#nextPos').textContent   = d.next_pos ? '#' + d.next_pos : '#—';
-                var sessEl = $('#sessionText');
-                sessEl.textContent = d.session_text || '+0 TODAY';
+                var m = d.rank_display.match(/^(#\d+)\s+(.+)$/);
+                if (m) {
+                    rankEl.innerHTML = '<span class="purple">' + m[1] + '</span> ' + m[2];
+                } else {
+                    rankEl.textContent = d.rank_display;
+                }
+
+                eloRight.textContent = d.elo_text || '—— ELO';
+
+                if (d.next_gap && d.next_pos) {
+                    nextCont.innerHTML =
+                        'Next: <span class="highlight">' + d.next_gap + ' ELO</span>' +
+                        ' to <span class="purple">#</span><span class="highlight">' + d.next_pos + '</span>';
+                } else {
+                    nextCont.innerHTML =
+                        'Next: <span class="highlight">—</span> to ' +
+                        '<span class="purple">#</span><span class="highlight">—</span>';
+                }
+
+                sessEl.textContent = d.session_text || '+0 ELO TODAY';
                 sessEl.className   = 'session-' + (d.session_sign || 'zero');
                 subRow.classList.remove('hidden');
-                divider2.classList.remove('hidden');
-            } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
-                $('#nextLabel').textContent = '';
-                $('#nextGap').textContent   = d.pct_to_next + '% TO NEXT RANK';
-                $('#nextArrow').textContent = '';
-                $('#nextPos').textContent   = '';
-                var sessEl = $('#sessionText');
+
+            } else {
+                rankEl.innerHTML = purpleNumeral(d.rank_display);
+                eloRight.textContent = (d.progression_pct !== null && d.progression_pct !== undefined)
+                    ? d.progression_pct + '%' : '—%';
+
+                if (d.pct_to_next !== null && d.pct_to_next !== undefined && d.next_rank_name) {
+                    nextCont.innerHTML =
+                        '<span class="highlight">' + d.pct_to_next + '%</span>' +
+                        ' TO ' + purpleNumeral(d.next_rank_name);
+                } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
+                    nextCont.innerHTML =
+                        '<span class="highlight">' + d.pct_to_next + '%</span> TO NEXT';
+                } else {
+                    nextCont.textContent = '—';
+                }
+
                 sessEl.textContent = d.session_text || '+0% TODAY';
                 sessEl.className   = 'session-' + (d.session_sign || 'zero');
                 subRow.classList.remove('hidden');
-                divider2.classList.remove('hidden');
-            } else {
-                subRow.classList.add('hidden');
-                divider2.classList.add('hidden');
             }
 
             $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '—';
@@ -1007,9 +916,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
-                if (!activeMode) {
-                    activeMode = d.active_mode_key || modes[0].key;
-                }
+                if (!activeMode) activeMode = d.active_mode_key || modes[0].key;
                 buildModeBar(modes);
                 document.querySelectorAll('.mode-btn').forEach(function(b) {
                     b.classList.toggle('active', b.dataset.key === activeMode);
