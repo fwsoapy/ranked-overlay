@@ -2,7 +2,7 @@
 
 A live ranked overlay for Fortnite streamers. Pulls real-time ELO, rank, and season stats from [OliTracker](https://olitracker.com) and displays them as a browser source in OBS. Supports multiple game modes, automatic non-Unreal progression tracking, and a built-in mode switcher for BR, Reload, and Boxfights.
 
-7 designs to choose from, each in its own self-contained folder — just grab the one you like.
+7 designs to choose from, each in its own self-contained folder - just grab the one you like.
 
 ---
 
@@ -14,7 +14,7 @@ A live ranked overlay for Fortnite streamers. Pulls real-time ELO, rank, and sea
 - Non-Unreal ranks: shows promotion progress % and percent gained today (`53% TO GOLD III`)
 - Mode switcher buttons for BR, Reload, and Boxfights, each with their own independent stats
 - Season stats (K/D, Win%, Kills, Wins) accurate per game mode
-- 7 overlay designs to choose from, any accent color you want
+- 8 overlay designs to choose from, any accent color you want
 
 ---
 
@@ -58,7 +58,10 @@ Click a preview to open that design's folder.
 <a href="Modern"><img src="Modern/preview.png" width="320"><br><b>Modern</b></a>
 <br>Sleek card with a soft radial glow accent and a bold colored left border.
 </td>
-<td></td>
+<td align="center" width="50%">
+<a href="Pulse"><img src="Pulse/preview.png" width="320"><br><b>Pulse</b></a>
+<br>Green terminal HUD with a live pulse indicator and monospace readout. Built for a clean, tactical look.
+</td>
 </tr>
 </table>
 
@@ -71,17 +74,17 @@ Each design works in any color. Open `server.py`, find the hex color value in th
 - Python 3 or later
 - Windows (the `.bat` files are Windows only; Mac/Linux users can run `python server.py` directly)
 - OBS Studio with a Browser Source
-- Your Epic Account ID (the bundled `account-id.bat` looks this up for you — see Setup below)
+- Your Epic Account ID (the bundled `account-id.bat` looks this up for you - see Setup below)
 
 ---
 
 ## Setup
 
-Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`) is self-contained — it has its own `server.py`, `account-id.bat`, `start.bat`, and `stop.bat`. You only ever need the one folder for the design you picked.
+Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`) is self-contained - it has its own `server.py`, `account-id.bat`, `start.bat`, and `stop.bat`. You only ever need the one folder for the design you picked.
 
 ### 1. Download the files
 
-Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on your PC. Your Desktop works fine. Open the folder for the design you picked from the table above — everything you need is in there.
+Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on your PC. Your Desktop works fine. Open the folder for the design you picked from the table above - everything you need is in there.
 
 ### 2. Find your Epic Account ID
 
