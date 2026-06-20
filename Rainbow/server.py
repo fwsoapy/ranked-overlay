@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Fortnite Ranked OBS Overlay - local server
--------------------------------------------
-Polls the OliTracker API every 30 seconds, caches the result, and serves a
-live, self-updating overlay that you point an OBS Browser Source at:
-
-    http://localhost:8888/overlay
-
-Other endpoints:
-    /data?window=session&mode=<key>   JSON the overlay reads
-    /debug                            diagnostics
-    /raw                               raw OliTracker response
-
-Standard library only — no pip install needed. Python 3 required.
-"""
-
 import json
 import re
 import time
@@ -27,9 +9,7 @@ from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-# ============================================================================
-#  CONFIG  —  edit these if you need to
-# ============================================================================
+# CONFIG  -  edit these if you need to
 EPIC_USERNAME    = "YourUsername"
 EPIC_ACCOUNT_ID  = "your-account-id-here"
 API_BASE          = "https://olitracker.com/api"
@@ -40,12 +20,11 @@ OVERLAY_POLL_MS   = 10000       # browser auto-refresh (milliseconds)
 # Which ranked mode to show.  "" = auto (picks the one with a real ELO).
 RANKED_MODE_HINT  = ""
 # The ranking_id used in match_history to filter ranked matches for stats.
-# Leave "" to AUTO-DETECT the mode you play most — recommended, and works for
+# Leave "" to AUTO-DETECT the mode you play most - recommended, and works for
 # any account.  Only set this if you want to force a specific ranking_id.
 RANKED_MODE_KEY   = ""
 # Try to look up the ELO gap to the next leaderboard position.
 ENABLE_NEXT_LOOKUP = True
-# ============================================================================
 
 SESSION_START = int(time.time())   # epoch-seconds when this server process started
 
@@ -79,9 +58,7 @@ _last_raw   = None     # full cached API response
 _last_modes = []       # ranked-mode candidates (BR / Reload / Boxfights, etc.)
 
 
-# ===========================================================================
-#  HTTP + JSON helpers
-# ===========================================================================
+# HTTP + JSON helpers
 def _http_get_json(url, timeout=15):
     req = urllib.request.Request(url, headers=BROWSER_HEADERS)
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -106,9 +83,7 @@ def _num(v):
     return None
 
 
-# ===========================================================================
-#  Find + choose the ranked Battle Royale block
-# ===========================================================================
+# Find + choose the ranked Battle Royale block
 DIVISION_NAMES = {
     0:  "BRONZE I",    1:  "BRONZE II",    2:  "BRONZE III",
     3:  "SILVER I",    4:  "SILVER II",    5:  "SILVER III",
@@ -179,7 +154,7 @@ def pick_mode_by_key(modes, mode_key):
 
 
 def pick_best_mode(modes):
-    """Pick the mode to display — prefers real ELO + Unreal placement."""
+    """Pick the mode to display - prefers real ELO + Unreal placement."""
     if not modes:
         return None, None
     hint = RANKED_MODE_HINT.strip().lower()
@@ -212,9 +187,7 @@ def extract_placement(mode_obj):
     return _num(mode_obj.get("unreal_placement"))
 
 
-# ===========================================================================
-#  Best-effort: ELO gap to the next leaderboard position
-# ===========================================================================
+# Best-effort: ELO gap to the next leaderboard position
 class _LeaderboardParser(HTMLParser):
     """Pull (placement, elo) pairs out of olitracker.com leaderboard HTML."""
     def __init__(self):
@@ -312,9 +285,7 @@ def fetch_elo_to_next(target_placement, mode_path):
     return None
 
 
-# ===========================================================================
-#  Polling loop
-# ===========================================================================
+# Polling loop
 def _set_error(msg):
     with _lock:
         STATE["error"] = msg
@@ -339,7 +310,7 @@ def refresh_once():
     modes       = find_ranked_modes(data)
     _last_modes = modes
     if not modes:
-        _set_error("no ranked data found in API response — see /raw")
+        _set_error("no ranked data found in API response - see /raw")
         return
 
     modes_available = []
@@ -354,7 +325,7 @@ def refresh_once():
     placement = extract_placement(mode)
 
     if elo is None:
-        _set_error("found ranked block but no ELO field — see /debug")
+        _set_error("found ranked block but no ELO field - see /debug")
         return
 
     next_pos    = (placement - 1) if (placement and placement > 1) else None
@@ -401,9 +372,7 @@ def poll_loop():
         refresh_once()
 
 
-# ===========================================================================
-#  Snapshot — builds display strings for the overlay (accepts window params)
-# ===========================================================================
+# Snapshot - builds display strings for the overlay (accepts window params)
 def snapshot(mode_key=None):
     with _lock:
         s   = dict(STATE)
@@ -421,7 +390,9 @@ def snapshot(mode_key=None):
         elo       = extract_elo(mode)
         label     = extract_label(mode)
         placement = extract_placement(mode)
-        nxt       = (placement - 1) if (placement and placement > 1) else None
+        is_unreal = (label == "UNREAL")
+        div       = _num(mode.get("division"))
+        nxt       = (placement - 1) if (is_unreal and placement and placement > 1) else None
         gap       = s.get("elo_to_next") if resolved_key == s.get("active_mode_key") else None
         with _lock:
             start = _start_elos.get(resolved_key)
@@ -430,30 +401,46 @@ def snapshot(mode_key=None):
         elo       = s.get("elo")
         placement = s.get("rank_number")
         label     = s.get("rank_label") or ""
+        is_unreal = s.get("is_unreal", False)
+        div       = None
         nxt       = s.get("next_position")
         gap       = s.get("elo_to_next")
         delta     = s.get("session_delta", 0) or 0
 
+    s["is_unreal"]     = is_unreal
     s["rank_display"]  = (f"#{placement} {label}".strip() if placement
-                          else (label or "—"))
-    s["elo_text"]      = (f"{elo} ELO" if elo is not None else "—— ELO")
+                          else (label or "-"))
 
-    # ELO-to-next — expose parts separately for styled rendering
-    if nxt and gap is not None:
+    if is_unreal:
+        s["elo_text"] = (f"{elo} ELO" if elo is not None else "-- ELO")
+    else:
+        s["elo_text"] = (f"{elo}%" if elo is not None else "-- %")
+
+    # ELO-to-next (Unreal) or percent-to-next-rank (everyone else)
+    if is_unreal and nxt and gap is not None:
         s["next_text"] = f"{gap} ELO UNTIL #{nxt}"
         s["next_gap"]  = str(gap)
         s["next_pos"]  = str(nxt)
-    elif nxt:
+    elif is_unreal and nxt:
         s["next_text"] = f"ELO UNTIL #{nxt}"
         s["next_gap"]  = None
         s["next_pos"]  = str(nxt)
+    elif not is_unreal and elo is not None:
+        next_div_name = division_name(div + 1) if (div is not None and (div + 1) in DIVISION_NAMES) else None
+        pct_left = 100 - elo
+        s["next_text"] = f"{pct_left}% TO {next_div_name}" if next_div_name else f"{pct_left}% TO NEXT RANK"
+        s["next_gap"]  = f"{pct_left}%"
+        s["next_pos"]  = next_div_name or "NEXT RANK"
     else:
-        s["next_text"] = "—"
+        s["next_text"] = "-"
         s["next_gap"]  = None
         s["next_pos"]  = None
 
     sign = "+" if delta >= 0 else ""
-    s["session_text"] = f"{sign}{delta} ELO TODAY"
+    if is_unreal:
+        s["session_text"] = f"{sign}{delta} ELO TODAY"
+    else:
+        s["session_text"] = f"{sign}{delta}% TODAY"
     s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
 
     s["session_start"] = SESSION_START
@@ -490,9 +477,7 @@ def debug_report():
     return "\n".join(out)
 
 
-# ===========================================================================
-#  Overlay HTML
-# ===========================================================================
+# Overlay HTML
 OVERLAY_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -511,10 +496,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             align-items: center;
         }
 
-        /* =========================================================
-           OVERLAY CARD  (what OBS sees — size your browser source
-           to ~90 px tall so the settings panel below stays hidden)
-           ========================================================= */
+        /* size your OBS browser source to ~90px tall so the buttons below stay hidden */
         .overlay-container {
             display: flex;
             flex-direction: column;
@@ -560,7 +542,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             100% { background-position: 0% 0%; }
         }
 
-        /* Shimmer for ELO number — thin purple line sweeps across white */
+        /* Shimmer for ELO number - thin purple line sweeps across white */
         .elo-container {
             position: relative; display: inline-block; color: #ffffff;
         }
@@ -581,7 +563,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             100% { background-position: 0% 0%; }
         }
 
-        /* Shimmer for "X ELO UNTIL #xxx" — white base, very thin purple sweep */
+        /* Shimmer for "X ELO UNTIL #xxx" - white base, very thin purple sweep */
         .next-shimmer {
             position: relative; display: inline-block; color: #ffffff;
         }
@@ -619,7 +601,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-hash { font-size: 26px; font-weight: 800; color: #b066fe;
                      letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
 
-        /* Right sub: single ELO delta line — same font as .sub-text */
+        /* Right sub: single ELO delta line - same font as .sub-text */
         .right-sub {
             display: flex; flex-direction: column;
             align-items: center; gap: 2px;
@@ -657,9 +639,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             gap: 0;
         }
 
-        /* =========================================================
-           MODE SWITCHER  (browser only — hidden by OBS crop)
-           ========================================================= */
+        /* mode switcher - browser only, hidden by the OBS crop */
         .mode-bar {
             display: flex;
             flex-direction: column;
@@ -702,22 +682,22 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 <body>
     <div class="wrap">
 
-        <!-- ===== OVERLAY CARD (OBS browser source points here) ===== -->
+        <!-- overlay card: point your OBS browser source here -->
         <div class="overlay-container" style="flex-direction: column; align-items: stretch;">
             <div style="display:flex; align-items:center;">
                 <div class="section left-section">
-                    <div class="main-text unreal-rainbow" id="rankText">#— UNREAL</div>
+                    <div class="main-text unreal-rainbow" id="rankText">#- UNREAL</div>
                     <div class="sub-text left-sub">
                         <span id="nextContainer" style="display:inline-flex;align-items:center;gap:5px;">
-                            <span class="next-gap-val" id="nextGap">—</span>
+                            <span class="next-gap-val" id="nextGap">-</span>
                             <span class="next-to">TO</span>
-                            <span class="next-hash" id="nextPos">#—</span>
+                            <span class="next-hash" id="nextPos">#-</span>
                         </span>
                     </div>
                 </div>
                 <div class="divider"></div>
                 <div class="section right-section">
-                    <div class="main-text elo-container" id="eloText" data-text="—— ELO">—— ELO</div>
+                    <div class="main-text elo-container" id="eloText" data-text="-- ELO">-- ELO</div>
                     <div class="right-sub">
                         <span class="session-zero" id="sessionText">+0 ELO TODAY</span>
                     </div>
@@ -728,7 +708,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             </div>
         </div>
 
-        <!-- ===== MODE SWITCHER (open in your browser; OBS won't see this if cropped) ===== -->
+        <!-- mode switcher: open in your browser, OBS won't see this if cropped -->
         <div class="mode-bar" id="modeBar"></div>
     </div>
 
@@ -769,18 +749,24 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 .then(function(d) {
                     if (!d || (d.ok === false && !d.elo_text)) return;
 
-                    $('#rankText').textContent = d.rank_display || '#— UNREAL';
+                    $('#rankText').textContent = d.rank_display || '#- UNREAL';
 
                     var eloEl  = $('#eloText');
-                    var eloStr = d.elo_text || '—— ELO';
+                    var eloStr = d.elo_text || '-- ELO';
                     eloEl.textContent = eloStr;
                     eloEl.setAttribute('data-text', eloStr);
 
-                    // ELO to next rank — update three styled parts
+                    // ELO to next rank (Unreal) or percent to next rank (everyone else)
                     var gapEl  = $('#nextGap');
                     var posEl  = $('#nextPos');
-                    var gapStr = d.next_gap ? d.next_gap + ' ELO' : '—';
-                    var posStr = d.next_pos ? '#' + d.next_pos : '#—';
+                    var gapStr, posStr;
+                    if (d.is_unreal) {
+                        gapStr = d.next_gap ? d.next_gap + ' ELO' : '-';
+                        posStr = d.next_pos ? '#' + d.next_pos : '#-';
+                    } else {
+                        gapStr = d.next_gap || '-';
+                        posStr = d.next_pos || '-';
+                    }
                     gapEl.textContent = gapStr;
                     posEl.textContent = posStr;
 
@@ -810,9 +796,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 </html>"""
 
 
-# ===========================================================================
-#  Tiny web server
-# ===========================================================================
+# Tiny web server
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # keep the console quiet
@@ -858,21 +842,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, "not found", "text/plain")
 
 
-# ===========================================================================
-#  Entry point
-# ===========================================================================
+# Entry point
 def main():
-    bar = "=" * 62
-    print(bar)
-    print(f"  Fortnite Ranked Overlay — port {PORT}")
-    print(bar)
-    print(f"  OBS Browser Source :  http://localhost:{PORT}/overlay")
-    print(f"  Settings panel     :  open the same URL in your browser")
-    print(f"  Data / debug / raw :  /data  /debug  /raw")
-    print(f"  Polling OliTracker every {POLL_SECONDS} s")
-    print(bar)
-    print("  Leave this window open while streaming.")
-    print("  Press Ctrl+C to stop.\n")
+    print(f"Fortnite Ranked Overlay - port {PORT}")
+    print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
+    print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
     threading.Thread(target=poll_loop, daemon=True).start()
 
