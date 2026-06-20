@@ -774,41 +774,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .info-col {
             display: flex;
             flex-direction: column;
-            gap: 11px;
+            justify-content: center;
+            gap: 12px;
             flex: 1;
             min-width: 0;
         }
 
-        .live-tag {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .live-dot {
-            width: 7px; height: 7px;
-            border-radius: 50%;
-            background: #2dff91;
-            box-shadow: 0 0 6px rgba(45,255,145,0.85);
-            animation: blink 2s ease-in-out infinite;
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50%      { opacity: 0.35; }
-        }
-
-        .live-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            font-weight: 700;
-            letter-spacing: 0.18em;
-            color: rgba(45, 255, 145, 0.6);
-            text-transform: uppercase;
-        }
-
         .rank-big {
-            font-size: 26px;
+            font-size: 28px;
             font-weight: 900;
             text-transform: uppercase;
             letter-spacing: 0.01em;
@@ -824,11 +797,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-row {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
             color: rgba(210, 255, 230, 0.85);
             text-transform: uppercase;
             visibility: visible;
@@ -846,8 +819,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, auto);
-            gap: 14px;
-            padding-top: 8px;
+            gap: 16px;
+            padding-top: 9px;
             border-top: 1px solid rgba(45, 255, 145, 0.14);
         }
 
@@ -868,7 +841,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .stat-value {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 14px;
+            font-size: 18px;
             font-weight: 700;
             color: #eafff2;
         }
@@ -931,11 +904,6 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             </div>
 
             <div class="info-col">
-                <div class="live-tag">
-                    <div class="live-dot"></div>
-                    <span class="live-label">live</span>
-                </div>
-
                 <div class="rank-big" id="rankText">- LOADING</div>
 
                 <div class="next-row hidden" id="nextRow">
