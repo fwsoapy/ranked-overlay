@@ -33,8 +33,9 @@ BROWSER_HEADERS = {
     "Referer":         "https://olitracker.com/",
 }
 
-_lock       = threading.Lock()
-_start_elos = {}
+_lock              = threading.Lock()
+_start_elos        = {}
+_start_progressions = {}
 _last_raw   = None
 _last_modes = []
 
@@ -437,7 +438,7 @@ def _set_error(msg):
 
 
 def refresh_once():
-    global _start_elos, _last_raw, _last_modes
+    global _start_elos, _start_progressions, _last_raw, _last_modes
     url = f"{API_BASE}/stats/{EPIC_ACCOUNT_ID}"
     try:
         data = _http_get_json(url)
@@ -464,12 +465,13 @@ def refresh_once():
             "label": _mode_label(key),
         })
 
-    path, mode = pick_best_mode(modes)
-    mode_key  = _path_str(path) if path else ""
-    elo       = extract_elo(mode)
-    label     = extract_label(mode)
-    placement = extract_placement(mode)
-    is_unreal = (label == "UNREAL")
+    path, mode  = pick_best_mode(modes)
+    mode_key    = _path_str(path) if path else ""
+    elo         = extract_elo(mode)
+    label       = extract_label(mode)
+    placement   = extract_placement(mode)
+    progression = extract_progression(mode)
+    is_unreal   = (label == "UNREAL")
 
     next_pos    = (placement - 1) if (is_unreal and placement and placement > 1) else None
     elo_to_next = None
@@ -481,8 +483,11 @@ def refresh_once():
     with _lock:
         if elo is not None and mode_key not in _start_elos:
             _start_elos[mode_key] = elo
+        if progression is not None and mode_key not in _start_progressions:
+            _start_progressions[mode_key] = progression
 
         session_delta = (elo - _start_elos[mode_key]) if (elo is not None and mode_key in _start_elos) else 0
+        prog_delta     = (progression - _start_progressions[mode_key]) if (progression is not None and mode_key in _start_progressions) else 0
 
         STATE.update({
             "ok":               True,
@@ -493,6 +498,7 @@ def refresh_once():
             "next_position":    next_pos,
             "elo_to_next":      elo_to_next,
             "session_delta":    session_delta,
+            "prog_delta":       prog_delta,
             "updated_at":       int(time.time()),
             "error":            None,
             "active_mode_key":  mode_key,
@@ -500,8 +506,8 @@ def refresh_once():
         })
 
     sess   = compute_windowed_stats(data, "session", mode_key)
-    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "—"
-    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "—"
+    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "-"
+    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "-"
     gap_txt = (
         f"{elo_to_next} ELO to #{next_pos}" if elo_to_next and next_pos
         else f"#{next_pos} (gap n/a)" if next_pos
@@ -547,8 +553,10 @@ def snapshot(window="session", mode_key=None):
         gap         = s.get("elo_to_next") if resolved_key == s.get("active_mode_key") else None
 
         with _lock:
-            start = _start_elos.get(resolved_key)
-        delta = (elo - start) if (elo is not None and start is not None) else 0
+            start      = _start_elos.get(resolved_key)
+            start_prog = _start_progressions.get(resolved_key)
+        delta      = (elo - start) if (elo is not None and start is not None) else 0
+        prog_delta = (progression - start_prog) if (progression is not None and start_prog is not None) else 0
     else:
         resolved_key = ""
         elo         = s.get("elo")
@@ -559,17 +567,18 @@ def snapshot(window="session", mode_key=None):
         nxt         = s.get("next_position")
         gap         = s.get("elo_to_next")
         delta       = s.get("session_delta", 0) or 0
+        prog_delta  = s.get("prog_delta", 0) or 0
 
     stats        = compute_windowed_stats(raw, "session", resolved_key or None)
     season_stats = compute_windowed_stats(raw, "season",  resolved_key or None)
 
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
-    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "—")
+    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
     s["elo_text"]     = f"{elo} ELO" if (is_unreal and elo is not None) else None
 
-    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "—"
-    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "—%"
+    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
+    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "-%"
     s["season_wins"]  = season_stats["wins"]
     s["season_kills"] = season_stats["kills"]
 
@@ -579,6 +588,11 @@ def snapshot(window="session", mode_key=None):
     elif is_unreal and nxt:
         s["next_gap"] = None
         s["next_pos"] = str(nxt)
+    elif not is_unreal and progression is not None:
+        div = _num(mode.get("division")) if mode is not None else None
+        next_div_name = division_name(div + 1) if (div is not None and (div + 1) in DIVISION_NAMES) else None
+        s["next_gap"] = f"{100 - progression}%"
+        s["next_pos"] = next_div_name or "NEXT RANK"
     else:
         s["next_gap"] = None
         s["next_pos"] = None
@@ -587,6 +601,10 @@ def snapshot(window="session", mode_key=None):
         sign = "+" if delta >= 0 else ""
         s["session_text"] = f"{sign}{delta} ELO TODAY"
         s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
+    elif progression is not None:
+        sign = "+" if prog_delta >= 0 else ""
+        s["session_text"] = f"{sign}{prog_delta}% TODAY" if prog_delta != 0 else "+0% TODAY"
+        s["session_sign"] = "pos" if prog_delta > 0 else ("neg" if prog_delta < 0 else "zero")
     else:
         s["session_text"] = None
         s["session_sign"] = "zero"
@@ -878,7 +896,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <div class="wrap">
         <div class="overlay-container">
             <div class="header-band">
-                <div class="rank-text" id="rankText">— LOADING</div>
+                <div class="rank-text" id="rankText">- LOADING</div>
                 <div class="header-right">
                     <div class="elo-pill" id="eloPill">
                         <div class="elo-text" id="eloText"></div>
@@ -895,9 +913,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             <div class="mid-row" id="midRow">
                 <div class="next-target">
                     <span>NEXT</span>
-                    <span class="hi" id="nextGap">—</span>
+                    <span class="hi" id="nextGap">-</span>
                     <span class="arrow">▶</span>
-                    <span class="hi" id="nextPos">#—</span>
+                    <span class="hi" id="nextPos">#-</span>
                 </div>
                 <span class="session-zero" id="sessionText">+0 TODAY</span>
             </div>
@@ -905,19 +923,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             <div class="stats-row">
                 <div class="stat">
                     <div class="stat-label">K/D</div>
-                    <div class="stat-value" id="seasonKd">—</div>
+                    <div class="stat-value" id="seasonKd">-</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">WIN%</div>
-                    <div class="stat-value" id="seasonWr">—</div>
+                    <div class="stat-value" id="seasonWr">-</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">KILLS</div>
-                    <div class="stat-value" id="seasonKills">—</div>
+                    <div class="stat-value" id="seasonKills">-</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">WINS</div>
-                    <div class="stat-value" id="seasonWins">—</div>
+                    <div class="stat-value" id="seasonWins">-</div>
                 </div>
             </div>
         </div>
@@ -978,9 +996,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 progWrap.classList.remove('visible');
             }
 
-            if (d.is_unreal && (d.next_pos || d.session_text)) {
-                $('#nextGap').textContent = d.next_gap ? d.next_gap + ' ELO' : '—';
-                $('#nextPos').textContent = d.next_pos ? '#' + d.next_pos : '#—';
+            if (d.next_pos || d.session_text) {
+                if (d.is_unreal) {
+                    $('#nextGap').textContent = d.next_gap ? d.next_gap + ' ELO' : '-';
+                    $('#nextPos').textContent = d.next_pos ? '#' + d.next_pos : '#-';
+                } else {
+                    $('#nextGap').textContent = d.next_gap || '-';
+                    $('#nextPos').textContent = d.next_pos || '-';
+                }
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 TODAY';
                 sessEl.className   = 'session-' + (d.session_sign || 'zero');
@@ -989,10 +1012,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 midRow.classList.remove('visible');
             }
 
-            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '—';
-            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '—';
-            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '—';
-            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '—';
+            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
@@ -1068,9 +1091,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"Fortnite Ranked Overlay — port {PORT}")
+    print(f"Fortnite Ranked Overlay - port {PORT}")
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
-    print(f"Polling OliTracker every {POLL_SECONDS}s — Ctrl+C to stop\n")
+    print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
     threading.Thread(target=poll_loop, daemon=True).start()
 
