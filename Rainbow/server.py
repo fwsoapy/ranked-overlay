@@ -711,18 +711,18 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             flex-direction: column;
             align-items: stretch;
             background: linear-gradient(180deg, rgba(20,18,26,0.95) 0%, rgba(12,11,16,0.95) 100%);
-            padding: 15px 30px;
+            padding: 24px 46px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.05);
             user-select: none;
         }
 
         .section { display: flex; flex-direction: column; justify-content: center; }
-        .left-section  { align-items: center; padding-right: 25px; }
-        .right-section { align-items: center; padding-left:  25px; }
+        .left-section  { align-items: center; padding-right: 40px; }
+        .right-section { align-items: center; padding-left:  40px; }
 
         .divider {
-            width: 2px; height: 50px;
+            width: 3px; height: 80px;
             background: linear-gradient(to bottom,
                 rgba(255,255,255,0) 0%,
                 rgba(255,255,255,0.6) 50%,
@@ -731,7 +731,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .main-text {
-            font-weight: 900; font-size: 28px;
+            font-weight: 900; font-size: 46px;
             letter-spacing: 0.5px; line-height: 1.1;
             text-transform: uppercase; white-space: nowrap;
         }
@@ -794,7 +794,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .sub-text {
-            font-weight: 800; font-size: 16px;
+            font-weight: 800; font-size: 26px;
             letter-spacing: 0.5px; margin-top: 4px;
             text-transform: uppercase; white-space: nowrap; text-align: center;
         }
@@ -803,11 +803,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .left-sub { color: #a39cb5; }
 
         /* Next rank sub-parts */
-        .next-gap-val { font-size: 16px; font-weight: 800; color: #ffffff;
+        .next-gap-val { font-size: 26px; font-weight: 800; color: #ffffff;
                         letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
-        .next-to   { font-size: 11px; font-weight: 700; color: #b8b8c4;
+        .next-to   { font-size: 18px; font-weight: 700; color: #b8b8c4;
                      letter-spacing: 0.5px; text-transform: uppercase; }
-        .next-hash { font-size: 16px; font-weight: 800; color: #b066fe;
+        .next-hash { font-size: 26px; font-weight: 800; color: #b066fe;
                      letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
 
         /* Right sub: single ELO delta line — same font as .sub-text */
@@ -816,7 +816,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             align-items: center; gap: 2px;
             margin-top: 4px;
             font-family: 'Montserrat', sans-serif;
-            font-weight: 800; font-size: 16px;
+            font-weight: 800; font-size: 26px;
             letter-spacing: 0.5px;
             text-transform: uppercase; white-space: nowrap;
         }
@@ -825,8 +825,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .bottom-row {
             width: 100%;
             text-align: center;
-            margin-top: 8px;
-            font-weight: 800; font-size: 16px;
+            margin-top: 12px;
+            font-weight: 800; font-size: 22px;
             letter-spacing: 0.5px;
             text-transform: uppercase; white-space: nowrap;
         }
