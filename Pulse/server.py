@@ -643,13 +643,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fortnite Rank Overlay</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Inter:wght@700;800;900&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             background: transparent;
-            font-family: 'JetBrains Mono', monospace;
+            font-family: 'Inter', sans-serif;
             display: flex;
             justify-content: flex-start;
             align-items: flex-start;
@@ -667,162 +667,188 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .overlay-container {
             position: relative;
             display: flex;
-            flex-direction: column;
-            gap: 12px;
-            background: rgba(4, 12, 8, 0.90);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(45, 255, 145, 0.30);
-            border-radius: 6px;
-            padding: 18px 26px;
-            min-width: 420px;
-            user-select: none;
-            box-shadow: 0 0 0 1px rgba(45,255,145,0.06), 0 8px 28px rgba(0,0,0,0.55);
-        }
-
-        .header-row {
-            display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 22px;
+            background: linear-gradient(135deg, rgba(5,16,11,0.95), rgba(2,8,6,0.97));
+            border: 1px solid rgba(45,255,145,0.28);
+            clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+            padding: 22px 28px;
+            min-width: 460px;
+            user-select: none;
+            box-shadow: 0 0 0 1px rgba(45,255,145,0.05), 0 12px 32px rgba(0,0,0,0.55);
         }
 
-        .pulse-dot {
+        .corner {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            pointer-events: none;
+        }
+        .corner-tl {
+            top: -1px; left: -1px;
+            border-top: 2px solid #2dff91;
+            border-left: 2px solid #2dff91;
+            clip-path: polygon(0 0, 60% 0, 0 60%);
+        }
+        .corner-br {
+            bottom: -1px; right: -1px;
+            border-bottom: 2px solid #2dff91;
+            border-right: 2px solid #2dff91;
+            clip-path: polygon(100% 100%, 40% 100%, 100% 40%);
+        }
+
+        .ring-wrap {
             position: relative;
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            background: #2dff91;
-            box-shadow: 0 0 6px rgba(45,255,145,0.8);
+            width: 122px;
+            height: 122px;
             flex-shrink: 0;
         }
 
-        .pulse-dot::after {
-            content: '';
+        .ring-svg { width: 122px; height: 122px; }
+
+        .ring-track {
+            fill: none;
+            stroke: rgba(45, 255, 145, 0.12);
+            stroke-width: 9;
+        }
+
+        .ring-progress {
+            fill: none;
+            stroke: #2dff91;
+            stroke-width: 9;
+            stroke-linecap: round;
+            stroke-dasharray: 364.4;
+            stroke-dashoffset: 364.4;
+            transform: rotate(-90deg);
+            transform-origin: 61px 61px;
+            transition: stroke-dashoffset 0.5s ease;
+            filter: drop-shadow(0 0 5px rgba(45,255,145,0.65));
+        }
+
+        .ring-spin {
+            animation: spin 7s linear infinite;
+            transform-origin: 61px 61px;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
+        }
+
+        .ring-tick {
+            fill: none;
+            stroke: rgba(45, 255, 145, 0.35);
+            stroke-width: 1;
+            stroke-dasharray: 1.5 7.5;
+        }
+
+        .ring-center {
             position: absolute;
-            top: 50%; left: 50%;
-            width: 9px; height: 9px;
-            margin: -4.5px 0 0 -4.5px;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .ring-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 27px;
+            font-weight: 800;
+            color: #eafff2;
+            line-height: 1;
+            letter-spacing: -0.01em;
+        }
+
+        .ring-unit {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            color: rgba(45, 255, 145, 0.70);
+            text-transform: uppercase;
+            margin-top: 3px;
+        }
+
+        .info-col {
+            display: flex;
+            flex-direction: column;
+            gap: 11px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .live-tag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .live-dot {
+            width: 7px; height: 7px;
             border-radius: 50%;
-            background: rgba(45,255,145,0.55);
-            animation: pulseRing 1.8s ease-out infinite;
+            background: #2dff91;
+            box-shadow: 0 0 6px rgba(45,255,145,0.85);
+            animation: blink 2s ease-in-out infinite;
         }
 
-        @keyframes pulseRing {
-            0%   { transform: scale(1);   opacity: 0.7; }
-            100% { transform: scale(3.2); opacity: 0; }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: 0.35; }
         }
 
-        .tag {
-            font-size: 11px;
+        .live-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.18em;
-            color: rgba(45, 255, 145, 0.65);
+            color: rgba(45, 255, 145, 0.6);
             text-transform: uppercase;
         }
 
-        .main-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 28px;
-        }
-
-        .rank-text {
-            font-size: 30px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.01em;
-        }
-
-        .rank-text .rank-name { color: #eafff2; }
-        .rank-text .rank-num  { color: #2dff91; }
-
-        .main-row-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .elo-text {
+        .rank-big {
             font-size: 26px;
-            font-weight: 700;
-            color: #2dff91;
+            font-weight: 900;
+            text-transform: uppercase;
             letter-spacing: 0.01em;
-        }
-
-        .prog-inline {
-            display: none;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .prog-inline.visible { display: flex; }
-
-        .prog-pct {
-            font-size: 20px;
-            font-weight: 700;
-            color: #2dff91;
-            min-width: 48px;
-            text-align: right;
-        }
-
-        .prog-track {
-            width: 80px;
-            height: 6px;
-            background: rgba(45, 255, 145, 0.12);
-            border-radius: 3px;
+            line-height: 1.1;
+            white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .prog-fill {
-            height: 100%;
-            background: #2dff91;
-            border-radius: 3px;
-            transition: width 0.4s ease;
-        }
+        .rank-big .rank-name { color: #eafff2; }
+        .rank-big .rank-num  { color: #2dff91; }
 
-        .divider {
-            height: 1px;
-            background: rgba(45, 255, 145, 0.14);
-        }
-
-        .sub-row {
+        .next-row {
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 6px;
+            font-family: 'JetBrains Mono', monospace;
             font-size: 13px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.02em;
             color: rgba(210, 255, 230, 0.85);
+            text-transform: uppercase;
             visibility: visible;
         }
 
-        .sub-row.hidden { visibility: hidden; }
+        .next-row.hidden { visibility: hidden; }
 
-        .next-target {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
+        .next-row .hi { color: #eafff2; font-weight: 700; }
+        .next-row .br { color: rgba(45, 255, 145, 0.5); }
 
-        .next-target .hi { color: #eafff2; }
-        .next-target .br { color: rgba(45, 255, 145, 0.5); }
+        .session-pos  { color: #2dff91; }
+        .session-neg  { color: #ff5c5c; }
+        .session-zero { color: rgba(210, 255, 230, 0.85); }
 
-        .session-pos  { font-size: 13px; color: #2dff91; }
-        .session-neg  { font-size: 13px; color: #ff5c5c; }
-        .session-zero { font-size: 13px; color: rgba(210, 255, 230, 0.85); }
-
-        .divider-mid {
-            height: 1px;
-            background: rgba(45, 255, 145, 0.14);
-            visibility: visible;
-        }
-
-        .divider-mid.hidden { visibility: hidden; }
-
-        .stats-row {
-            display: flex;
-            gap: 18px;
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, auto);
+            gap: 14px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(45, 255, 145, 0.14);
         }
 
         .stat {
@@ -832,15 +858,17 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .stat-label {
+            font-family: 'JetBrains Mono', monospace;
             font-size: 9px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: rgba(45, 255, 145, 0.55);
+            letter-spacing: 0.10em;
+            color: rgba(45, 255, 145, 0.5);
         }
 
         .stat-value {
-            font-size: 15px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
             font-weight: 700;
             color: #eafff2;
         }
@@ -879,7 +907,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .mode-btn.active {
             color: #2dff91;
-            background: rgba(20, 50, 36, 0.95);
+            background: rgba(18, 48, 35, 0.95);
             border-color: rgba(45, 255, 145, 0.55);
         }
     </style>
@@ -887,58 +915,57 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 <body>
     <div class="wrap">
         <div class="overlay-container">
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-br"></div>
 
-            <div class="header-row">
-                <div class="pulse-dot"></div>
-                <span class="tag">live</span>
-            </div>
-
-            <div class="main-row">
-                <div class="rank-text" id="rankText">- LOADING</div>
-                <div class="main-row-right">
-                    <div class="elo-text" id="eloText" style="display:none"></div>
-                    <div class="prog-inline" id="progInline">
-                        <div class="prog-track">
-                            <div class="prog-fill" id="progFill" style="width:0%"></div>
-                        </div>
-                        <div class="prog-pct" id="progPct">0%</div>
-                    </div>
+            <div class="ring-wrap">
+                <svg class="ring-svg" viewBox="0 0 122 122">
+                    <circle class="ring-tick ring-spin" cx="61" cy="61" r="58"></circle>
+                    <circle class="ring-track" cx="61" cy="61" r="58"></circle>
+                    <circle class="ring-progress" id="ringProgress" cx="61" cy="61" r="58"></circle>
+                </svg>
+                <div class="ring-center">
+                    <div class="ring-value" id="ringValue">--</div>
+                    <div class="ring-unit" id="ringUnit">ELO</div>
                 </div>
             </div>
 
-            <div class="divider"></div>
+            <div class="info-col">
+                <div class="live-tag">
+                    <div class="live-dot"></div>
+                    <span class="live-label">live</span>
+                </div>
 
-            <div class="sub-row hidden" id="subRow">
-                <div class="next-target">
+                <div class="rank-big" id="rankText">- LOADING</div>
+
+                <div class="next-row hidden" id="nextRow">
                     <span id="nextLabel">NEXT</span>
                     <span class="hi" id="nextGap">-</span>
                     <span class="br" id="nextArrow">&gt;&gt;</span>
                     <span class="hi" id="nextPos">#-</span>
+                    <span class="br">|</span>
+                    <span class="session-zero" id="sessionText">+0 TODAY</span>
                 </div>
-                <span class="session-zero" id="sessionText">+0 TODAY</span>
+
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-label">KD</div>
+                        <div class="stat-value" id="seasonKd">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">WIN%</div>
+                        <div class="stat-value" id="seasonWr">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">KILLS</div>
+                        <div class="stat-value" id="seasonKills">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">WINS</div>
+                        <div class="stat-value" id="seasonWins">-</div>
+                    </div>
+                </div>
             </div>
-
-            <div class="divider-mid hidden" id="divider2"></div>
-
-            <div class="stats-row">
-                <div class="stat">
-                    <div class="stat-label">KD</div>
-                    <div class="stat-value" id="seasonKd">-</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">WIN%</div>
-                    <div class="stat-value" id="seasonWr">-</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">KILLS</div>
-                    <div class="stat-value" id="seasonKills">-</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">WINS</div>
-                    <div class="stat-value" id="seasonWins">-</div>
-                </div>
-            </div>
-
         </div>
 
         <div class="mode-bar" id="modeBar"></div>
@@ -948,8 +975,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         var POLL_MS      = __POLL_MS__;
         var activeMode   = '';
         var modeBarBuilt = false;
+        var RING_CIRC    = 364.4;
 
         function $(s) { return document.querySelector(s); }
+
+        function setRing(pct) {
+            var clamped = Math.max(0, Math.min(100, pct));
+            var offset = RING_CIRC - (RING_CIRC * clamped / 100);
+            $('#ringProgress').style.strokeDashoffset = offset;
+        }
 
         function buildModeBar(modes) {
             if (modeBarBuilt) return;
@@ -1001,23 +1035,21 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             renderRankText(d.rank_display, d.is_unreal);
 
-            var eloEl    = $('#eloText');
-            var progEl   = $('#progInline');
-            var subRow   = $('#subRow');
-            var divider2 = $('#divider2');
+            var nextRow = $('#nextRow');
 
             if (d.is_unreal && d.elo_text) {
-                eloEl.textContent    = d.elo_text;
-                eloEl.style.display  = '';
-                progEl.classList.remove('visible');
+                var num = (d.elo_text.match(/-?\d+/) || ['--'])[0];
+                $('#ringValue').textContent = num;
+                $('#ringUnit').textContent  = 'ELO';
+                setRing(100);
             } else if (!d.is_unreal && d.progression_pct !== null && d.progression_pct !== undefined) {
-                $('#progFill').style.width = d.progression_pct + '%';
-                $('#progPct').textContent  = d.progression_pct + '%';
-                progEl.classList.add('visible');
-                eloEl.style.display = 'none';
+                $('#ringValue').textContent = d.progression_pct;
+                $('#ringUnit').textContent  = '% RANK UP';
+                setRing(d.progression_pct);
             } else {
-                eloEl.style.display = 'none';
-                progEl.classList.remove('visible');
+                $('#ringValue').textContent = '--';
+                $('#ringUnit').textContent  = '';
+                setRing(0);
             }
 
             if (d.is_unreal) {
@@ -1028,21 +1060,18 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 TODAY';
                 sessEl.className   = 'session-' + (d.session_sign || 'zero');
-                subRow.classList.remove('hidden');
-                divider2.classList.remove('hidden');
+                nextRow.classList.remove('hidden');
             } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
                 $('#nextLabel').textContent = '';
-                $('#nextGap').textContent   = d.pct_to_next + '% TO NEXT RANK';
+                $('#nextGap').textContent   = d.pct_to_next + '% TO NEXT';
                 $('#nextArrow').textContent = '';
                 $('#nextPos').textContent   = '';
-                var sessEl = $('#sessionText');
-                sessEl.textContent = d.session_text || '+0% TODAY';
-                sessEl.className   = 'session-' + (d.session_sign || 'zero');
-                subRow.classList.remove('hidden');
-                divider2.classList.remove('hidden');
+                var sessEl2 = $('#sessionText');
+                sessEl2.textContent = d.session_text || '+0% TODAY';
+                sessEl2.className   = 'session-' + (d.session_sign || 'zero');
+                nextRow.classList.remove('hidden');
             } else {
-                subRow.classList.add('hidden');
-                divider2.classList.add('hidden');
+                nextRow.classList.add('hidden');
             }
 
             $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
