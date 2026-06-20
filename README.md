@@ -34,8 +34,6 @@ Full details for each step are below.
 
 ## Designs
 
-![all designs](preview-grid.png)
-
 Click a preview below to open that design's folder.
 
 <table>
