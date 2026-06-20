@@ -854,41 +854,40 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .mode-bar {
             display: flex;
-            flex-direction: row;
-            gap: 4px;
-            margin-top: 6px;
+            flex-direction: column;
+            gap: 7px;
             width: 100%;
+            margin-top: 50px;
         }
 
         .mode-btn {
             font-family: 'Rajdhani', sans-serif;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: rgba(200, 100, 100, 0.5);
-            background: rgba(15, 4, 4, 0.88);
-            border: 1px solid rgba(140, 20, 20, 0.22);
-            border-left: 2px solid rgba(140,20,20,0.35);
-            border-radius: 0;
-            padding: 7px 14px;
+            letter-spacing: 0.08em;
+            color: rgba(220, 220, 220, 0.55);
+            background: rgba(20, 20, 20, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 13px 18px;
             cursor: pointer;
             user-select: none;
-            flex: 1;
+            width: 100%;
             text-align: center;
-            clip-path: polygon(0 0, 100% 0, 96% 100%, 0 100%);
-            transition: color 0.15s, background 0.15s, border-color 0.15s;
+            transition: color 0.12s, background 0.12s, border-color 0.12s;
         }
+
         .mode-btn:hover {
-            color: rgba(255, 180, 180, 0.9);
-            background: rgba(40, 8, 8, 0.92);
-            border-color: rgba(200, 40, 40, 0.5);
+            color: rgba(255, 255, 255, 0.90);
+            background: rgba(40, 40, 40, 0.95);
+            border-color: rgba(255, 255, 255, 0.20);
         }
+
         .mode-btn.active {
-            color: #fff;
-            background: rgba(80, 8, 8, 0.95);
-            border-left-color: #cc1111;
-            border-color: rgba(220, 50, 50, 0.6);
+            color: #ffffff;
+            background: rgba(55, 55, 55, 0.98);
+            border-color: rgba(255, 255, 255, 0.30);
         }
     </style>
 </head>
