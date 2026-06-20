@@ -503,7 +503,7 @@ def refresh_once():
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     elo_str = f"{elo} ELO" if elo is not None else label
     print(f"[overlay] {ts}  {elo_str}  |  session {session_delta:+d}")
-    print(f"          session: {sess['wins']}W / {sess['losses']}L   KD {kd_txt}   WR {wr_txt}")
+    print(f"          session: {sess['wins']}W / {sess['losses']}L   KD {kd_txt}   WR {wr_txt}   ({sess['matches']} games)")
 
 
 def poll_loop():
@@ -552,7 +552,8 @@ def snapshot(window="session", mode_key=None):
         delta       = s.get("session_delta", 0) or 0
         prog_delta  = s.get("prog_delta", 0) or 0
 
-    season_stats = compute_windowed_stats(raw, "season", resolved_key or None)
+    stats        = compute_windowed_stats(raw, "session", resolved_key or None)
+    season_stats = compute_windowed_stats(raw, "season",  resolved_key or None)
 
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
@@ -581,16 +582,10 @@ def snapshot(window="session", mode_key=None):
         s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
     else:
         pct_left = (100 - progression) if progression is not None else None
-        s["pct_to_next"] = pct_left
+        s["pct_to_next"]  = pct_left
         sign = "+" if prog_delta >= 0 else ""
         s["session_text"] = f"{sign}{prog_delta}% TODAY" if prog_delta != 0 else "+0% TODAY"
         s["session_sign"] = "pos" if prog_delta > 0 else ("neg" if prog_delta < 0 else "zero")
-        div = _num(mode.get("division")) if mode is not None else None
-        if div is not None:
-            next_div_name = division_name(div + 1) if (div + 1) in DIVISION_NAMES else None
-        else:
-            next_div_name = None
-        s["next_rank_name"] = next_div_name
 
     s["session_start"] = SESSION_START
     s["window"]        = window
@@ -644,19 +639,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fortnite Rank Overlay</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800;900&family=Barlow:wght@500;600&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             background: transparent;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Barlow Condensed', sans-serif;
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
             align-items: flex-start;
             height: 100vh;
-            padding: 16px;
+            padding: 0;
         }
 
         .wrap {
@@ -667,81 +662,219 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .overlay-container {
+            position: relative;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            min-width: 600px;
+            overflow: hidden;
+            background: rgba(4, 10, 18, 0.90);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.18);
+            box-shadow:
+                0 0 0 1px rgba(0,0,0,0.6),
+                0 4px 32px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .accent-bar {
+            width: 7px;
+            background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
+            flex-shrink: 0;
+        }
+
+        .accent-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -20px;
+            width: 0;
+            height: 0;
+            border-top: 0 solid transparent;
+            border-bottom: 300px solid transparent;
+            border-left: 20px solid #0ea5e9;
+            opacity: 0.35;
+            pointer-events: none;
+        }
+
+        .content {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            background: rgba(12, 10, 16, 0.85);
-            backdrop-filter: blur(8px);
-            border-left: 6px solid #ac46ff;
-            padding: 18px 20px;
-            min-width: 560px;
-            letter-spacing: -0.02em;
-            user-select: none;
+            padding: 14px 22px 14px 24px;
+            gap: 0;
         }
 
-        .main-row {
+        .top-row {
             display: flex;
-            justify-content: space-between;
             align-items: baseline;
-            margin-bottom: 10px;
+            gap: 14px;
+            margin-bottom: 6px;
         }
 
-        .rank-text {
-            font-weight: 800;
-            font-size: 44px;
-            color: #ffffff;
-            text-transform: uppercase;
+        .top-divider {
+            font-weight: 300;
+            font-size: 34px;
+            color: rgba(56, 189, 248, 0.4);
+            align-self: center;
         }
 
-        .rank-text .purple { color: #ac46ff; }
-
-        .elo-text {
-            font-weight: 800;
-            font-size: 44px;
-            color: #ac46ff;
-            text-transform: uppercase;
-        }
-
-        .sub-row {
+        .elo-group {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            font-weight: 700;
-            font-size: 22px;
+            gap: 20px;
+            margin-left: auto;
+        }
+
+        .rank-badge {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .rank-number {
+            font-weight: 900;
+            font-size: 42px;
+            color: #38bdf8;
+            letter-spacing: -0.01em;
+            line-height: 1;
+        }
+
+        .rank-label {
+            font-weight: 900;
+            font-size: 42px;
+            color: #ffffff;
+            letter-spacing: 0.02em;
+            line-height: 1;
             text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.75);
-            padding-bottom: 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .elo-value {
+            font-weight: 900;
+            font-size: 42px;
+            letter-spacing: 0.02em;
+            line-height: 1;
+            text-transform: uppercase;
+            color: #38bdf8;
+            text-shadow:
+                0 0 20px rgba(56, 189, 248, 0.7),
+                0 0 40px rgba(56, 189, 248, 0.3);
+        }
+
+        .prog-group {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+        }
+
+        .prog-group.visible { display: flex; }
+
+        .prog-pct {
+            font-weight: 900;
+            font-size: 38px;
+            color: #38bdf8;
+            letter-spacing: 0.02em;
+            line-height: 1;
+            text-shadow:
+                0 0 20px rgba(56, 189, 248, 0.7),
+                0 0 40px rgba(56, 189, 248, 0.3);
+        }
+
+        .prog-track {
+            width: 90px;
+            height: 8px;
+            background: rgba(56, 189, 248, 0.15);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .prog-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        .divider {
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg,
+                rgba(56,189,248,0.5) 0%,
+                rgba(56,189,248,0.1) 60%,
+                transparent 100%);
+            margin-bottom: 8px;
+        }
+
+        .mid-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .next-value {
+            font-weight: 800;
+            font-size: 22px;
+            letter-spacing: 0.04em;
+            color: #7dd3fc;
+            text-transform: uppercase;
+            white-space: nowrap;
             visibility: visible;
         }
 
-        .sub-row.hidden { visibility: hidden; }
+        .next-value.hidden { visibility: hidden; }
+        .next-value .hl { color: #fff; }
 
-        .next-target {
-            display: flex;
-            gap: 6px;
-            align-items: baseline;
+        .session-pill {
+            font-weight: 800;
+            font-size: 18px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 4px 12px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
         }
 
-        .next-target .highlight { color: #ffffff; }
-        .next-target .purple    { color: #ac46ff; }
+        .session-pos  { color: #3ddc68; border-color: rgba(61,220,104,0.3);  background: rgba(61,220,104,0.08); }
+        .session-neg  { color: #ff4a5e; border-color: rgba(255,74,94,0.3);   background: rgba(255,74,94,0.08); }
+        .session-zero { color: #fff; }
 
-        .session-delta { font-weight: 700; }
-        .session-pos  { color: #2ed573; }
-        .session-neg  { color: #ff4757; }
-        .session-zero { color: #2ed573; }
-
-        .season-row {
+        .stats-row {
             display: flex;
-            gap: 24px;
-            margin-top: 12px;
-            font-weight: 500;
-            font-size: 22px;
-            color: rgba(255, 255, 255, 0.75);
+            gap: 20px;
+            align-items: center;
         }
 
-        .stat-item span {
-            font-weight: 700;
-            color: rgba(255, 255, 255, 0.90);
+        .stat-chip {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-chip .s-label {
+            font-family: 'Barlow', sans-serif;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #38a3d4;
+            line-height: 1;
+        }
+
+        .stat-chip .s-value {
+            font-weight: 800;
+            font-size: 20px;
+            letter-spacing: 0.02em;
+            color: #ffffff;
+            line-height: 1;
+        }
+
+        .stat-sep {
+            width: 1px;
+            height: 30px;
+            background: rgba(56,189,248,0.2);
         }
 
         .mode-bar {
@@ -753,11 +886,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .mode-btn {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Barlow', sans-serif;
             font-size: 14px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.10em;
             color: rgba(220, 220, 220, 0.55);
             background: rgba(20, 20, 20, 0.90);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -786,28 +919,57 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 <body>
     <div class="wrap">
         <div class="overlay-container">
-            <div class="main-row">
-                <div class="rank-text" id="rankText">#— UNREAL</div>
-                <div class="elo-text" id="eloRight">—— ELO</div>
-            </div>
+            <div class="accent-bar"></div>
+            <div class="content">
 
-            <div class="sub-row" id="subRow">
-                <div class="next-target" id="nextContainer">
-                    <span>Next:</span>
-                    <span class="highlight">—</span>
-                    <span>to</span>
-                    <span class="highlight">#—</span>
+                <div class="top-row">
+                    <div class="rank-badge">
+                        <span class="rank-number" id="rankNumber">#—</span>
+                        <span class="rank-label" id="rankLabel">UNREAL</span>
+                    </div>
+                    <span class="top-divider" id="topDivider">|</span>
+                    <div class="elo-group" id="eloGroup">
+                        <div class="elo-value" id="eloText">—— ELO</div>
+                        <div class="session-pill session-zero" id="sessionText">+0 ELO TODAY</div>
+                    </div>
+                    <div class="prog-group" id="progGroup">
+                        <div class="prog-track">
+                            <div class="prog-fill" id="progFill" style="width:0%"></div>
+                        </div>
+                        <div class="prog-pct" id="progPct">0%</div>
+                        <div class="session-pill session-zero" id="sessionText2">+0% TODAY</div>
+                    </div>
                 </div>
-                <div class="session-delta">
-                    <span class="session-zero" id="sessionText">+0 ELO TODAY</span>
-                </div>
-            </div>
 
-            <div class="season-row">
-                <div class="stat-item">KD: <span id="seasonKd">—</span></div>
-                <div class="stat-item">WR: <span id="seasonWr">—%</span></div>
-                <div class="stat-item">KILLS: <span id="seasonKills">—</span></div>
-                <div class="stat-item">WINS: <span id="seasonWins">—</span></div>
+                <div class="divider"></div>
+
+                <div class="mid-row">
+                    <span class="next-value hidden" id="nextRow">
+                        NEXT <span class="hl" id="nextGap">—</span> ELO → <span class="hl" id="nextPos">#—</span>
+                    </span>
+                    <div class="stats-row">
+                        <div class="stat-chip">
+                            <span class="s-label">K/D</span>
+                            <span class="s-value" id="seasonKd">—</span>
+                        </div>
+                        <div class="stat-sep"></div>
+                        <div class="stat-chip">
+                            <span class="s-label">WIN%</span>
+                            <span class="s-value" id="seasonWr">—%</span>
+                        </div>
+                        <div class="stat-sep"></div>
+                        <div class="stat-chip">
+                            <span class="s-label">KILLS</span>
+                            <span class="s-value" id="seasonKills">—</span>
+                        </div>
+                        <div class="stat-sep"></div>
+                        <div class="stat-chip">
+                            <span class="s-label">WINS</span>
+                            <span class="s-value" id="seasonWins">—</span>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -820,18 +982,6 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
-
-        var ROMAN = {'I':true,'II':true,'III':true,'IV':true,'V':true,'VI':true};
-
-        function purpleNumeral(text) {
-            if (!text) return '';
-            var parts = text.split(' ');
-            var last  = parts[parts.length - 1];
-            if (ROMAN[last]) {
-                return parts.slice(0, -1).join(' ') + ' <span class="purple">' + last + '</span>';
-            }
-            return text;
-        }
 
         function buildModeBar(modes) {
             if (modeBarBuilt) return;
@@ -855,58 +1005,54 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             });
         }
 
+        function splitRankDisplay(rd, isUnreal) {
+            if (!rd) return { num: '', label: 'UNREAL' };
+            if (isUnreal) {
+                var m = rd.match(/^(#\d+)\s+(.+)$/);
+                if (m) return { num: m[1], label: m[2] };
+            }
+            return { num: '', label: rd };
+        }
+
         function applyData(d) {
             if (!d || !d.rank_display) return;
 
-            var rankEl    = $('#rankText');
-            var eloRight  = $('#eloRight');
-            var subRow    = $('#subRow');
-            var nextCont  = $('#nextContainer');
-            var sessEl    = $('#sessionText');
+            var parts = splitRankDisplay(d.rank_display, d.is_unreal);
+            $('#rankNumber').textContent = parts.num;
+            $('#rankLabel').textContent  = parts.label;
+
+            var eloGroup  = $('#eloGroup');
+            var progGroup = $('#progGroup');
+            var nextRow   = $('#nextRow');
 
             if (d.is_unreal) {
-                var m = d.rank_display.match(/^(#\d+)\s+(.+)$/);
-                if (m) {
-                    rankEl.innerHTML = '<span class="purple">' + m[1] + '</span> ' + m[2];
-                } else {
-                    rankEl.textContent = d.rank_display;
-                }
-
-                eloRight.textContent = d.elo_text || '—— ELO';
-
-                if (d.next_gap && d.next_pos) {
-                    nextCont.innerHTML =
-                        'Next: <span class="highlight">' + d.next_gap + ' ELO</span>' +
-                        ' to <span class="purple">#</span><span class="highlight">' + d.next_pos + '</span>';
-                } else {
-                    nextCont.innerHTML =
-                        'Next: <span class="highlight">—</span> to ' +
-                        '<span class="purple">#</span><span class="highlight">—</span>';
-                }
-
+                $('#eloText').textContent = d.elo_text || '—— ELO';
+                var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 ELO TODAY';
-                sessEl.className   = 'session-' + (d.session_sign || 'zero');
-                subRow.classList.remove('hidden');
+                sessEl.className   = 'session-pill session-' + (d.session_sign || 'zero');
+                eloGroup.classList.remove('visible');
+                eloGroup.style.display = '';
+                progGroup.classList.remove('visible');
 
-            } else {
-                rankEl.innerHTML = purpleNumeral(d.rank_display);
-                eloRight.textContent = (d.progression_pct !== null && d.progression_pct !== undefined)
-                    ? d.progression_pct + '%' : '—%';
-
-                if (d.pct_to_next !== null && d.pct_to_next !== undefined && d.next_rank_name) {
-                    nextCont.innerHTML =
-                        '<span class="highlight">' + d.pct_to_next + '%</span>' +
-                        ' TO ' + purpleNumeral(d.next_rank_name);
-                } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
-                    nextCont.innerHTML =
-                        '<span class="highlight">' + d.pct_to_next + '%</span> TO NEXT';
+                var hasGap = d.next_gap && d.next_pos;
+                if (hasGap) {
+                    $('#nextGap').textContent = d.next_gap;
+                    $('#nextPos').textContent = '#' + d.next_pos;
+                    nextRow.classList.remove('hidden');
                 } else {
-                    nextCont.textContent = '—';
+                    nextRow.classList.add('hidden');
                 }
-
-                sessEl.textContent = d.session_text || '+0% TODAY';
-                sessEl.className   = 'session-' + (d.session_sign || 'zero');
-                subRow.classList.remove('hidden');
+            } else {
+                eloGroup.style.display = 'none';
+                if (d.progression_pct !== null && d.progression_pct !== undefined) {
+                    $('#progFill').style.width = d.progression_pct + '%';
+                    $('#progPct').textContent  = d.progression_pct + '%';
+                }
+                var sess2 = $('#sessionText2');
+                sess2.textContent = d.session_text || '+0% TODAY';
+                sess2.className   = 'session-pill session-' + (d.session_sign || 'zero');
+                progGroup.classList.add('visible');
+                nextRow.classList.add('hidden');
             }
 
             $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '—';
@@ -916,7 +1062,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
-                if (!activeMode) activeMode = d.active_mode_key || modes[0].key;
+                if (!activeMode) {
+                    activeMode = d.active_mode_key || modes[0].key;
+                }
                 buildModeBar(modes);
                 document.querySelectorAll('.mode-btn').forEach(function(b) {
                     b.classList.toggle('active', b.dataset.key === activeMode);
