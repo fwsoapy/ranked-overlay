@@ -2,6 +2,8 @@
 
 A live ranked overlay for Fortnite streamers. Pulls real-time ELO, rank, and season stats from [OliTracker](https://olitracker.com) and displays them as a browser source in OBS. Supports multiple game modes, automatic non-Unreal progression tracking, and a built-in mode switcher for BR, Reload, and Boxfights.
 
+7 designs to choose from, each in its own self-contained folder — just grab the one you like.
+
 ---
 
 ## Features
@@ -18,15 +20,47 @@ A live ranked overlay for Fortnite streamers. Pulls real-time ELO, rank, and sea
 
 ## Designs
 
-| Name | Description |
-|------|-------------|
-| **Minimal** | Clean single-row card with rank and ELO side-by-side and a bold colored left border. |
-| **Classic** | A timeless dark card with a thin top accent line and subtle dividers between sections. |
-| **Sharp** | Stacked sections with a strong accent color and clipped corners. Feels structured and aggressive. |
-| **Wide** | Spread out horizontally with a glowing accent bar on the left. Great for wider stream layouts. |
-| **Slash** | A diagonal cut splits the rank and ELO into two panels. Stands out on any stream. |
-| **Rainbow** | Animated rainbow rank text and a shimmering ELO value. High energy. |
-| **Modern** | Sleek card with a soft radial glow accent and a bold colored left border. |
+Click a preview to open that design's folder.
+
+<table>
+<tr>
+<td align="center" width="50%">
+<a href="Minimal"><img src="Minimal/preview.png" width="320"><br><b>Minimal</b></a>
+<br>Clean single-row card with rank and ELO side-by-side and a bold colored left border.
+</td>
+<td align="center" width="50%">
+<a href="Classic"><img src="Classic/preview.png" width="320"><br><b>Classic</b></a>
+<br>A timeless dark card with a thin top accent line and subtle dividers between sections.
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="Sharp"><img src="Sharp/preview.png" width="320"><br><b>Sharp</b></a>
+<br>Stacked sections with a strong accent color and clipped corners. Feels structured and aggressive.
+</td>
+<td align="center" width="50%">
+<a href="Wide"><img src="Wide/preview.png" width="320"><br><b>Wide</b></a>
+<br>Spread out horizontally with a glowing accent bar on the left. Great for wider stream layouts.
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="Slash"><img src="Slash/preview.png" width="320"><br><b>Slash</b></a>
+<br>A diagonal cut splits the rank and ELO into two panels. Stands out on any stream.
+</td>
+<td align="center" width="50%">
+<a href="Rainbow"><img src="Rainbow/preview.png" width="320"><br><b>Rainbow</b></a>
+<br>Animated rainbow rank text and a shimmering ELO value. High energy.
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+<a href="Modern"><img src="Modern/preview.png" width="320"><br><b>Modern</b></a>
+<br>Sleek card with a soft radial glow accent and a bold colored left border.
+</td>
+<td></td>
+</tr>
+</table>
 
 Each design works in any color. Open `server.py`, find the hex color value in the CSS near the top of `OVERLAY_HTML`, and swap it for whatever you want. Use [coolors.co](https://coolors.co) to pick one.
 
@@ -37,19 +71,21 @@ Each design works in any color. Open `server.py`, find the hex color value in th
 - Python 3 or later
 - Windows (the `.bat` files are Windows only; Mac/Linux users can run `python server.py` directly)
 - OBS Studio with a Browser Source
-- Your Epic Account ID (find it at [olitracker.com](https://olitracker.com) by searching your username)
+- Your Epic Account ID (the bundled `account-id.bat` looks this up for you — see Setup below)
 
 ---
 
 ## Setup
 
+Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`) is self-contained — it has its own `server.py`, `account-id.bat`, `start.bat`, and `stop.bat`. You only ever need the one folder for the design you picked.
+
 ### 1. Download the files
 
-Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on your PC. Your Desktop works fine.
+Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on your PC. Your Desktop works fine. Open the folder for the design you picked from the table above — everything you need is in there.
 
 ### 2. Find your Epic Account ID
 
-Double-click `GET_ACCOUNT_ID.bat` from the repo. It will print your account ID in the console window. Copy it.
+Double-click `account-id.bat`. Enter your Epic display name and it will print your account ID in the console window and copy it to your clipboard.
 
 ### 3. Add your account ID to the server file
 
@@ -64,9 +100,9 @@ Replace both values with your username and account ID. Save the file.
 
 ### 4. Start the overlay
 
-Double-click `START_OVERLAY.bat`. A window will briefly appear confirming it started, then close itself. The overlay is now running in the background.
+Double-click `start.bat`. A window will briefly appear confirming it started, then close itself. The overlay is now running in the background.
 
-To stop it, double-click `STOP_OVERLAY.bat`.
+To stop it, double-click `stop.bat`.
 
 ### 5. Add it to OBS
 
@@ -92,13 +128,13 @@ The overlay shows mode buttons (BR, Reload, Boxfights) below the widget. Click a
 OliTracker may be slow to respond. Wait 30 seconds, and if it still does not load, check that your Account ID in `server.py` is correct.
 
 **Port already in use error**
-Something else is using port 8888. Run `STOP_OVERLAY.bat` first, then start it again. If the issue persists, change `PORT = 8888` to another number like `8889` in `server.py` and update the OBS URL to match.
+Something else is using port 8888. Run `stop.bat` first, then start it again. If the issue persists, change `PORT = 8888` to another number like `8889` in `server.py` and update the OBS URL to match.
 
 **Stats look wrong after switching modes**
 Give it one poll cycle (about 10 seconds) after clicking a mode button. The server fetches fresh data on each cycle.
 
 **OBS shows a black box instead of the overlay**
-Make sure `START_OVERLAY.bat` has been run first. The browser source needs the local server to be running. Also check that the URL in OBS is exactly `http://localhost:8888/overlay`.
+Make sure `start.bat` has been run first. The browser source needs the local server to be running. Also check that the URL in OBS is exactly `http://localhost:8888/overlay`.
 
 ---
 
