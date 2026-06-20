@@ -815,7 +815,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .session-pos  { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #4ade80; }
         .session-neg  { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #f87171; }
-        .session-zero { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: rgba(255, 210, 210, 0.80); }
+        .session-zero { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #ffffff; }
 
         .stats-row {
             display: flex;

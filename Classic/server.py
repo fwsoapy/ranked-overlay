@@ -773,7 +773,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .session-pos  { font-size: 18px; color: #22c55e; }
         .session-neg  { font-size: 18px; color: #ef4444; }
-        .session-zero { font-size: 18px; color: rgba(185, 205, 245, 0.95); }
+        .session-zero { font-size: 18px; color: #ffffff; }
 
         .divider-mid {
             height: 1px;

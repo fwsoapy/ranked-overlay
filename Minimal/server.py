@@ -733,7 +733,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .session-delta { font-weight: 700; }
         .session-pos  { color: #2ed573; }
         .session-neg  { color: #ff4757; }
-        .session-zero { color: #2ed573; }
+        .session-zero { color: #ffffff; }
 
         .season-row {
             display: flex;

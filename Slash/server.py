@@ -838,7 +838,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .session-pos  { color: #34d399; background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.25); }
         .session-neg  { color: #f87171; background: rgba(248,113,113,0.10); border: 1px solid rgba(248,113,113,0.25); }
-        .session-zero { color: rgba(230,210,255,0.95); background: rgba(var(--accent-rgb),0.08); border: 1px solid rgba(var(--accent-rgb),0.25); }
+        .session-zero { color: #ffffff; background: rgba(var(--accent-rgb),0.08); border: 1px solid rgba(var(--accent-rgb),0.25); }
 
         .stats-band {
             display: flex;

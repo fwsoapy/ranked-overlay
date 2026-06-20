@@ -817,9 +817,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-row .hi { color: #eafff2; font-weight: 700; }
         .next-row .br { color: rgba(var(--accent-rgb), 0.5); }
 
-        .session-pos  { color: var(--accent); }
+        .session-pos  { color: #2ed573; }
         .session-neg  { color: #ff5c5c; }
-        .session-zero { color: rgba(210, 255, 230, 0.85); }
+        .session-zero { color: #ffffff; }
 
         .stats-grid {
             display: grid;
