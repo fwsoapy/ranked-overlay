@@ -85,8 +85,8 @@ Click a preview below to open that design's folder.
 
 ## Requirements
 
-- Python 3 or later
-- Windows (the `.bat` files are Windows only; Mac/Linux users can run `python server.py` directly)
+- Python 3 or later. Download it from [python.org/downloads](https://www.python.org/downloads/) if you don't have it. During setup, tick **Add python.exe to PATH**, the overlay won't start without it.
+- Windows (the `.bat` files are Windows only; Mac/Linux users can run `python server.py` directly from a terminal, and look up their Account ID manually at [olitracker.com](https://olitracker.com) instead of using `account-id.bat`)
 - OBS Studio with a Browser Source
 - Your Epic Account ID (the bundled `account-id.bat` looks this up for you, see Setup below)
 
@@ -108,6 +108,8 @@ Windows may show a SmartScreen warning ("Windows protected your PC") the first t
 
 Double-click `account-id.bat`. Enter your Epic display name and it will print your account ID in the console window and copy it to your clipboard.
 
+If it can't find your account, search your username at [olitracker.com](https://olitracker.com) instead, open your profile, and copy the account ID out of the page URL.
+
 ### 3. Add your account ID to the server file
 
 Open `server.py` in Notepad (right-click > Open with > Notepad) and find these two lines near the top:
@@ -123,7 +125,11 @@ Replace both values with your username and account ID. Save the file.
 
 Double-click `start.bat`. A window will briefly appear confirming it started, then close itself. The overlay is now running in the background.
 
+On some setups (depends on how Python was installed) a second window titled "Fortnite Overlay Server" stays open instead of closing. That's normal, just leave it open and minimize it, closing it stops the overlay.
+
 To stop it, double-click `stop.bat`.
+
+Want to run more than one design at once, side by side, to compare them? Each one defaults to port 8888, so only one can run at a time on that port. Open `server.py` in the second design's folder and change `PORT = 8888` to something else like `8889`, then use that port in its OBS Browser Source URL.
 
 ### 5. Add it to OBS
 
@@ -140,6 +146,8 @@ The overlay will appear and start showing your live stats within a few seconds o
 ## Switching game modes
 
 The overlay shows mode buttons (BR, Reload, Boxfights) below the widget. Click a button to switch and the rank, ELO, and stats all update for that mode. Your choice is remembered the next time you open the overlay. In OBS you can interact with browser sources by right-clicking the source and selecting **Interact**.
+
+You'll only see buttons for modes you actually have ranked stats in. If you've never queued Reload, no Reload button shows up, that's expected, not a bug.
 
 ---
 
@@ -163,6 +171,9 @@ Make sure `start.bat` has been run first. The browser source needs the local ser
 **Windows says the file is unsafe / SmartScreen popup**
 That's expected for any `.bat` file downloaded from the internet. Click **More info > Run anyway**.
 
+**I want to see exactly what the server is doing**
+While the overlay is running, open `http://localhost:8888/debug` in a browser for a full status dump (current rank, ELO, detected modes, last error), or `http://localhost:8888/raw` for the raw OliTracker response. Both are handy if something looks wrong and the on-overlay error message isn't enough to go on.
+
 ---
 
 ## Changing the accent color
@@ -174,6 +185,28 @@ Add `?color=` followed by a hex code to the overlay URL, both in your regular br
 
 **Permanent change**
 Open `server.py` and find the CSS inside `OVERLAY_HTML`. The main accent color is defined as a hex value like `#7c3aed` (purple) or `#dc2626` (red), near the top of the `<style>` block as a `--accent` variable. Change that one line and the whole design updates. Use [coolors.co](https://coolors.co) to pick one.
+
+---
+
+## FAQ
+
+**Does this work on Mac or Linux?**
+Yes, run `python server.py` from a terminal instead of `start.bat`, and look up your Account ID manually at [olitracker.com](https://olitracker.com) instead of running `account-id.bat`. Everything else is the same.
+
+**Can I run two designs at the same time to compare them?**
+Yes, see the port note under Setup above. Change the port in one of them so they don't collide.
+
+**Does this slow down Fortnite or use a lot of resources?**
+No, it's a tiny local web server that polls OliTracker every 10 seconds. CPU and memory use are both negligible.
+
+**Can I resize or reposition the overlay?**
+Yes, it's a normal OBS Browser Source. Resize, move, and add filters to it exactly like any other source.
+
+**Will this break if Epic or OliTracker changes something?**
+It depends on OliTracker's API staying in the same shape. If stats suddenly stop updating, check `/debug` first (see Troubleshooting), and check that [olitracker.com](https://olitracker.com) itself is loading your stats correctly in a normal browser.
+
+**Is any of my data sent anywhere besides OliTracker?**
+No. The server only talks to the OliTracker API to pull your stats, and serves the overlay page to your own browser/OBS on your own PC. Nothing else.
 
 ---
 
