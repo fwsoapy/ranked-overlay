@@ -498,8 +498,8 @@ def refresh_once():
         })
 
     sess   = compute_windowed_stats(data, "session", mode_key)
-    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "—"
-    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "—"
+    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "-"
+    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "-"
     ts = datetime.datetime.now().strftime("%H:%M:%S")
     elo_str = f"{elo} ELO" if elo is not None else label
     print(f"[overlay] {ts}  {elo_str}  |  session {session_delta:+d}")
@@ -558,11 +558,11 @@ def snapshot(window="session", mode_key=None):
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
     s["prog_delta"]      = prog_delta if not is_unreal else None
-    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "—")
+    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
     s["elo_text"]        = f"{elo} ELO" if (is_unreal and elo is not None) else None
 
-    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "—"
-    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "—%"
+    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
+    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "-%"
     s["season_wins"]  = season_stats["wins"]
     s["season_kills"] = season_stats["kills"]
 
@@ -924,12 +924,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
                 <div class="top-row">
                     <div class="rank-badge">
-                        <span class="rank-number" id="rankNumber">#—</span>
+                        <span class="rank-number" id="rankNumber">#-</span>
                         <span class="rank-label" id="rankLabel">UNREAL</span>
                     </div>
                     <span class="top-divider" id="topDivider">|</span>
                     <div class="elo-group" id="eloGroup">
-                        <div class="elo-value" id="eloText">—— ELO</div>
+                        <div class="elo-value" id="eloText">-- ELO</div>
                         <div class="session-pill session-zero" id="sessionText">+0 ELO TODAY</div>
                     </div>
                     <div class="prog-group" id="progGroup">
@@ -945,27 +945,27 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
                 <div class="mid-row">
                     <span class="next-value hidden" id="nextRow">
-                        NEXT <span class="hl" id="nextGap">—</span> ELO → <span class="hl" id="nextPos">#—</span>
+                        NEXT <span class="hl" id="nextGap">-</span> ELO → <span class="hl" id="nextPos">#-</span>
                     </span>
                     <div class="stats-row">
                         <div class="stat-chip">
                             <span class="s-label">K/D</span>
-                            <span class="s-value" id="seasonKd">—</span>
+                            <span class="s-value" id="seasonKd">-</span>
                         </div>
                         <div class="stat-sep"></div>
                         <div class="stat-chip">
                             <span class="s-label">WIN%</span>
-                            <span class="s-value" id="seasonWr">—%</span>
+                            <span class="s-value" id="seasonWr">-%</span>
                         </div>
                         <div class="stat-sep"></div>
                         <div class="stat-chip">
                             <span class="s-label">KILLS</span>
-                            <span class="s-value" id="seasonKills">—</span>
+                            <span class="s-value" id="seasonKills">-</span>
                         </div>
                         <div class="stat-sep"></div>
                         <div class="stat-chip">
                             <span class="s-label">WINS</span>
-                            <span class="s-value" id="seasonWins">—</span>
+                            <span class="s-value" id="seasonWins">-</span>
                         </div>
                     </div>
                 </div>
@@ -1026,7 +1026,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             var nextRow   = $('#nextRow');
 
             if (d.is_unreal) {
-                $('#eloText').textContent = d.elo_text || '—— ELO';
+                $('#eloText').textContent = d.elo_text || '-- ELO';
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 ELO TODAY';
                 sessEl.className   = 'session-pill session-' + (d.session_sign || 'zero');
@@ -1055,10 +1055,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 nextRow.classList.add('hidden');
             }
 
-            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '—';
-            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '—';
-            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '—';
-            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '—';
+            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
@@ -1130,9 +1130,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"Fortnite Ranked Overlay — port {PORT}")
+    print(f"Fortnite Ranked Overlay - port {PORT}")
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
-    print(f"Polling OliTracker every {POLL_SECONDS}s — Ctrl+C to stop\n")
+    print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
     threading.Thread(target=poll_loop, daemon=True).start()
 
