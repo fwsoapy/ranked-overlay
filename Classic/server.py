@@ -497,8 +497,8 @@ def refresh_once():
         })
 
     sess   = compute_windowed_stats(data, "session", mode_key)
-    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "—"
-    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "—"
+    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "-"
+    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "-"
     gap_txt = (
         f"{elo_to_next} ELO to #{next_pos}" if elo_to_next and next_pos
         else f"#{next_pos} (gap n/a)" if next_pos
@@ -562,11 +562,11 @@ def snapshot(window="session", mode_key=None):
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
     s["prog_delta"]      = prog_delta if not is_unreal else None
-    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "—")
+    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
     s["elo_text"]        = f"{elo} ELO" if (is_unreal and elo is not None) else None
 
-    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "—"
-    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "—%"
+    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
+    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "-%"
     s["season_wins"]  = season_stats["wins"]
     s["season_kills"] = season_stats["kills"]
 
@@ -847,7 +847,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         <div class="overlay-container">
 
             <div class="main-row">
-                <div class="rank-text" id="rankText">— LOADING</div>
+                <div class="rank-text" id="rankText">- LOADING</div>
                 <div class="main-row-right">
                     <div class="elo-text" id="eloText" style="display:none"></div>
                     <div class="prog-inline" id="progInline">
@@ -864,9 +864,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             <div class="sub-row hidden" id="subRow">
                 <div class="next-target">
                     <span id="nextLabel">NEXT</span>
-                    <span class="hi" id="nextGap">—</span>
+                    <span class="hi" id="nextGap">-</span>
                     <span id="nextArrow">→</span>
-                    <span class="hi" id="nextPos">#—</span>
+                    <span class="hi" id="nextPos">#-</span>
                 </div>
                 <span class="session-zero" id="sessionText">+0 TODAY</span>
             </div>
@@ -876,19 +876,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             <div class="stats-row">
                 <div class="stat">
                     <div class="stat-label">KD</div>
-                    <div class="stat-value" id="seasonKd">—</div>
+                    <div class="stat-value" id="seasonKd">-</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">WIN%</div>
-                    <div class="stat-value" id="seasonWr">—</div>
+                    <div class="stat-value" id="seasonWr">-</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">KILLS</div>
-                    <div class="stat-value" id="seasonKills">—</div>
+                    <div class="stat-value" id="seasonKills">-</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">WINS</div>
-                    <div class="stat-value" id="seasonWins">—</div>
+                    <div class="stat-value" id="seasonWins">-</div>
                 </div>
             </div>
 
@@ -928,8 +928,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function renderRankText(rankDisplay, isUnreal) {
             var el = $('#rankText');
-            if (!rankDisplay || rankDisplay === '—') {
-                el.innerHTML = '<span class="rank-name">—</span>';
+            if (!rankDisplay || rankDisplay === '-') {
+                el.innerHTML = '<span class="rank-name">-</span>';
                 return;
             }
             if (isUnreal) {
@@ -977,9 +977,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             if (d.is_unreal) {
                 $('#nextLabel').textContent = 'NEXT';
-                $('#nextGap').textContent   = d.next_gap ? d.next_gap + ' ELO' : '—';
+                $('#nextGap').textContent   = d.next_gap ? d.next_gap + ' ELO' : '-';
                 $('#nextArrow').textContent = '→';
-                $('#nextPos').textContent   = d.next_pos ? '#' + d.next_pos : '#—';
+                $('#nextPos').textContent   = d.next_pos ? '#' + d.next_pos : '#-';
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 TODAY';
                 sessEl.className   = 'session-' + (d.session_sign || 'zero');
@@ -1000,10 +1000,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 divider2.classList.add('hidden');
             }
 
-            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '—';
-            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '—';
-            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '—';
-            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '—';
+            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
@@ -1075,9 +1075,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"Fortnite Ranked Overlay — port {PORT}")
+    print(f"Fortnite Ranked Overlay - port {PORT}")
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
-    print(f"Polling OliTracker every {POLL_SECONDS}s — Ctrl+C to stop\n")
+    print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
     threading.Thread(target=poll_loop, daemon=True).start()
 
