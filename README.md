@@ -1,10 +1,10 @@
-# 🏆 Fortnite Ranked Overlay
+# 🏆 Fortnite Ranked Overlay for OBS
 
-A live ranked overlay for Fortnite streamers. Pulls real-time **ELO**, **rank**, and **season stats** from [OliTracker](https://olitracker.com) and displays them as a browser source in OBS.
+A free, live Fortnite ranked overlay and ELO tracker for streamers. Pulls real-time **ELO**, **rank**, and **season stats** from [OliTracker](https://olitracker.com) and displays them as an OBS browser source, so your Fortnite stream overlay always shows your current rank without you touching a thing.
 
 ✨ **8 designs** to choose from, any accent color you want, each one self-contained in its own folder, just grab the one you like.
 
-![demo](demo.gif)
+![Fortnite ranked overlay demo showing live ELO and rank tracking in OBS](demo.gif)
 
 ---
 
@@ -55,41 +55,41 @@ Click a preview below to open that design's folder.
 <table>
 <tr>
 <td align="center" width="50%">
-<a href="Minimal"><img src="Minimal/preview.png" width="320"><br><b>Minimal</b></a>
+<a href="Minimal"><img src="Minimal/preview.png" width="320" alt="Minimal Fortnite ranked overlay design for OBS"><br><b>Minimal</b></a>
 <br>Clean single-row card with rank and ELO side-by-side and a bold colored left border.
 </td>
 <td align="center" width="50%">
-<a href="Classic"><img src="Classic/preview.png" width="320"><br><b>Classic</b></a>
+<a href="Classic"><img src="Classic/preview.png" width="320" alt="Classic Fortnite ranked overlay design for OBS"><br><b>Classic</b></a>
 <br>A timeless dark card with a thin top accent line and subtle dividers between sections.
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<a href="Sharp"><img src="Sharp/preview.png" width="320"><br><b>Sharp</b></a>
+<a href="Sharp"><img src="Sharp/preview.png" width="320" alt="Sharp Fortnite ranked overlay design for OBS"><br><b>Sharp</b></a>
 <br>Stacked sections with a strong accent color and clipped corners. Feels structured and aggressive.
 </td>
 <td align="center" width="50%">
-<a href="Wide"><img src="Wide/preview.png" width="320"><br><b>Wide</b></a>
+<a href="Wide"><img src="Wide/preview.png" width="320" alt="Wide Fortnite ranked overlay design for OBS"><br><b>Wide</b></a>
 <br>Spread out horizontally with a glowing accent bar on the left. Great for wider stream layouts.
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<a href="Slash"><img src="Slash/preview.png" width="320"><br><b>Slash</b></a>
+<a href="Slash"><img src="Slash/preview.png" width="320" alt="Slash Fortnite ranked overlay design for OBS"><br><b>Slash</b></a>
 <br>A diagonal cut splits the rank and ELO into two panels. Stands out on any stream.
 </td>
 <td align="center" width="50%">
-<a href="Rainbow"><img src="Rainbow/preview.png" width="320"><br><b>Rainbow</b></a>
+<a href="Rainbow"><img src="Rainbow/preview.png" width="320" alt="Rainbow Fortnite ranked overlay design for OBS"><br><b>Rainbow</b></a>
 <br>Animated rainbow rank text and a shimmering ELO value. High energy.
 </td>
 </tr>
 <tr>
 <td align="center" width="50%">
-<a href="Modern"><img src="Modern/preview.png" width="320"><br><b>Modern</b></a>
+<a href="Modern"><img src="Modern/preview.png" width="320" alt="Modern Fortnite ranked overlay design for OBS"><br><b>Modern</b></a>
 <br>Sleek card with a soft radial glow accent and a bold colored left border.
 </td>
 <td align="center" width="50%">
-<a href="Pulse"><img src="Pulse/preview.png" width="320"><br><b>Pulse</b></a>
+<a href="Pulse"><img src="Pulse/preview.png" width="320" alt="Pulse Fortnite ranked overlay design for OBS"><br><b>Pulse</b></a>
 <br>Green terminal HUD with a radial progress gauge and monospace readout. Built for a clean, tactical look.
 </td>
 </tr>
@@ -224,7 +224,7 @@ No. The server only talks to the OliTracker API to pull your stats, and serves t
 
 ## ⚙️ How it works
 
-The overlay is a small Python web server that runs locally on your PC. It polls the OliTracker API every 10 seconds, parses your ranked stats, and serves a single HTML page at `localhost:8888/overlay`. OBS loads that page as a browser source and auto-refreshes the displayed data. No data ever leaves your machine other than the API request to OliTracker.
+This Fortnite rank tracker is a small Python web server that runs locally on your PC. It polls the OliTracker API every 10 seconds, parses your ranked stats, and serves a single HTML page at `localhost:8888/overlay`. OBS loads that page as a browser source and auto-refreshes the displayed data, turning it into a live Fortnite stream overlay with zero manual updates. No data ever leaves your machine other than the API request to OliTracker.
 
 ---
 
