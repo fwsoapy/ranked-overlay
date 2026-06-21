@@ -5,6 +5,7 @@ import json
 import time
 import shutil
 import subprocess
+import webbrowser
 import urllib.request
 import urllib.parse
 
@@ -37,16 +38,8 @@ def run_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
-def find_pythonw():
-    pyw = shutil.which("pythonw")
-    if pyw:
-        return pyw
-    py = shutil.which("python") or shutil.which("py")
-    if py:
-        candidate = os.path.join(os.path.dirname(py), "pythonw.exe")
-        if os.path.exists(candidate):
-            return candidate
-    return py
+def find_python():
+    return shutil.which("python") or shutil.which("py")
 
 
 def _port_in_use(port):
@@ -333,17 +326,21 @@ def main():
             print("  Port 8888 is already in use, probably by another overlay you've already started.")
             print("  Stop that one first (its stop.bat), then run start.bat in this new folder yourself.")
         else:
-            pyw = find_pythonw()
-            if pyw is None:
+            py = find_python()
+            if py is None:
                 print("  Could not find Python to launch with, run start.bat in the folder yourself.")
             else:
                 server_py = os.path.join(dest_dir, "server.py")
                 subprocess.Popen(
-                    [pyw, server_py],
+                    [py, server_py],
                     cwd=dest_dir,
                     creationflags=subprocess.CREATE_NO_WINDOW,
                 )
-                print("Starting (no window will appear, it runs in the background)...")
+                print("Starting the overlay...")
+                time.sleep(2)
+                overlay_url = "http://localhost:8888/overlay"
+                print(f"Opening {overlay_url} in your browser...")
+                webbrowser.open(overlay_url)
 
     print()
     auto_close(5)
