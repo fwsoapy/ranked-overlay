@@ -28,6 +28,8 @@ A free, live Fortnite ranked overlay and ELO tracker for streamers. Pulls real-t
 
 ## 🚀 Quick start
 
+> 🧙 **The fastest way is the [setup wizard](#-setup-wizard-the-easy-way)** — it does every step below for you (design, color, Account ID lookup, and launch). Prefer to set it up by hand? Here's the manual way:
+
 1. Click **Code > Download ZIP** above, unzip it, and open the folder for the design you want (see the gallery below). Or just run `setup.bat` and it'll ask which design you want and copy it straight to your Desktop.
 2. Run `account-id.bat` to look up your Epic Account ID.
 3. Open `server.py`, paste your username and account ID into the two lines near the top, save.
@@ -41,7 +43,7 @@ That's it, you're live. Full details for each step are below if you get stuck an
 
 Don't want to edit any files by hand? Download **`FortniteOverlaySetup.zip`** from the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest), unzip it, and run `FortniteOverlaySetup.exe` inside the extracted folder instead of the manual steps above.
 
-It walks you through everything in a console window: picks a design from a small preview window, lets you set an accent color (by name or hex code), asks whether you want stats or a creator code shown, looks up your Epic Account ID for you automatically, then builds a ready-to-run overlay folder right next to the `.exe` and offers to start it and open it in your browser, all in one go. No editing `server.py`, no separate Account ID lookup step.
+It walks you through everything in a console window: picks a design from a small preview window, lets you set an accent color (by name or hex code), asks whether you want stats or a creator code shown, looks up your Epic Account ID for you automatically, then builds a ready-to-run overlay folder right next to the `.exe` and offers to start it and open it in your browser, all in one go. If an overlay is already running on port 8888, it stops that one first so the new one can take over. No editing `server.py`, no separate Account ID lookup step.
 
 > 💡 The wizard is just a convenience layer over the same 8 designs in this repo, it builds the exact same `server.py`/`start.bat`/`stop.bat` files described below. Use whichever way you prefer.
 
@@ -157,7 +159,7 @@ Replace both values with your username and account ID, then save the file.
 
 ### 4️⃣ Start the overlay
 
-Double-click `start.bat`. A window will briefly appear confirming it started, then close itself. The overlay is now running in the background.
+Double-click `start.bat`. A window will briefly appear confirming it started, then close itself, and the overlay opens in your browser so you can see it's working. The overlay keeps running in the background after you close that tab.
 
 - On some setups (depends on how Python was installed) a second window titled **"Fortnite Overlay Server"** stays open instead of closing. That's normal, just leave it open and minimize it, closing it stops the overlay.
 - To stop the overlay, double-click `stop.bat`.
@@ -185,9 +187,9 @@ The overlay shows mode buttons (**BR**, **Reload**, **Boxfights**) below the wid
 
 ## 🔁 Switching between stats and creator code
 
-Below the mode buttons there are two more buttons, **Stats** and **Creator Code**. Click between them to switch what shows on the card, live, with no server restart needed. Pick **Creator Code** and a text box appears where you can type your own code directly in the browser, it updates the overlay instantly as you type.
+Below the mode buttons there are two more buttons, **Stats** and **Creator Code**. Click between them to switch what shows on the card, live, with no server restart needed. Pick **Creator Code** and a text box appears where you can type your own code directly in the browser, it updates the overlay instantly as you type. Switching between the two never changes the size of the overlay, so nothing else in your OBS scene shifts around.
 
-Both your chosen mode and whatever code you typed are remembered the next time the overlay loads, the same way the BR/Reload/Boxfights choice is remembered. The `CREATOR_CODE` value in `server.py` is just the starting default, the on-page toggle is the source of truth once you've used it.
+Your choice and the code you typed are remembered per design the next time the overlay loads, the same way the BR/Reload/Boxfights choice is remembered. The `CREATOR_CODE` value in `server.py` (or whatever you picked in the wizard) sets the starting default: that's what shows the first time, and if you later change it there and restart, the new setting takes over again.
 
 ---
 
@@ -224,7 +226,7 @@ Two ways to do this:
 Add `?color=` followed by a hex code to the overlay URL, both in your regular browser and in the OBS Browser Source. For example: `http://localhost:8888/overlay?color=ff7a00`. This overrides the accent color at runtime, useful for trying out a color before committing to it. *(On the Rainbow design, the rank text always stays an animated rainbow, the override only changes the highlight colors around it.)*
 
 **💾 Permanent change**
-Open `server.py` and find the CSS inside `OVERLAY_HTML`. The main accent color is defined as a hex value like `#7c3aed` (purple) or `#dc2626` (red), near the top of the `<style>` block as a `--accent` variable. Change that one line and the whole design updates. Use [coolors.co](https://coolors.co) to pick one.
+Open `server.py` and find the CSS inside `OVERLAY_HTML`. Near the top of the `<style>` block, inside `:root`, there's an `--accent` hex value (the design's main color) and a matching `--accent-rgb` (the same color as `r, g, b`). Change both to your color and the whole design updates. Use [coolors.co](https://coolors.co) to pick one. *(Tip: the `?color=` trick above is easier and updates both for you, no editing needed.)*
 
 ---
 
