@@ -793,8 +793,21 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-row {
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .next-left {
+            display: flex;
+            align-items: center;
             gap: 8px;
-            margin-top: 6px;
+        }
+        /* shared slot so stats and creator code occupy the same height */
+        .bottom-slot {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            height: 48px;
         }
 
         .next-gap-val {
@@ -858,20 +871,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             letter-spacing: 1.5px;
             text-transform: uppercase;
             color: #ffffff;
-            margin-left: 14px;
-            padding-left: 14px;
-            border-left: 1px solid rgba(var(--accent-rgb), 0.3);
             white-space: nowrap;
         }
 
         .stats-row {
             display: flex;
             gap: 22px;
-            margin-top: 4px;
         }
         .stat-label {
             font-family: 'Rajdhani', sans-serif;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
@@ -879,7 +888,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
         .stat-value {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 22px;
+            font-size: 24px;
             color: #ffffff;
             letter-spacing: 1px;
         }
@@ -970,19 +979,22 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 </div>
             </div>
 
-            <!-- next leaderboard position -->
+            <!-- next leaderboard position + stats/creator code (same slot, right side) -->
             <div class="next-row" id="leftSubRow">
-                <span class="next-gap-val" id="nextGap">-</span>
-                <span class="next-to" id="nextToLabel">TO</span>
-                <span class="next-hash" id="nextPos">#-</span>
-                <span class="ad-tag" id="creatorRow"></span>
-            </div>
-
-            <div class="stats-row" id="statsRow">
-                <div><div class="stat-label">KD</div><div class="stat-value" id="seasonKd">-</div></div>
-                <div><div class="stat-label">WIN%</div><div class="stat-value" id="seasonWr">-</div></div>
-                <div><div class="stat-label">KILLS</div><div class="stat-value" id="seasonKills">-</div></div>
-                <div><div class="stat-label">WINS</div><div class="stat-value" id="seasonWins">-</div></div>
+                <div class="next-left" id="nextLeft">
+                    <span class="next-gap-val" id="nextGap">-</span>
+                    <span class="next-to" id="nextToLabel">TO</span>
+                    <span class="next-hash" id="nextPos">#-</span>
+                </div>
+                <div class="bottom-slot">
+                    <div class="stats-row" id="statsRow">
+                        <div><div class="stat-label">KD</div><div class="stat-value" id="seasonKd">-</div></div>
+                        <div><div class="stat-label">WIN%</div><div class="stat-value" id="seasonWr">-</div></div>
+                        <div><div class="stat-label">KILLS</div><div class="stat-value" id="seasonKills">-</div></div>
+                        <div><div class="stat-label">WINS</div><div class="stat-value" id="seasonWins">-</div></div>
+                    </div>
+                    <span class="ad-tag" id="creatorRow"></span>
+                </div>
             </div>
         </div>
 
@@ -1131,6 +1143,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             var rightSection = $('#rightSection');
             var progSection  = $('#progSection');
             var leftSubRow   = $('#leftSubRow');
+            var nextLeft     = $('#nextLeft');
 
             if (d.is_unreal) {
                 var eloStr = d.elo_text || '-- ELO';
@@ -1144,11 +1157,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 if (d.next_gap && d.next_pos) {
                     gapEl.textContent = d.next_gap + ' ELO';
                     posEl.textContent = '#' + d.next_pos;
-                    leftSubRow.style.visibility = 'visible';
+                    nextLeft.style.visibility = 'visible';
                 } else {
                     gapEl.textContent = '-';
                     posEl.textContent = '#-';
-                    leftSubRow.style.visibility = 'hidden';
+                    nextLeft.style.visibility = 'hidden';
                 }
 
                 var sessEl = $('#sessionText');
@@ -1172,7 +1185,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     $('#nextToLabel').textContent = 'TO';
                     $('#nextPos').textContent     = '#-';
                 }
-                leftSubRow.style.visibility = 'visible';
+                nextLeft.style.visibility = 'visible';
 
                 var sess2 = $('#sessionText2');
                 sess2.textContent = d.session_text || '+0% TODAY';

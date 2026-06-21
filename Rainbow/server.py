@@ -726,9 +726,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         /* Bottom centered code-ad row (spans full card width) */
         .bottom-row {
             width: 100%;
-            text-align: center;
-            margin-top: 12px;
-            font-weight: 800; font-size: 22px;
+            margin-top: 16px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800; font-size: 28px;
             letter-spacing: 0.5px;
             text-transform: uppercase; white-space: nowrap;
         }
@@ -738,8 +741,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             width: 100%;
             display: flex;
             justify-content: center;
+            align-items: center;
             gap: 34px;
-            margin-top: 18px;
+            margin-top: 16px;
+            min-height: 40px;
         }
         .stat { display: flex; flex-direction: row; align-items: baseline; gap: 8px; }
         .stat-label {

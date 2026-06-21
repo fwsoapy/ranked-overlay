@@ -49,6 +49,36 @@ def _port_in_use(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _free_port(port):
+    """Force-stop whatever is listening on the port (a previously started
+    overlay). Returns True once the port is free."""
+    try:
+        out = subprocess.run(["netstat", "-ano"], capture_output=True,
+                             text=True, timeout=10).stdout
+    except Exception:
+        out = ""
+    pids = set()
+    needle = ":" + str(port)
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and "LISTENING" in parts and parts[1].endswith(needle):
+            pid = parts[-1]
+            if pid.isdigit() and pid != "0":
+                pids.add(pid)
+    for pid in pids:
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", pid],
+                          capture_output=True, timeout=10)
+        except Exception:
+            pass
+    # give Windows a moment to release the socket
+    for _ in range(10):
+        if not _port_in_use(port):
+            return True
+        time.sleep(0.3)
+    return not _port_in_use(port)
+
+
 def banner():
     print("=" * 56)
     print("   Fortnite Ranked Overlay - Setup Wizard")
@@ -326,14 +356,17 @@ def main():
 
     launch = input("\nStart the overlay now? (Y/N): ").strip().lower()
     if launch == "y":
-        if _port_in_use(8888):
-            print("  Port 8888 is already in use, probably by another overlay you've already started.")
-            print("  Stop that one first (its stop.bat), then run start.bat in this new folder yourself.")
+        py = find_python()
+        if py is None:
+            print("  Could not find Python to launch with, run start.bat in the folder yourself.")
         else:
-            py = find_python()
-            if py is None:
-                print("  Could not find Python to launch with, run start.bat in the folder yourself.")
-            else:
+            if _port_in_use(8888):
+                print("  Port 8888 is busy (an overlay is already running). Stopping it first...")
+                if not _free_port(8888):
+                    print("  Couldn't free port 8888 automatically. Close the other overlay,")
+                    print("  then run start.bat in this new folder yourself.")
+                    py = None
+            if py is not None:
                 server_py = os.path.join(dest_dir, "server.py")
                 subprocess.Popen(
                     [py, server_py],

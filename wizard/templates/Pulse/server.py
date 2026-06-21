@@ -826,8 +826,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, auto);
+            align-items: center;
             gap: 16px;
-            padding-top: 9px;
+            height: 52px;
             border-top: 1px solid rgba(var(--accent-rgb), 0.14);
         }
 
@@ -848,15 +849,18 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .stat-value {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 18px;
+            font-size: 21px;
             font-weight: 700;
             color: #eafff2;
         }
 
         .creator-row {
-            padding-top: 9px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            border-top: 1px solid rgba(var(--accent-rgb), 0.14);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 15px;
+            font-size: 21px;
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
@@ -927,7 +931,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             <div class="corner corner-br"></div>
 
             <div class="ring-wrap">
-                <svg class="ring-svg" viewBox="0 0 122 122">
+                <svg class="ring-svg" viewBox="-8 -8 138 138">
                     <circle class="ring-tick ring-spin" cx="61" cy="61" r="58"></circle>
                     <circle class="ring-track" cx="61" cy="61" r="58"></circle>
                     <circle class="ring-progress" id="ringProgress" cx="61" cy="61" r="58"></circle>

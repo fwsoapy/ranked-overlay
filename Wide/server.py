@@ -822,6 +822,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             display: flex;
             align-items: center;
             justify-content: space-between;
+            min-height: 40px;
         }
 
         .next-value {
@@ -885,10 +886,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .creator-row {
             font-weight: 800;
-            font-size: 18px;
+            font-size: 26px;
             letter-spacing: 0.06em;
             text-transform: uppercase;
             color: var(--accent-light);
+            display: flex;
+            align-items: center;
         }
 
         .stat-sep {

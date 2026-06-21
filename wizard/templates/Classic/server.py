@@ -787,7 +787,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .stats-row {
             display: flex;
-            gap: 18px;
+            gap: 22px;
+            min-height: 42px;
+            align-items: center;
+            margin-top: 6px;
         }
 
         .stat {
@@ -797,7 +800,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .stat-label {
-            font-size: 9px;
+            font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.1em;
@@ -805,18 +808,21 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .stat-value {
-            font-size: 17px;
+            font-size: 21px;
             font-weight: 700;
             color: #d8e8ff;
         }
 
         .creator-row {
-            font-size: 16px;
+            font-size: 24px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.06em;
             color: var(--accent);
-            padding: 10px 20px 11px 18px;
+            min-height: 42px;
+            display: flex;
+            align-items: center;
+            margin-top: 6px;
         }
 
         .error-text {

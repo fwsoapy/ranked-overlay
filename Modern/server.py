@@ -821,7 +821,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .stats-row {
             display: flex;
-            padding: 10px 20px 11px 18px;
+            padding: 0 20px 0 18px;
+            min-height: 58px;
+            align-items: center;
         }
 
         .stat {
@@ -861,9 +863,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .creator-row {
-            padding: 10px 20px 11px 18px;
+            padding: 0 20px 0 18px;
+            min-height: 58px;
+            display: flex;
+            align-items: center;
             font-family: 'Barlow Condensed', sans-serif;
-            font-size: 18px;
+            font-size: 27px;
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;

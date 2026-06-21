@@ -844,14 +844,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .stats-band {
             display: flex;
-            padding: 10px 22px;
+            padding: 0 22px;
             gap: 0;
+            min-height: 58px;
+            align-items: center;
         }
 
         .creator-row {
-            padding: 10px 22px;
+            padding: 0 22px;
+            min-height: 58px;
+            display: flex;
+            align-items: center;
             font-family: 'Space Mono', monospace;
-            font-size: 15px;
+            font-size: 23px;
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;

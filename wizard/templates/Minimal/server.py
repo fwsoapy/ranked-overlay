@@ -741,6 +741,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             display: flex;
             gap: 24px;
             margin-top: 12px;
+            min-height: 32px;
+            align-items: center;
             font-weight: 500;
             font-size: 22px;
             color: rgba(255, 255, 255, 0.75);
@@ -748,8 +750,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .creator-row {
             margin-top: 12px;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
             font-weight: 700;
-            font-size: 20px;
+            font-size: 24px;
             letter-spacing: 0.04em;
             text-transform: uppercase;
             color: var(--accent-light);
