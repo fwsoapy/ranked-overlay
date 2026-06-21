@@ -865,6 +865,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             background: rgba(55, 55, 55, 0.98);
             border-color: rgba(255, 255, 255, 0.30);
         }
+    
+        #codeInput.mode-btn {
+            text-align: left;
+            cursor: text;
+        }
+
+        #codeInput.mode-btn::placeholder {
+            color: rgba(220, 220, 220, 0.35);
+        }
     </style>
 </head>
 <body>
@@ -898,7 +907,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             <div class="divider-mid hidden" id="divider2"></div>
 
-            <div class="stats-row" style="__STATS_STYLE__">
+            <div class="stats-row" id="statsRow">
                 <div class="stat">
                     <div class="stat-label">KD</div>
                     <div class="stat-value" id="seasonKd">-</div>
@@ -916,12 +925,17 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     <div class="stat-value" id="seasonWins">-</div>
                 </div>
             </div>
-            <div class="creator-row" style="__CODE_STYLE__">__CODE_TEXT__</div>
+            <div class="creator-row" id="creatorRow"></div>
 
         </div>
 
         <div class="error-text" id="errorText" style="display:none"></div>
         <div class="mode-bar" id="modeBar"></div>
+        <div class="mode-bar" id="displayToggleBar">
+            <button class="mode-btn" id="statsToggleBtn">Stats</button>
+            <button class="mode-btn" id="codeToggleBtn">Creator Code</button>
+            <input class="mode-btn" id="codeInput" type="text" placeholder="Enter creator code" style="display:none;">
+        </div>
     </div>
 
     <script>
@@ -944,6 +958,52 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
+
+        var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
+        var displayMode = localStorage.getItem('fn_display_mode') || (INITIAL_CREATOR_CODE ? 'code' : 'stats');
+        var creatorCode = localStorage.getItem('fn_creator_code');
+        if (creatorCode === null) creatorCode = INITIAL_CREATOR_CODE;
+
+        function renderCreatorText() {
+            var el = $('#creatorRowText') || $('#creatorRow');
+            el.textContent = creatorCode ? ('Use Code ' + creatorCode + ' #ad') : '';
+        }
+
+        function applyDisplayMode() {
+            var statsEl = $('#statsRow');
+            var codeEl  = $('#creatorRow');
+            var input   = $('#codeInput');
+            if (displayMode === 'code') {
+                statsEl.style.display = 'none';
+                codeEl.style.display  = '';
+                input.style.display   = '';
+            } else {
+                statsEl.style.display = '';
+                codeEl.style.display  = 'none';
+                input.style.display   = 'none';
+            }
+            $('#statsToggleBtn').classList.toggle('active', displayMode === 'stats');
+            $('#codeToggleBtn').classList.toggle('active', displayMode === 'code');
+        }
+
+        $('#statsToggleBtn').addEventListener('click', function() {
+            displayMode = 'stats';
+            localStorage.setItem('fn_display_mode', displayMode);
+            applyDisplayMode();
+        });
+        $('#codeToggleBtn').addEventListener('click', function() {
+            displayMode = 'code';
+            localStorage.setItem('fn_display_mode', displayMode);
+            applyDisplayMode();
+        });
+        $('#codeInput').addEventListener('input', function(e) {
+            creatorCode = e.target.value;
+            localStorage.setItem('fn_creator_code', creatorCode);
+            renderCreatorText();
+        });
+        $('#codeInput').value = creatorCode || '';
+        renderCreatorText();
+        applyDisplayMode();
 
         function buildModeBar(modes) {
             if (modeBarBuilt) return;
@@ -1111,11 +1171,8 @@ class Handler(BaseHTTPRequestHandler):
             return (params.get(key, [default]) or [default])[0]
 
         if path in ("", "/overlay"):
-            show_code = bool(CREATOR_CODE.strip())
             html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
-            html = html.replace("__STATS_STYLE__", "display:none;" if show_code else "")
-            html = html.replace("__CODE_STYLE__", "" if show_code else "display:none;")
-            html = html.replace("__CODE_TEXT__", f"Use Code {CREATOR_CODE.strip()} #ad" if show_code else "")
+            html = html.replace("__INITIAL_CREATOR_CODE__", CREATOR_CODE.strip().replace('"', '\\"'))
             self._send(200, html, "text/html; charset=utf-8")
         elif path == "/data":
             w = _p("window", _p("stats_window", "session"))

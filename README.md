@@ -11,11 +11,13 @@ A free, live Fortnite ranked overlay and ELO tracker for streamers. Pulls real-t
 ## 📋 Table of contents
 
 - [Quick start](#-quick-start)
+- [Setup wizard (the easy way)](#-setup-wizard-the-easy-way)
 - [Features](#-features)
 - [Designs](#-designs)
 - [Requirements](#-requirements)
 - [Setup](#-setup)
 - [Switching game modes](#-switching-game-modes)
+- [Switching between stats and creator code](#-switching-between-stats-and-creator-code)
 - [Troubleshooting](#-troubleshooting)
 - [Changing the accent color](#-changing-the-accent-color)
 - [FAQ](#-faq)
@@ -35,6 +37,16 @@ That's it, you're live. Full details for each step are below if you get stuck an
 
 ---
 
+## 🧙 Setup wizard (the easy way)
+
+Don't want to edit any files by hand? Download **`FortniteOverlaySetup.exe`** from the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest) instead of the manual steps above.
+
+It walks you through everything in a console window: picks a design from a small preview window, lets you set an accent color (by name or hex code), asks whether you want stats or a creator code shown, looks up your Epic Account ID for you automatically, then builds a ready-to-run overlay folder right next to the `.exe` and offers to start it and open it in your browser, all in one go. No editing `server.py`, no separate Account ID lookup step.
+
+> 💡 The wizard is just a convenience layer over the same 8 designs in this repo, it builds the exact same `server.py`/`start.bat`/`stop.bat` files described below. Use whichever way you prefer.
+
+---
+
 ## ✨ Features
 
 - **Live rank, ELO, and leaderboard position**, pulled every 10 seconds
@@ -42,6 +54,7 @@ That's it, you're live. Full details for each step are below if you get stuck an
 - **Unreal leaderboard tracking**: shows ELO to next rank (`NEXT 14 ELO to #66`)
 - **Non-Unreal progress tracking**: shows promotion progress % and percent gained today (`53% TO GOLD III`)
 - **Mode switcher** for BR, Reload, and Boxfights, each with its own independent stats, and your last selected mode is remembered the next time the overlay loads
+- **Live stats / creator code toggle**, right in the browser, no restart needed, see [below](#-switching-between-stats-and-creator-code)
 - **Season stats** (K/D, Win%, Kills, Wins), accurate per game mode
 - **8 overlay designs**, any accent color you want
 - **Built-in error messages**: if something goes wrong (bad account ID, OliTracker is down, etc.) a small message shows under the card instead of the overlay just sitting there blank
@@ -50,48 +63,53 @@ That's it, you're live. Full details for each step are below if you get stuck an
 
 ## 🎨 Designs
 
-Click a preview below to open that design's folder.
+Click a design's name to open its folder. Every design can show either **season stats** or a **creator code**, switchable live with the on-overlay toggle, so each one gets two previews below.
 
 <table>
 <tr>
-<td align="center" width="50%">
-<a href="Minimal"><img src="Minimal/preview.png" width="320" alt="Minimal Fortnite ranked overlay design for OBS"><br><b>Minimal</b></a>
-<br>Clean single-row card with rank and ELO side-by-side and a bold colored left border.
-</td>
-<td align="center" width="50%">
-<a href="Classic"><img src="Classic/preview.png" width="320" alt="Classic Fortnite ranked overlay design for OBS"><br><b>Classic</b></a>
-<br>A timeless dark card with a thin top accent line and subtle dividers between sections.
-</td>
+<th>Design</th>
+<th>Stats mode</th>
+<th>Creator code mode</th>
 </tr>
 <tr>
-<td align="center" width="50%">
-<a href="Sharp"><img src="Sharp/preview.png" width="320" alt="Sharp Fortnite ranked overlay design for OBS"><br><b>Sharp</b></a>
-<br>Stacked sections with a strong accent color and clipped corners. Feels structured and aggressive.
-</td>
-<td align="center" width="50%">
-<a href="Wide"><img src="Wide/preview.png" width="320" alt="Wide Fortnite ranked overlay design for OBS"><br><b>Wide</b></a>
-<br>Spread out horizontally with a glowing accent bar on the left. Great for wider stream layouts.
-</td>
+<td width="20%"><a href="Minimal"><b>Minimal</b></a><br>Clean single-row card with rank and ELO side-by-side and a bold colored left border.</td>
+<td align="center" width="40%"><img src="Minimal/preview-stats.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Minimal/preview-code.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, creator code mode"></td>
 </tr>
 <tr>
-<td align="center" width="50%">
-<a href="Slash"><img src="Slash/preview.png" width="320" alt="Slash Fortnite ranked overlay design for OBS"><br><b>Slash</b></a>
-<br>A diagonal cut splits the rank and ELO into two panels. Stands out on any stream.
-</td>
-<td align="center" width="50%">
-<a href="Rainbow"><img src="Rainbow/preview.png" width="320" alt="Rainbow Fortnite ranked overlay design for OBS"><br><b>Rainbow</b></a>
-<br>Animated rainbow rank text and a shimmering ELO value. High energy.
-</td>
+<td width="20%"><a href="Classic"><b>Classic</b></a><br>A timeless dark card with a thin top accent line and subtle dividers between sections.</td>
+<td align="center" width="40%"><img src="Classic/preview-stats.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Classic/preview-code.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, creator code mode"></td>
 </tr>
 <tr>
-<td align="center" width="50%">
-<a href="Modern"><img src="Modern/preview.png" width="320" alt="Modern Fortnite ranked overlay design for OBS"><br><b>Modern</b></a>
-<br>Sleek card with a soft radial glow accent and a bold colored left border.
-</td>
-<td align="center" width="50%">
-<a href="Pulse"><img src="Pulse/preview.png" width="320" alt="Pulse Fortnite ranked overlay design for OBS"><br><b>Pulse</b></a>
-<br>Green terminal HUD with a radial progress gauge and monospace readout. Built for a clean, tactical look.
-</td>
+<td width="20%"><a href="Sharp"><b>Sharp</b></a><br>Stacked sections with a strong accent color and clipped corners. Feels structured and aggressive.</td>
+<td align="center" width="40%"><img src="Sharp/preview-stats.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Sharp/preview-code.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, creator code mode"></td>
+</tr>
+<tr>
+<td width="20%"><a href="Wide"><b>Wide</b></a><br>Spread out horizontally with a glowing accent bar on the left. Great for wider stream layouts.</td>
+<td align="center" width="40%"><img src="Wide/preview-stats.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Wide/preview-code.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, creator code mode"></td>
+</tr>
+<tr>
+<td width="20%"><a href="Slash"><b>Slash</b></a><br>A diagonal cut splits the rank and ELO into two panels. Stands out on any stream.</td>
+<td align="center" width="40%"><img src="Slash/preview-stats.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Slash/preview-code.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, creator code mode"></td>
+</tr>
+<tr>
+<td width="20%"><a href="Rainbow"><b>Rainbow</b></a><br>Animated rainbow rank text and a shimmering ELO value. High energy.</td>
+<td align="center" width="40%"><img src="Rainbow/preview-stats.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Rainbow/preview-code.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, creator code mode"></td>
+</tr>
+<tr>
+<td width="20%"><a href="Modern"><b>Modern</b></a><br>Sleek card with a soft radial glow accent and a bold colored left border.</td>
+<td align="center" width="40%"><img src="Modern/preview-stats.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Modern/preview-code.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, creator code mode"></td>
+</tr>
+<tr>
+<td width="20%"><a href="Pulse"><b>Pulse</b></a><br>Green terminal HUD with a radial progress gauge and monospace readout. Built for a clean, tactical look.</td>
+<td align="center" width="40%"><img src="Pulse/preview-stats.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Pulse/preview-code.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, creator code mode"></td>
 </tr>
 </table>
 
@@ -160,6 +178,14 @@ Double-click `start.bat`. A window will briefly appear confirming it started, th
 The overlay shows mode buttons (**BR**, **Reload**, **Boxfights**) below the widget. Click a button to switch, and the rank, ELO, and stats all update for that mode. Your choice is remembered the next time you open the overlay. In OBS you can interact with browser sources by right-clicking the source and selecting **Interact**.
 
 > ℹ️ You'll only see buttons for modes you actually have ranked stats in. If you've never queued Reload, no Reload button shows up, that's expected, not a bug.
+
+---
+
+## 🔁 Switching between stats and creator code
+
+Below the mode buttons there are two more buttons, **Stats** and **Creator Code**. Click between them to switch what shows on the card, live, with no server restart needed. Pick **Creator Code** and a text box appears where you can type your own code directly in the browser, it updates the overlay instantly as you type.
+
+Both your chosen mode and whatever code you typed are remembered the next time the overlay loads, the same way the BR/Reload/Boxfights choice is remembered. The `CREATOR_CODE` value in `server.py` is just the starting default, the on-page toggle is the source of truth once you've used it.
 
 ---
 
