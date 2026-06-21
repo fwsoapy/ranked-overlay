@@ -4,7 +4,6 @@ import sys
 import json
 import time
 import shutil
-import threading
 import subprocess
 import urllib.request
 import urllib.parse
@@ -36,6 +35,25 @@ def run_dir():
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def find_pythonw():
+    pyw = shutil.which("pythonw")
+    if pyw:
+        return pyw
+    py = shutil.which("python") or shutil.which("py")
+    if py:
+        candidate = os.path.join(os.path.dirname(py), "pythonw.exe")
+        if os.path.exists(candidate):
+            return candidate
+    return py
+
+
+def _port_in_use(port):
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def banner():
@@ -80,37 +98,36 @@ def check_python():
 _preview_state = {"root": None}
 
 
-def _tk_preview_worker(path):
-    try:
-        import tkinter as tk
-        root = tk.Tk()
-        root.title("Pick a design (1-8)")
-        img = tk.PhotoImage(file=path)
-        label = tk.Label(root, image=img)
-        label.image = img
-        label.pack()
-        root.attributes("-topmost", True)
-        _preview_state["root"] = root
-        root.mainloop()
-    except Exception:
-        pass
-
-
 def show_previews():
     path = resource_path(os.path.join("assets", "design-previews.png"))
     if not os.path.exists(path):
         print("  (Preview image not found, picking blind, sorry.)")
         return
-    t = threading.Thread(target=_tk_preview_worker, args=(path,), daemon=True)
-    t.start()
-    time.sleep(0.5)
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.title("Pick a design (1-8)")
+        img = tk.PhotoImage(file=path)
+        # Cap the window at a sensible size so it never feels huge.
+        max_w = 620
+        if img.width() > max_w:
+            factor = max(2, round(img.width() / max_w))
+            img = img.subsample(factor, factor)
+        label = tk.Label(root, image=img)
+        label.image = img
+        label.pack()
+        root.resizable(False, False)
+        root.update()
+        _preview_state["root"] = root
+    except Exception:
+        _preview_state["root"] = None
 
 
 def close_previews():
     root = _preview_state.get("root")
     if root is not None:
         try:
-            root.quit()
+            root.destroy()
         except Exception:
             pass
         _preview_state["root"] = None
@@ -312,13 +329,21 @@ def main():
 
     launch = input("\nStart the overlay now? (Y/N): ").strip().lower()
     if launch == "y":
-        start_bat = os.path.join(dest_dir, "start.bat")
-        subprocess.Popen(
-            ["cmd", "/c", start_bat],
-            cwd=dest_dir,
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
-        )
-        print("Starting...")
+        if _port_in_use(8888):
+            print("  Port 8888 is already in use, probably by another overlay you've already started.")
+            print("  Stop that one first (its stop.bat), then run start.bat in this new folder yourself.")
+        else:
+            pyw = find_pythonw()
+            if pyw is None:
+                print("  Could not find Python to launch with, run start.bat in the folder yourself.")
+            else:
+                server_py = os.path.join(dest_dir, "server.py")
+                subprocess.Popen(
+                    [pyw, server_py],
+                    cwd=dest_dir,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                )
+                print("Starting (no window will appear, it runs in the background)...")
 
     print()
     auto_close(5)
@@ -330,5 +355,10 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
     except Exception as e:
+        import traceback
         print(f"\nSomething went wrong: {e}")
-        input("Press Enter to close...")
+        traceback.print_exc()
+        try:
+            input("Press Enter to close...")
+        except Exception:
+            time.sleep(15)
