@@ -11,6 +11,7 @@ from urllib.parse import urlparse, parse_qs
 
 EPIC_USERNAME    = "YourUsername"
 EPIC_ACCOUNT_ID  = "your-account-id-here"
+CREATOR_CODE     = ""
 API_BASE         = "https://olitracker.com/api"
 PORT             = 8888
 POLL_SECONDS     = 10
@@ -808,6 +809,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: #d8e8ff;
         }
 
+        .creator-row {
+            font-size: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--accent);
+            padding: 10px 20px 11px 18px;
+        }
+
         .error-text {
             font-size: 11px;
             font-weight: 600;
@@ -887,7 +897,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
             <div class="divider-mid hidden" id="divider2"></div>
 
-            <div class="stats-row">
+            <div class="stats-row" style="__STATS_STYLE__">
                 <div class="stat">
                     <div class="stat-label">KD</div>
                     <div class="stat-value" id="seasonKd">-</div>
@@ -905,6 +915,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     <div class="stat-value" id="seasonWins">-</div>
                 </div>
             </div>
+            <div class="creator-row" style="__CODE_STYLE__">__CODE_TEXT__</div>
 
         </div>
 
@@ -1099,7 +1110,11 @@ class Handler(BaseHTTPRequestHandler):
             return (params.get(key, [default]) or [default])[0]
 
         if path in ("", "/overlay"):
+            show_code = bool(CREATOR_CODE.strip())
             html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
+            html = html.replace("__STATS_STYLE__", "display:none;" if show_code else "")
+            html = html.replace("__CODE_STYLE__", "" if show_code else "display:none;")
+            html = html.replace("__CODE_TEXT__", f"Use Code {CREATOR_CODE.strip()} #ad" if show_code else "")
             self._send(200, html, "text/html; charset=utf-8")
         elif path == "/data":
             w = _p("window", _p("stats_window", "session"))

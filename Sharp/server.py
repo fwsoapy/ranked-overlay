@@ -11,6 +11,7 @@ from urllib.parse import urlparse, parse_qs
 
 EPIC_USERNAME    = "YourUsername"
 EPIC_ACCOUNT_ID  = "your-account-id-here"
+CREATOR_CODE     = ""
 API_BASE         = "https://olitracker.com/api"
 PORT             = 8888
 POLL_SECONDS     = 10
@@ -601,7 +602,12 @@ def snapshot(window="session", mode_key=None):
         delta       = s.get("session_delta", 0) or 0
         prog_delta  = s.get("prog_delta", 0) or 0
 
-    stats = compute_windowed_stats(raw, window, resolved_key or None)
+    stats        = compute_windowed_stats(raw, window, resolved_key or None)
+    season_stats = compute_windowed_stats(raw, "season", resolved_key or None)
+    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
+    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "-%"
+    s["season_kills"] = season_stats["kills"]
+    s["season_wins"]  = season_stats["wins"]
 
     s["is_unreal"]       = is_unreal
     s["progression_pct"] = progression if not is_unreal else None
@@ -857,6 +863,26 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             white-space: nowrap;
         }
 
+        .stats-row {
+            display: flex;
+            gap: 22px;
+            margin-top: 4px;
+        }
+        .stat-label {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(var(--accent-rgb), 0.7);
+        }
+        .stat-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 22px;
+            color: #ffffff;
+            letter-spacing: 1px;
+        }
+
         .error-text {
             font-size: 11px;
             font-weight: 600;
@@ -939,7 +965,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 <span class="next-gap-val" id="nextGap">-</span>
                 <span class="next-to" id="nextToLabel">TO</span>
                 <span class="next-hash" id="nextPos">#-</span>
-                <span class="ad-tag">Use Code YourCode #ad</span>
+                <span class="ad-tag" style="__CODE_STYLE__">__CODE_TEXT__</span>
+            </div>
+
+            <div class="stats-row" style="__STATS_STYLE__">
+                <div><div class="stat-label">KD</div><div class="stat-value" id="seasonKd">-</div></div>
+                <div><div class="stat-label">WIN%</div><div class="stat-value" id="seasonWr">-</div></div>
+                <div><div class="stat-label">KILLS</div><div class="stat-value" id="seasonKills">-</div></div>
+                <div><div class="stat-label">WINS</div><div class="stat-value" id="seasonWins">-</div></div>
             </div>
         </div>
 
@@ -1066,6 +1099,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 sess2.className   = 'session-delta session-' + (d.session_sign || 'zero');
             }
 
+            if ($('#seasonKd')) {
+                $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+                $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+                $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+                $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
+            }
+
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
                 if (!activeMode) {
@@ -1120,7 +1160,11 @@ class Handler(BaseHTTPRequestHandler):
             return (params.get(key, [default]) or [default])[0]
 
         if path in ("", "/overlay"):
+            show_code = bool(CREATOR_CODE.strip())
             html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
+            html = html.replace("__STATS_STYLE__", "display:none;" if show_code else "")
+            html = html.replace("__CODE_STYLE__", "" if show_code else "display:none;")
+            html = html.replace("__CODE_TEXT__", f"Use Code {CREATOR_CODE.strip()} #ad" if show_code else "")
             self._send(200, html, "text/html; charset=utf-8")
         elif path == "/data":
             w = _p("window", _p("stats_window", "session"))

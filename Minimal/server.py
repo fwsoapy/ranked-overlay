@@ -11,6 +11,7 @@ from urllib.parse import urlparse, parse_qs
 
 EPIC_USERNAME    = "YourUsername"
 EPIC_ACCOUNT_ID  = "your-account-id-here"
+CREATOR_CODE     = ""
 API_BASE         = "https://olitracker.com/api"
 PORT             = 8888
 POLL_SECONDS     = 10
@@ -744,6 +745,15 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: rgba(255, 255, 255, 0.75);
         }
 
+        .creator-row {
+            margin-top: 12px;
+            font-weight: 700;
+            font-size: 20px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
         .stat-item span {
             font-weight: 700;
             color: rgba(255, 255, 255, 0.90);
@@ -817,12 +827,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 </div>
             </div>
 
-            <div class="season-row">
+            <div class="season-row" style="__STATS_STYLE__">
                 <div class="stat-item">KD: <span id="seasonKd">-</span></div>
                 <div class="stat-item">WR: <span id="seasonWr">-%</span></div>
                 <div class="stat-item">KILLS: <span id="seasonKills">-</span></div>
                 <div class="stat-item">WINS: <span id="seasonWins">-</span></div>
             </div>
+            <div class="creator-row" style="__CODE_STYLE__">__CODE_TEXT__</div>
         </div>
 
         <div class="error-text" id="errorText" style="display:none"></div>
@@ -1006,7 +1017,11 @@ class Handler(BaseHTTPRequestHandler):
             return (params.get(key, [default]) or [default])[0]
 
         if path in ("", "/overlay"):
+            show_code = bool(CREATOR_CODE.strip())
             html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
+            html = html.replace("__STATS_STYLE__", "display:none;" if show_code else "")
+            html = html.replace("__CODE_STYLE__", "" if show_code else "display:none;")
+            html = html.replace("__CODE_TEXT__", f"Use Code {CREATOR_CODE.strip()} #ad" if show_code else "")
             self._send(200, html, "text/html; charset=utf-8")
         elif path == "/data":
             w = _p("window", _p("stats_window", "session"))

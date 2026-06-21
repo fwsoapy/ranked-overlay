@@ -12,6 +12,7 @@ from urllib.parse import urlparse, parse_qs
 # CONFIG  -  edit these if you need to
 EPIC_USERNAME    = "YourUsername"
 EPIC_ACCOUNT_ID  = "your-account-id-here"
+CREATOR_CODE     = ""
 API_BASE          = "https://olitracker.com/api"
 PORT              = 8888
 POLL_SECONDS      = 10          # API poll interval (seconds)
@@ -185,6 +186,101 @@ def extract_label(mode_obj):
 
 def extract_placement(mode_obj):
     return _num(mode_obj.get("unreal_placement"))
+
+
+def extract_progression(mode_obj):
+    if _num(mode_obj.get("unreal_placement")) is not None:
+        return None
+    return _num(mode_obj.get("promotion_progression"))
+
+
+MODE_STAT_PATH = {
+    "ranked-br-combined":      ("ranked",),
+    "ranked_blastberry_build": ("reload",),
+    "ranked_squareclub":       None,
+    "ranked-squareclub":       None,
+}
+
+MODES_WITHOUT_SEASONAL_BLOCK = {"ranked_squareclub", "ranked-squareclub"}
+
+_EMPTY_STATS = {
+    "wins": 0, "losses": 0, "kills": 0,
+    "matches": 0, "kd": None, "wr": None,
+}
+
+
+def _detect_ranking_id(data, preferred_mode_key=None):
+    if preferred_mode_key:
+        return preferred_mode_key
+    override = RANKED_MODE_KEY.strip()
+    if override:
+        return override
+    tally = {}
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd  = grp.get("ranked_data") or {}
+            rid = rd.get("ranking_id")
+            if rid:
+                tally[rid] = tally.get(rid, 0) + int(grp.get("matches", 0) or 0)
+    return max(tally, key=tally.get) if tally else None
+
+
+def _stat_block(data, timeframe, ranking_id):
+    path_key = MODE_STAT_PATH.get(ranking_id or "", ("ranked",))
+    if path_key is None:
+        return None
+    try:
+        block = data["stats"][timeframe]
+        for k in path_key:
+            block = block[k]
+        return block["both"]["overall"]
+    except (KeyError, TypeError):
+        try:
+            return data["stats"][timeframe]["ranked"]["both"]["overall"]
+        except (KeyError, TypeError):
+            return None
+
+
+def _stats_from_history(data, ranking_id):
+    total_wins = total_matches = total_kills = 0
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if rd.get("ranking_id") != ranking_id:
+                continue
+            total_wins    += int(grp.get("wins",    0) or 0)
+            total_matches += int(grp.get("matches", 0) or 0)
+            total_kills   += int(grp.get("kills",   0) or 0)
+    losses = total_matches - total_wins
+    kd = round(total_kills / losses, 2) if losses > 0 else None
+    wr = round(total_wins / total_matches * 100, 1) if total_matches > 0 else None
+    return {"wins": total_wins, "losses": losses, "kills": total_kills, "matches": total_matches, "kd": kd, "wr": wr}
+
+
+def _seasonal_ranked_stats(data, ranking_id=None):
+    if ranking_id in MODES_WITHOUT_SEASONAL_BLOCK:
+        return _stats_from_history(data, ranking_id)
+    try:
+        blk = _stat_block(data, "seasonal", ranking_id)
+        if blk is None:
+            return _stats_from_history(data, ranking_id) if ranking_id else dict(_EMPTY_STATS)
+        wins    = int(blk.get("wins",           0) or 0)
+        matches = int(blk.get("matches_played", 0) or 0)
+        kills   = int(blk.get("kills",          0) or 0)
+        losses  = matches - wins
+        kd = round(kills / losses, 2) if losses > 0 else None
+        wr = round(wins / matches * 100, 1) if matches > 0 else None
+        return {"wins": wins, "losses": losses, "kills": kills, "matches": matches, "kd": kd, "wr": wr}
+    except Exception:
+        return dict(_EMPTY_STATS)
+
+
+def compute_windowed_stats(data, window_spec, ranking_id=None):
+    if data is None:
+        return dict(_EMPTY_STATS)
+    if window_spec == "season":
+        return _seasonal_ranked_stats(data, ranking_id)
+    return dict(_EMPTY_STATS)
 
 
 # Best-effort: ELO gap to the next leaderboard position
@@ -376,6 +472,7 @@ def poll_loop():
 def snapshot(mode_key=None):
     with _lock:
         s   = dict(STATE)
+        raw = _last_raw
         mds = list(_last_modes)
 
     if mode_key and mds:
@@ -398,6 +495,7 @@ def snapshot(mode_key=None):
             start = _start_elos.get(resolved_key)
         delta = (elo - start) if (elo is not None and start is not None) else 0
     else:
+        resolved_key = ""
         elo       = s.get("elo")
         placement = s.get("rank_number")
         label     = s.get("rank_label") or ""
@@ -406,6 +504,12 @@ def snapshot(mode_key=None):
         nxt       = s.get("next_position")
         gap       = s.get("elo_to_next")
         delta     = s.get("session_delta", 0) or 0
+
+    season_stats = compute_windowed_stats(raw, "season", resolved_key or None)
+    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
+    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "-%"
+    s["season_kills"] = season_stats["kills"]
+    s["season_wins"]  = season_stats["wins"]
 
     s["is_unreal"]     = is_unreal
     s["rank_display"]  = (f"#{placement} {label}".strip() if placement
@@ -628,6 +732,20 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
         .code-ad { color: #ffffff; font-style: italic; }
 
+        .stats-row {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 26px;
+            margin-top: 12px;
+        }
+        .stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .stat-label {
+            font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+            text-transform: uppercase; color: rgba(255,255,255,0.55);
+        }
+        .stat-value { font-size: 18px; font-weight: 800; color: #ffffff; }
+
         .wl-wins   { color: #2ed573; text-shadow: 0 0 10px rgba(46,213,115,0.3); }
         .wl-sep    { color: #ffffff; margin: 0 2px; }
         .wl-losses { color: #ff4757; text-shadow: 0 0 10px rgba(255,71,87,0.3); }
@@ -717,8 +835,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     </div>
                 </div>
             </div>
-            <div class="bottom-row">
-                <span class="code-ad">Use Code YourCode :) #ad</span>
+            <div class="bottom-row" style="__CODE_STYLE__">
+                <span class="code-ad">__CODE_TEXT__</span>
+            </div>
+            <div class="stats-row" style="__STATS_STYLE__">
+                <div class="stat"><div class="stat-label">KD</div><div class="stat-value" id="seasonKd">-</div></div>
+                <div class="stat"><div class="stat-label">WIN%</div><div class="stat-value" id="seasonWr">-</div></div>
+                <div class="stat"><div class="stat-label">KILLS</div><div class="stat-value" id="seasonKills">-</div></div>
+                <div class="stat"><div class="stat-label">WINS</div><div class="stat-value" id="seasonWins">-</div></div>
             </div>
         </div>
 
@@ -816,6 +940,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     sessEl.textContent = d.session_text || '+0 ELO TODAY';
                     sessEl.className   = 'session-' + (d.session_sign || 'zero');
 
+                    if ($('#seasonKd')) {
+                        $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+                        $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+                        $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+                        $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
+                    }
+
                     var modes = d.modes_available;
                     if (modes && modes.length > 0) {
                         if (!activeMode) {
@@ -866,7 +997,11 @@ class Handler(BaseHTTPRequestHandler):
             return (params.get(key, [default]) or [default])[0]
 
         if path in ("", "/overlay"):
+            show_code = bool(CREATOR_CODE.strip())
             html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
+            html = html.replace("__STATS_STYLE__", "display:none;" if show_code else "")
+            html = html.replace("__CODE_STYLE__", "" if show_code else "display:none;")
+            html = html.replace("__CODE_TEXT__", f"Use Code {CREATOR_CODE.strip()} #ad" if show_code else "")
             self._send(200, html, "text/html; charset=utf-8")
 
         elif path == "/data":

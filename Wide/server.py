@@ -11,6 +11,7 @@ from urllib.parse import urlparse, parse_qs
 
 EPIC_USERNAME    = "YourUsername"
 EPIC_ACCOUNT_ID  = "your-account-id-here"
+CREATOR_CODE     = ""
 API_BASE         = "https://olitracker.com/api"
 PORT             = 8888
 POLL_SECONDS     = 10
@@ -881,6 +882,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             line-height: 1;
         }
 
+        .creator-row {
+            font-weight: 800;
+            font-size: 18px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
         .stat-sep {
             width: 1px;
             height: 30px;
@@ -966,7 +975,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     <span class="next-value hidden" id="nextRow">
                         <span id="nextLabel">NEXT</span> <span class="hl" id="nextGap">-</span><span id="nextUnit"> ELO</span> <span id="nextArrow">&rarr;</span> <span class="hl" id="nextPos">#-</span>
                     </span>
-                    <div class="stats-row">
+                    <div class="stats-row" style="__STATS_STYLE__">
                         <div class="stat-chip">
                             <span class="s-label">K/D</span>
                             <span class="s-value" id="seasonKd">-</span>
@@ -987,6 +996,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                             <span class="s-value" id="seasonWins">-</span>
                         </div>
                     </div>
+                    <div class="creator-row" style="__CODE_STYLE__">__CODE_TEXT__</div>
                 </div>
 
             </div>
@@ -1172,7 +1182,11 @@ class Handler(BaseHTTPRequestHandler):
             return (params.get(key, [default]) or [default])[0]
 
         if path in ("", "/overlay"):
+            show_code = bool(CREATOR_CODE.strip())
             html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
+            html = html.replace("__STATS_STYLE__", "display:none;" if show_code else "")
+            html = html.replace("__CODE_STYLE__", "" if show_code else "display:none;")
+            html = html.replace("__CODE_TEXT__", f"Use Code {CREATOR_CODE.strip()} #ad" if show_code else "")
             self._send(200, html, "text/html; charset=utf-8")
         elif path == "/data":
             w = _p("window", _p("stats_window", "session"))
