@@ -596,6 +596,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             --accent: #c080ff;
             --accent-rgb: 192, 128, 255;
             --accent-light: color-mix(in srgb, var(--accent) 65%, white);
+            --stat-label-color: #ffffff;
         }
 
         body {
@@ -737,16 +738,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             width: 100%;
             display: flex;
             justify-content: center;
-            gap: 26px;
-            margin-top: 12px;
+            gap: 34px;
+            margin-top: 18px;
         }
-        .stat { display: flex; flex-direction: row; align-items: baseline; gap: 6px; }
+        .stat { display: flex; flex-direction: row; align-items: baseline; gap: 8px; }
         .stat-label {
-            font-size: 15px; font-weight: 700; letter-spacing: 0.08em;
-            text-transform: uppercase; color: var(--accent-light);
+            font-size: 19px; font-weight: 700; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--stat-label-color);
         }
         .stat-label::after { content: ":"; }
-        .stat-value { font-size: 22px; font-weight: 800; color: #ffffff; }
+        .stat-value { font-size: 30px; font-weight: 800; color: #ffffff; }
 
         .wl-wins   { color: #2ed573; text-shadow: 0 0 10px rgba(46,213,115,0.3); }
         .wl-sep    { color: #ffffff; margin: 0 2px; }
@@ -878,6 +879,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     var b = parseInt(c.substr(4, 2), 16);
                     document.documentElement.style.setProperty('--accent', '#' + c);
                     document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                    document.documentElement.style.setProperty('--stat-label-color', '#' + c);
                 }
             }
         })();

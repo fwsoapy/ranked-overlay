@@ -279,6 +279,10 @@ def build_overlay(design, accent, display_choice, username, account_id, dest_roo
                               f'--accent: #{accent};', server_text, count=1)
         server_text = re.sub(r'--accent-rgb:\s*[0-9]+,\s*[0-9]+,\s*[0-9]+;',
                               f'--accent-rgb: {r}, {g}, {b};', server_text, count=1)
+        # Rainbow's stat labels default to white; if a custom color is chosen,
+        # tint them to match (no-op for the other 7 designs, which lack this var).
+        server_text = re.sub(r'--stat-label-color:\s*#[0-9a-fA-F]{6};',
+                              f'--stat-label-color: #{accent};', server_text, count=1)
 
     with open(os.path.join(dest_dir, "server.py"), "w", encoding="utf-8") as f:
         f.write(server_text)
@@ -340,7 +344,12 @@ def main():
                 time.sleep(2)
                 overlay_url = "http://localhost:8888/overlay"
                 print(f"Opening {overlay_url} in your browser...")
-                webbrowser.open(overlay_url)
+                # os.startfile hands the URL to Windows' default browser exactly
+                # once; webbrowser.open can spawn two tabs/windows on Windows.
+                try:
+                    os.startfile(overlay_url)
+                except (AttributeError, OSError):
+                    webbrowser.open(overlay_url)
 
     print()
     auto_close(5)
