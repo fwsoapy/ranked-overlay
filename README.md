@@ -39,11 +39,13 @@ That's it, you're live. Full details for each step are below if you get stuck an
 
 ## 🧙 Setup wizard (the easy way)
 
-Don't want to edit any files by hand? Download **`FortniteOverlaySetup.exe`** from the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest) instead of the manual steps above.
+Don't want to edit any files by hand? Download **`FortniteOverlaySetup.zip`** from the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest), unzip it, and run `FortniteOverlaySetup.exe` inside the extracted folder instead of the manual steps above.
 
 It walks you through everything in a console window: picks a design from a small preview window, lets you set an accent color (by name or hex code), asks whether you want stats or a creator code shown, looks up your Epic Account ID for you automatically, then builds a ready-to-run overlay folder right next to the `.exe` and offers to start it and open it in your browser, all in one go. No editing `server.py`, no separate Account ID lookup step.
 
 > 💡 The wizard is just a convenience layer over the same 8 designs in this repo, it builds the exact same `server.py`/`start.bat`/`stop.bat` files described below. Use whichever way you prefer.
+
+> ⚠️ It ships as a zip (rather than a single `.exe`) because standalone PyInstaller executables are commonly flagged as false positives by antivirus heuristics, distributing it as an extracted folder instead of a self-extracting single file avoids that. Windows SmartScreen may still warn the first time you run it since it's an unsigned indie tool, click **More info > Run anyway**, same as the `.bat` files.
 
 ---
 

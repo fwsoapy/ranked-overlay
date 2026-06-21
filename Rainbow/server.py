@@ -731,7 +731,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             letter-spacing: 0.5px;
             text-transform: uppercase; white-space: nowrap;
         }
-        .code-ad { color: var(--accent-light); font-style: italic; }
+        .code-ad { color: #ffffff; font-style: italic; }
 
         .stats-row {
             width: 100%;
@@ -740,13 +740,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             gap: 26px;
             margin-top: 12px;
         }
-        .stat { display: flex; flex-direction: row; align-items: baseline; gap: 4px; }
+        .stat { display: flex; flex-direction: row; align-items: baseline; gap: 6px; }
         .stat-label {
-            font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+            font-size: 15px; font-weight: 700; letter-spacing: 0.08em;
             text-transform: uppercase; color: var(--accent-light);
         }
         .stat-label::after { content: ":"; }
-        .stat-value { font-size: 18px; font-weight: 800; color: #ffffff; }
+        .stat-value { font-size: 22px; font-weight: 800; color: #ffffff; }
 
         .wl-wins   { color: #2ed573; text-shadow: 0 0 10px rgba(46,213,115,0.3); }
         .wl-sep    { color: #ffffff; margin: 0 2px; }
