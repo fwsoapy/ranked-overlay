@@ -1,0 +1,8 @@
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# PyInstaller build output (the wizard exe is attached to releases, not committed)
+wizard/build/
+wizard/dist/
+*.spec

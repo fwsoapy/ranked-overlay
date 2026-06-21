@@ -960,9 +960,28 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         function $(s) { return document.querySelector(s); }
 
         var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
-        var displayMode = localStorage.getItem('fn_display_mode') || (INITIAL_CREATOR_CODE ? 'code' : 'stats');
-        var creatorCode = localStorage.getItem('fn_creator_code');
-        if (creatorCode === null) creatorCode = INITIAL_CREATOR_CODE;
+        // localStorage is shared by every overlay on localhost, so namespace the
+        // keys per design and gate them on a signature of the server's config.
+        // That way the wizard's choice (stats vs. code) and the configured code
+        // always win on first load, and only an in-browser toggle for THIS
+        // overlay persists, instead of one typed code bleeding across overlays.
+        var FN_NS  = "Classic";
+        var K_MODE = 'fn_display_mode_' + FN_NS;
+        var K_CODE = 'fn_creator_code_' + FN_NS;
+        var K_SIG  = 'fn_config_sig_' + FN_NS;
+
+        var displayMode, creatorCode;
+        if (localStorage.getItem(K_SIG) === INITIAL_CREATOR_CODE) {
+            displayMode = localStorage.getItem(K_MODE) || (INITIAL_CREATOR_CODE ? 'code' : 'stats');
+            var _savedCode = localStorage.getItem(K_CODE);
+            creatorCode = (_savedCode === null) ? INITIAL_CREATOR_CODE : _savedCode;
+        } else {
+            displayMode = INITIAL_CREATOR_CODE ? 'code' : 'stats';
+            creatorCode = INITIAL_CREATOR_CODE;
+            localStorage.setItem(K_SIG, INITIAL_CREATOR_CODE);
+            localStorage.setItem(K_MODE, displayMode);
+            localStorage.setItem(K_CODE, creatorCode);
+        }
 
         function renderCreatorText() {
             var el = $('#creatorRowText') || $('#creatorRow');
@@ -988,17 +1007,17 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         $('#statsToggleBtn').addEventListener('click', function() {
             displayMode = 'stats';
-            localStorage.setItem('fn_display_mode', displayMode);
+            localStorage.setItem(K_MODE, displayMode);
             applyDisplayMode();
         });
         $('#codeToggleBtn').addEventListener('click', function() {
             displayMode = 'code';
-            localStorage.setItem('fn_display_mode', displayMode);
+            localStorage.setItem(K_MODE, displayMode);
             applyDisplayMode();
         });
         $('#codeInput').addEventListener('input', function(e) {
             creatorCode = e.target.value;
-            localStorage.setItem('fn_creator_code', creatorCode);
+            localStorage.setItem(K_CODE, creatorCode);
             renderCreatorText();
         });
         $('#codeInput').value = creatorCode || '';
