@@ -689,7 +689,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .accent-bar {
             width: 7px;
-            background: linear-gradient(180deg, var(--accent) 0%, #0ea5e9 100%);
+            background: linear-gradient(180deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, black) 100%);
             flex-shrink: 0;
         }
 
@@ -702,7 +702,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             height: 0;
             border-top: 0 solid transparent;
             border-bottom: 300px solid transparent;
-            border-left: 20px solid #0ea5e9;
+            border-left: 20px solid color-mix(in srgb, var(--accent) 70%, black);
             opacity: 0.35;
             pointer-events: none;
         }
@@ -801,7 +801,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .prog-fill {
             height: 100%;
-            background: linear-gradient(90deg, var(--accent), #0ea5e9);
+            background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, black));
             border-radius: 4px;
             transition: width 0.4s ease;
         }
@@ -826,7 +826,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 800;
             font-size: 22px;
             letter-spacing: 0.04em;
-            color: #7dd3fc;
+            color: var(--accent);
             text-transform: uppercase;
             white-space: nowrap;
             visibility: visible;
@@ -869,7 +869,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-size: 12px;
             letter-spacing: 0.14em;
             text-transform: uppercase;
-            color: #38a3d4;
+            color: var(--accent);
             line-height: 1;
         }
 

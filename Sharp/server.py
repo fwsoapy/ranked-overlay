@@ -768,7 +768,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .sep {
             width: 2px;
             height: 32px;
-            background: rgba(180, 30, 30, 0.5);
+            background: rgba(var(--accent-rgb), 0.5);
         }
 
         .session-delta {
@@ -794,7 +794,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-family: 'Rajdhani', sans-serif;
             font-weight: 700;
             font-size: 22px;
-            color: rgba(255,220,220,0.9);
+            color: rgba(var(--accent-rgb), 0.9);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             white-space: nowrap;
@@ -802,14 +802,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-to {
             font-size: 16px;
             font-weight: 600;
-            color: rgba(255,180,180,0.7);
+            color: rgba(var(--accent-rgb), 0.7);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         .next-hash {
             font-family: 'Bebas Neue', sans-serif;
             font-size: 24px;
-            color: #ff5555;
+            color: var(--accent);
             letter-spacing: 1px;
         }
 
@@ -833,7 +833,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .prog-bar-track {
             width: 100%;
             height: 5px;
-            background: rgba(255,30,30,0.15);
+            background: rgba(var(--accent-rgb), 0.15);
             border-radius: 2px;
             overflow: hidden;
         }

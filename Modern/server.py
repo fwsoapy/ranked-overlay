@@ -749,7 +749,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-family: 'Barlow Condensed', sans-serif;
             font-size: 24px;
             font-weight: 700;
-            color: #fca5a5;
+            color: var(--accent);
             letter-spacing: 0.04em;
             line-height: 1;
         }
@@ -845,7 +845,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.12em;
-            color: rgba(255, 180, 180, 0.85);
+            color: rgba(var(--accent-rgb), 0.85);
             line-height: 1;
         }
 

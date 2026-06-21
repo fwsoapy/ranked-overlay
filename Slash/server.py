@@ -690,7 +690,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             flex-direction: column;
             justify-content: center;
             padding: 0 52px 0 22px;
-            background: rgba(124, 58, 237, 0.15);
+            background: rgba(var(--accent-rgb), 0.15);
             position: relative;
             z-index: 1;
             flex: 1;
@@ -706,7 +706,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             background: rgba(13, 11, 18, 0.92);
             transform: skewX(-12deg);
             z-index: 2;
-            border-left: 2px solid #7c3aed;
+            border-left: 2px solid var(--accent);
         }
 
         .slash-right {
@@ -805,9 +805,9 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             justify-content: space-between;
             align-items: center;
             padding: 9px 22px;
-            background: rgba(124, 58, 237, 0.08);
-            border-top: 1px solid rgba(124, 58, 237, 0.18);
-            border-bottom: 1px solid rgba(124, 58, 237, 0.12);
+            background: rgba(var(--accent-rgb), 0.08);
+            border-top: 1px solid rgba(var(--accent-rgb), 0.18);
+            border-bottom: 1px solid rgba(var(--accent-rgb), 0.12);
             visibility: visible;
             min-height: 42px;
         }
@@ -820,11 +820,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 400;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            color: rgba(230, 210, 255, 0.95);
+            color: rgba(var(--accent-rgb), 0.95);
         }
 
         .next-text .hl     { color: #ffffff; font-weight: 700; }
-        .next-text .accent { color: #c084fc; font-weight: 700; }
+        .next-text .accent { color: var(--accent); font-weight: 700; }
 
         .session-badge {
             font-family: 'Space Mono', monospace;
@@ -859,7 +859,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             position: absolute;
             left: 0; top: 4px; bottom: 4px;
             width: 1px;
-            background: rgba(124, 58, 237, 0.20);
+            background: rgba(var(--accent-rgb), 0.20);
         }
 
         .stat-block + .stat-block { padding-left: 16px; }

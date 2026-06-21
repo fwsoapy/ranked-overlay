@@ -675,7 +675,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             gap: 10px;
             background: rgba(6, 10, 20, 0.82);
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(56, 139, 255, 0.18);
+            border: 1px solid rgba(var(--accent-rgb), 0.18);
             border-top: 5px solid var(--accent);
             padding: 16px 24px 16px 20px;
             min-width: 400px;
@@ -732,7 +732,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .prog-track {
             width: 80px;
             height: 7px;
-            background: rgba(56, 139, 255, 0.15);
+            background: rgba(var(--accent-rgb), 0.15);
             border-radius: 4px;
             overflow: hidden;
         }
@@ -746,7 +746,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .divider {
             height: 1px;
-            background: rgba(56, 139, 255, 0.12);
+            background: rgba(var(--accent-rgb), 0.12);
         }
 
         .sub-row {
@@ -777,7 +777,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         .divider-mid {
             height: 1px;
-            background: rgba(56, 139, 255, 0.12);
+            background: rgba(var(--accent-rgb), 0.12);
             visibility: visible;
         }
 
@@ -799,7 +799,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            color: rgba(170, 195, 245, 0.95);
+            color: rgba(var(--accent-rgb), 0.95);
         }
 
         .stat-value {
