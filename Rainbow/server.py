@@ -595,6 +595,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         :root {
             --accent: #c080ff;
             --accent-rgb: 192, 128, 255;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
         }
 
         body {
@@ -700,12 +701,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         /* Left sub: ELO to next rank */
-        .left-sub { color: #a39cb5; }
+        .left-sub { color: var(--accent-light); }
 
         /* Next rank sub-parts */
         .next-gap-val { font-size: 26px; font-weight: 800; color: #ffffff;
                         letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
-        .next-to   { font-size: 18px; font-weight: 700; color: #b8b8c4;
+        .next-to   { font-size: 18px; font-weight: 700; color: var(--accent-light);
                      letter-spacing: 0.5px; text-transform: uppercase; }
         .next-hash { font-size: 26px; font-weight: 800; color: var(--accent);
                      letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
@@ -730,7 +731,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             letter-spacing: 0.5px;
             text-transform: uppercase; white-space: nowrap;
         }
-        .code-ad { color: #ffffff; font-style: italic; }
+        .code-ad { color: var(--accent-light); font-style: italic; }
 
         .stats-row {
             width: 100%;
@@ -742,7 +743,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
         .stat-label {
             font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
-            text-transform: uppercase; color: rgba(255,255,255,0.55);
+            text-transform: uppercase; color: var(--accent-light);
         }
         .stat-value { font-size: 18px; font-weight: 800; color: #ffffff; }
 

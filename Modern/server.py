@@ -669,6 +669,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         :root {
             --accent: #dc2626;
             --accent-rgb: 220, 38, 38;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
         }
 
         body {
@@ -769,7 +770,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-size: 22px;
             font-weight: 700;
             letter-spacing: 0.04em;
-            color: rgba(255, 220, 220, 0.95);
+            color: var(--accent);
             line-height: 1;
             min-width: 44px;
             text-align: right;
@@ -808,11 +809,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.07em;
-            color: rgba(255, 200, 200, 0.80);
+            color: var(--accent-light);
         }
 
-        .next-target .arrow { color: rgba(var(--accent-rgb), 0.85); font-size: 12px; }
-        .next-target .hi    { color: rgba(255, 230, 230, 1.0); }
+        .next-target .arrow { color: var(--accent-light); font-size: 12px; }
+        .next-target .hi    { color: #ffffff; }
 
         .session-pos  { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #4ade80; }
         .session-neg  { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #f87171; }
@@ -846,7 +847,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.12em;
-            color: rgba(var(--accent-rgb), 0.85);
+            color: var(--accent-light);
             line-height: 1;
         }
 
@@ -866,7 +867,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: var(--accent);
+            color: var(--accent-light);
         }
 
         .error-text {

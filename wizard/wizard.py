@@ -2,7 +2,9 @@ import os
 import re
 import sys
 import json
+import time
 import shutil
+import threading
 import subprocess
 import urllib.request
 import urllib.parse
@@ -75,15 +77,50 @@ def check_python():
         return False
 
 
+_preview_state = {"root": None}
+
+
+def _tk_preview_worker(path):
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.title("Pick a design (1-8)")
+        img = tk.PhotoImage(file=path)
+        label = tk.Label(root, image=img)
+        label.image = img
+        label.pack()
+        root.attributes("-topmost", True)
+        _preview_state["root"] = root
+        root.mainloop()
+    except Exception:
+        pass
+
+
 def show_previews():
     path = resource_path(os.path.join("assets", "design-previews.png"))
-    if os.path.exists(path):
-        try:
-            os.startfile(path)
-        except Exception:
-            print(f"  (Could not auto-open the preview image, look at it here: {path})")
-    else:
+    if not os.path.exists(path):
         print("  (Preview image not found, picking blind, sorry.)")
+        return
+    t = threading.Thread(target=_tk_preview_worker, args=(path,), daemon=True)
+    t.start()
+    time.sleep(0.5)
+
+
+def close_previews():
+    root = _preview_state.get("root")
+    if root is not None:
+        try:
+            root.quit()
+        except Exception:
+            pass
+        _preview_state["root"] = None
+
+
+def auto_close(seconds=5):
+    for i in range(seconds, 0, -1):
+        print(f"\rClosing in {i}...  ", end="", flush=True)
+        time.sleep(1)
+    print()
 
 
 def ask_design():
@@ -146,9 +183,15 @@ def lookup_account_id(username):
         f"https://prod.api-fortnite.com/api/v1/profile/progress?displayName={name_q}",
         f"https://prod.api-fortnite.com/api/v1/profile/stats?displayName={name_q}",
     ]
+    headers = {
+        "x-api-key": ACCOUNT_API_KEY,
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/125.0.0.0 Safari/537.36"),
+    }
     for url in urls:
         try:
-            req = urllib.request.Request(url, headers={"x-api-key": ACCOUNT_API_KEY})
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=10) as r:
                 data = json.loads(r.read().decode("utf-8", "replace"))
         except Exception:
@@ -240,6 +283,7 @@ def main():
 
     while True:
         design = ask_design()
+        close_previews()
         accent = ask_color()
         display_choice = ask_display_choice()
         username = ask_username()
@@ -269,10 +313,15 @@ def main():
     launch = input("\nStart the overlay now? (Y/N): ").strip().lower()
     if launch == "y":
         start_bat = os.path.join(dest_dir, "start.bat")
-        subprocess.Popen(["cmd", "/c", "start", "", start_bat], shell=False)
+        subprocess.Popen(
+            ["cmd", "/c", start_bat],
+            cwd=dest_dir,
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+        )
         print("Starting...")
 
-    input("\nPress Enter to close...")
+    print()
+    auto_close(5)
 
 
 if __name__ == "__main__":

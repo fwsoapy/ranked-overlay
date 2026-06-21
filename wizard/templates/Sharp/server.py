@@ -706,6 +706,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         :root {
             --accent: #cc1111;
             --accent-rgb: 204, 17, 17;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
         }
 
         body {
@@ -800,7 +801,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-family: 'Rajdhani', sans-serif;
             font-weight: 700;
             font-size: 22px;
-            color: rgba(var(--accent-rgb), 0.9);
+            color: var(--accent-light);
             text-transform: uppercase;
             letter-spacing: 0.5px;
             white-space: nowrap;
@@ -808,7 +809,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-to {
             font-size: 16px;
             font-weight: 600;
-            color: rgba(var(--accent-rgb), 0.7);
+            color: var(--accent-light);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
@@ -859,7 +860,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: #ffffff;
             margin-left: 14px;
             padding-left: 14px;
-            border-left: 1px solid rgba(180, 60, 60, 0.3);
+            border-left: 1px solid rgba(var(--accent-rgb), 0.3);
             white-space: nowrap;
         }
 
@@ -874,7 +875,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: rgba(var(--accent-rgb), 0.7);
+            color: var(--accent-light);
         }
         .stat-value {
             font-family: 'Bebas Neue', sans-serif;

@@ -652,6 +652,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         :root {
             --accent: #a855f7;
             --accent-rgb: 168, 85, 247;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
         }
 
         body {
@@ -729,7 +730,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 400;
             letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: rgba(216, 180, 254, 0.90);
+            color: var(--accent-light);
             line-height: 1;
             margin-bottom: 4px;
         }
@@ -752,7 +753,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 400;
             letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: rgba(216, 180, 254, 0.90);
+            color: var(--accent-light);
             line-height: 1;
             margin-bottom: 4px;
             text-align: right;
@@ -821,7 +822,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 400;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            color: rgba(var(--accent-rgb), 0.95);
+            color: var(--accent-light);
         }
 
         .next-text .hl     { color: #ffffff; font-weight: 700; }
@@ -881,7 +882,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 400;
             letter-spacing: 0.16em;
             text-transform: uppercase;
-            color: rgba(216, 180, 254, 0.90);
+            color: var(--accent-light);
             line-height: 1;
         }
 

@@ -652,6 +652,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         :root {
             --accent: #ac46ff;
             --accent-rgb: 172, 70, 255;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
         }
 
         body {
@@ -729,7 +730,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         .next-target .highlight { color: #ffffff; }
-        .next-target .purple    { color: var(--accent); }
+        .next-target .purple    { color: var(--accent-light); }
 
         .session-delta { font-weight: 700; }
         .session-pos  { color: #2ed573; }
@@ -751,7 +752,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-size: 20px;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            color: var(--accent);
+            color: var(--accent-light);
         }
 
         .stat-item span {

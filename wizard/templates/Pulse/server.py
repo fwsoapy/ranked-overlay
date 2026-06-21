@@ -651,6 +651,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         :root {
             --accent: #2dff91;
             --accent-rgb: 45, 255, 145;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
         }
 
         body {
@@ -772,7 +773,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-size: 9px;
             font-weight: 700;
             letter-spacing: 0.14em;
-            color: rgba(var(--accent-rgb), 0.70);
+            color: var(--accent-light);
             text-transform: uppercase;
             margin-top: 3px;
         }
@@ -816,7 +817,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .next-row.hidden { visibility: hidden; }
 
         .next-row .hi { color: #eafff2; font-weight: 700; }
-        .next-row .br { color: rgba(var(--accent-rgb), 0.5); }
+        .next-row .br { color: var(--accent-light); }
 
         .session-pos  { color: #2ed573; }
         .session-neg  { color: #ff5c5c; }
@@ -842,7 +843,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.10em;
-            color: rgba(var(--accent-rgb), 0.5);
+            color: var(--accent-light);
         }
 
         .stat-value {
@@ -859,7 +860,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: var(--accent);
+            color: var(--accent-light);
         }
 
         .error-text {
