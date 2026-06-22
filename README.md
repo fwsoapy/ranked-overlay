@@ -8,8 +8,19 @@ A free, live Fortnite ranked overlay and ELO tracker for streamers. Pulls real-t
 
 ---
 
+## 📺 Watch: full setup walkthrough
+
+A start-to-finish video showing how to download, set up, and use the overlay:
+
+<video src="https://github.com/fwsoapy/ranked-overlay/releases/download/v1/how-to-use.mp4" controls width="100%"></video>
+
+> ▶️ Not playing here? [Click to watch or download the setup video](https://github.com/fwsoapy/ranked-overlay/releases/download/v1/how-to-use.mp4) (it's also attached to the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest)).
+
+---
+
 ## 📋 Table of contents
 
+- [Watch: full setup walkthrough](#-watch-full-setup-walkthrough)
 - [Quick start](#-quick-start)
 - [Setup wizard (the easy way)](#-setup-wizard-the-easy-way)
 - [Features](#-features)
