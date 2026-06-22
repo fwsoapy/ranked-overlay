@@ -28,7 +28,7 @@ A free, live Fortnite ranked overlay and ELO tracker for streamers. Pulls real-t
 
 ## 🚀 Quick start
 
-> 🧙 **The fastest way is the [setup wizard](#-setup-wizard-the-easy-way)** — it does every step below for you (design, color, Account ID lookup, and launch). Prefer to set it up by hand? Here's the manual way:
+> 🧙 **The fastest way is the [setup wizard](#-setup-wizard-the-easy-way)** it does every step below for you (design, color, Account ID lookup, and launch). Prefer to set it up by hand? Here's the manual way:
 
 1. Click **Code > Download ZIP** above, unzip it, and open the folder for the design you want (see the gallery below). Or just run `setup.bat` and it'll ask which design you want and copy it straight to your Desktop.
 2. Run `account-id.bat` to look up your Epic Account ID.
