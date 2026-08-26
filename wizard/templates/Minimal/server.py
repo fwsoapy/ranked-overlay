@@ -1,11 +1,12 @@
 import json
+import os
 import re
+import tempfile
 import time
 import datetime
 import threading
 import urllib.request
 import urllib.error
-from html.parser import HTMLParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -14,8 +15,8 @@ EPIC_ACCOUNT_ID  = "your-account-id-here"
 CREATOR_CODE     = ""
 API_BASE         = "https://olitracker.com/api"
 PORT             = 8888
-POLL_SECONDS     = 10
-OVERLAY_POLL_MS  = 10000
+POLL_SECONDS     = 30      # how often the server asks OliTracker for new data
+OVERLAY_POLL_MS  = 30000   # how often the browser page asks the server
 
 RANKED_MODE_HINT   = ""
 RANKED_MODE_KEY    = ""
@@ -39,6 +40,15 @@ _start_elos         = {}
 _start_progressions = {}
 _last_raw           = None
 _last_modes         = []
+_baseline_day       = None
+
+# mode key -> {"elo", "next_pos", "gap"}. Filled by the poll loop for every
+# mode, so snapshot() can answer for whichever mode the overlay asks about
+# without doing a leaderboard fetch on the request path.
+_elo_lookup         = {}
+
+_lb_lock            = threading.Lock()
+_lb_cache           = {}   # (slug, page) -> (fetched_at, rows)
 
 STATE = {
     "ok":              False,
@@ -73,16 +83,44 @@ MODE_LABELS = {
     "ranked_blastberry_build": "Reload",
     "ranked_squareclub":       "Boxfights",
     "ranked-squareclub":       "Boxfights",
+    "ranked-rocket-racing":    "Racing",
+    "delmar-competitive":      "Blitz",
 }
 
+# Which stats bucket belongs to which ranked mode. `None` means OliTracker
+# publishes no bucket for that mode at all, so its stats come from
+# match_history instead. Keys are normalised, so - and _ spellings both hit.
 MODE_STAT_PATH = {
     "ranked-br-combined":      ("ranked",),
-    "ranked_blastberry_build": ("reload",),
-    "ranked_squareclub":       None,
-    "ranked-squareclub":       None,
+    "ranked-blastberry-build": ("reload",),
+    "ranked-squareclub":       None,   # no bucket of its own, counted from history
+    "delmar-competitive":      None,
+    "ranked-rocket-racing":    None,
 }
 
-MODES_WITHOUT_SEASONAL_BLOCK = {"ranked_squareclub", "ranked-squareclub"}
+# OliTracker's public leaderboard stops at page 100 (100 rows a page). Past
+# that there is no ELO to read for a placement, at any price.
+LEADERBOARD_PAGE_SIZE     = 100
+LEADERBOARD_MAX_PAGE      = 100
+LEADERBOARD_MAX_PLACEMENT = LEADERBOARD_PAGE_SIZE * LEADERBOARD_MAX_PAGE
+LEADERBOARD_TTL           = 60    # seconds; keeps pace with POLL_SECONDS
+LEADERBOARD_PAGES_BACK    = 4     # pages to walk up through an ELO tie
+
+def _state_dir():
+    """Where the daily ELO baseline is kept.
+
+    Deliberately not the overlay folder -- that stays as the four files it
+    ships with, so nothing extra shows up next to server.py.
+    """
+    base = (
+        os.environ.get("LOCALAPPDATA")
+        or os.environ.get("APPDATA")
+        or tempfile.gettempdir()
+    )
+    return os.path.join(base, "FortniteRankOverlay")
+
+
+BASELINE_FILE = os.path.join(_state_dir(), "elo_baseline.json")
 
 _WINDOW_SECS = {"12h": 43200, "24h": 86400}
 
@@ -107,12 +145,29 @@ def _path_str(path):
     return "/".join(str(p) for p in path).lower()
 
 
+def _normalize_mode_key(key):
+    """OliTracker spells mode keys with both - and _; fold them together."""
+    return str(key or "").lower().replace("_", "-")
+
+
 def _num(v):
     if isinstance(v, bool):
         return None
     if isinstance(v, (int, float)):
         return int(round(v))
     return None
+
+
+def _unreal_placement(obj):
+    """Current Unreal leaderboard rank.
+
+    OliTracker calls this field `current_unreal_placement`; older responses
+    used `unreal_placement`, so accept either.
+    """
+    if not isinstance(obj, dict):
+        return None
+    v = _num(obj.get("current_unreal_placement"))
+    return v if v is not None else _num(obj.get("unreal_placement"))
 
 
 def division_name(div):
@@ -137,7 +192,7 @@ def _mode_label(key):
 def _looks_like_ranked_mode(d):
     return (
         isinstance(d, dict)
-        and ("elo" in d or "unreal_placement" in d)
+        and ("elo" in d or "current_unreal_placement" in d or "unreal_placement" in d)
         and ("division" in d or "promotion_progression" in d)
     )
 
@@ -176,6 +231,31 @@ def pick_mode_by_key(modes, mode_key):
     return None, None
 
 
+def _mode_rank_key(item):
+    """Sort key for "which mode should the overlay lead with" (higher = better).
+
+    The headline number on the overlay is the ELO, so a mode whose ELO can
+    actually be resolved outranks one that only has a placement. Ordering by
+    raw dict order used to hand the default to Reload -- placement #562k, no
+    published ELO -- which is why the overlay opened with an empty ELO row.
+    """
+    path, obj = item
+    key = _path_str(path)
+    with _lock:
+        resolved = (_elo_lookup.get(key) or {}).get("elo")
+    elo = _num(obj.get("elo"))
+    if elo is None:
+        elo = resolved
+    placed = _unreal_placement(obj)
+    div    = _num(obj.get("division")) or 0
+    return (
+        1 if elo is not None else 0,
+        div,
+        -placed if placed is not None else 0,   # better (lower) placement wins
+        elo or 0,
+    )
+
+
 def pick_best_mode(modes):
     if not modes:
         return None, None
@@ -184,33 +264,49 @@ def pick_best_mode(modes):
         for path, obj in modes:
             if hint in _path_str(path):
                 return path, obj
-
-    def rank_key(item):
-        _, obj = item
-        elo    = _num(obj.get("elo"))
-        placed = _num(obj.get("unreal_placement"))
-        return (1 if elo is not None else 0, 1 if placed is not None else 0, elo or 0)
-
-    return max(modes, key=rank_key)
+    return max(modes, key=_mode_rank_key)
 
 
 def extract_elo(mode_obj):
-    v = _num(mode_obj.get("elo"))
-    return v if v is not None else _num(mode_obj.get("promotion_progression"))
+    """The mode's real ELO from the stats endpoint, or None.
+
+    OliTracker returns `elo: null` here for this account on every mode, so an
+    Unreal mode's ELO is filled in from the leaderboard instead (mode_view).
+    Below Unreal there is no ELO at all -- promotion_progression is a
+    percentage and is reported on its own, never dressed up as an ELO score.
+    """
+    return _num(mode_obj.get("elo"))
 
 
 def extract_label(mode_obj):
-    if _num(mode_obj.get("unreal_placement")) is not None:
+    if _unreal_placement(mode_obj) is not None:
         return "UNREAL"
     return division_name(_num(mode_obj.get("division")))
 
 
 def extract_placement(mode_obj):
-    return _num(mode_obj.get("unreal_placement"))
+    return _unreal_placement(mode_obj)
+
+
+def _progress_points(mode_obj):
+    """Rank progress on a continuous scale (division * 100 + progression).
+
+    promotion_progression restarts at ~0 on promotion, so comparing it against
+    a baseline taken in the previous division reads a rank-up as a big loss.
+    Folding the division in keeps the number monotonic across the boundary.
+    Returns None for Unreal, which is measured in ELO instead.
+    """
+    if _unreal_placement(mode_obj) is not None:
+        return None
+    prog = _num(mode_obj.get("promotion_progression"))
+    if prog is None:
+        return None
+    div = _num(mode_obj.get("division")) or 0
+    return div * 100 + prog
 
 
 def extract_progression(mode_obj):
-    if _num(mode_obj.get("unreal_placement")) is not None:
+    if _unreal_placement(mode_obj) is not None:
         return None
     return _num(mode_obj.get("promotion_progression"))
 
@@ -231,8 +327,29 @@ def _detect_ranking_id(data, preferred_mode_key=None):
     return max(tally, key=tally.get) if tally else None
 
 
+def _mode_stat_path(ranking_id):
+    if not ranking_id:
+        return ("ranked",)
+    key = _normalize_mode_key(ranking_id)
+    if key in MODE_STAT_PATH:
+        return MODE_STAT_PATH[key]
+    label = _mode_label(ranking_id)
+    if label == "Reload":
+        return ("reload",)
+    if label == "BR":
+        return ("ranked",)
+    return None
+
+
 def _stat_block(data, timeframe, ranking_id):
-    path_key = MODE_STAT_PATH.get(ranking_id or "", ("ranked",))
+    """The stats bucket for exactly one ranked mode, or None.
+
+    This must never fall back to another mode's bucket. OliTracker only emits a
+    `reload` bucket once the account has played Reload inside that timeframe,
+    and quietly borrowing `ranked` when it was missing is what made BR and
+    Reload report identical KD/WR/kills/wins.
+    """
+    path_key = _mode_stat_path(ranking_id)
     if path_key is None:
         return None
     try:
@@ -241,10 +358,7 @@ def _stat_block(data, timeframe, ranking_id):
             block = block[k]
         return block["both"]["overall"]
     except (KeyError, TypeError):
-        try:
-            return data["stats"][timeframe]["ranked"]["both"]["overall"]
-        except (KeyError, TypeError):
-            return None
+        return None
 
 
 def _stats_from_history(data, ranking_id):
@@ -252,7 +366,7 @@ def _stats_from_history(data, ranking_id):
     for day in (data.get("match_history") or []):
         for grp in (day.get("matches") or []):
             rd = grp.get("ranked_data") or {}
-            if rd.get("ranking_id") != ranking_id:
+            if _normalize_mode_key(rd.get("ranking_id")) != _normalize_mode_key(ranking_id):
                 continue
             total_wins    += int(grp.get("wins",    0) or 0)
             total_matches += int(grp.get("matches", 0) or 0)
@@ -264,11 +378,12 @@ def _stats_from_history(data, ranking_id):
 
 
 def _seasonal_ranked_stats(data, ranking_id=None):
-    if ranking_id in MODES_WITHOUT_SEASONAL_BLOCK:
-        return _stats_from_history(data, ranking_id)
     try:
         blk = _stat_block(data, "seasonal", ranking_id)
         if blk is None:
+            # No seasonal bucket for this mode: either the mode has none at all
+            # (Boxfights) or the account has not played it this season. Count
+            # its own matches instead of borrowing another mode's totals.
             return _stats_from_history(data, ranking_id) if ranking_id else dict(_EMPTY_STATS)
         wins    = int(blk.get("wins",           0) or 0)
         matches = int(blk.get("matches_played", 0) or 0)
@@ -328,101 +443,370 @@ def compute_windowed_stats(data, window_spec, ranking_id=None):
     return {"wins": total_wins, "losses": losses, "kills": total_kills, "matches": total_matches, "kd": kd, "wr": wr}
 
 
-class _LeaderboardParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.rows   = []
-        self._cells = []
-        self._in_td = False
-        self._in_tr = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "tr":
-            self._in_tr = True
-            self._cells = []
-        elif tag in ("td", "th") and self._in_tr:
-            self._in_td = True
-
-    def handle_endtag(self, tag):
-        if tag == "td" and self._in_td:
-            self._in_td = False
-        elif tag == "tr" and self._in_tr:
-            self._in_tr = False
-            self._try_row(self._cells)
-            self._cells = []
-
-    def handle_data(self, data):
-        if self._in_td:
-            t = data.strip()
-            if t:
-                self._cells.append(t)
-
-    def _try_row(self, cells):
-        nums = []
-        for c in cells:
-            clean = re.sub(r"[^\d]", "", c)
-            if clean:
-                nums.append(int(clean))
-        if len(nums) >= 2:
-            placement = nums[0]
-            elo = max(nums[1:])
-            if 1 <= placement <= 50000 and elo > 100:
-                self.rows.append({"placement": placement, "elo": elo})
+# One leaderboard row: rank cell, the player's /stats/<account id> link, and
+# the ELO cell. Anchoring on the cell classes matters -- the old parser took
+# "the largest number in the row", which happily read digits out of player
+# names ("Twitch 666k2b" scored 6662 ELO).
+_LB_ROW  = re.compile(r"<tr[^>]*leaderboard-player-row.*?</tr>", re.S)
+_LB_RANK = re.compile(r"leaderboard-rank-cell[^\"]*\"[^>]*>\s*#?([\d,]+)", re.S)
+_LB_ACCT = re.compile(r"/stats/([0-9a-fA-F]{16,})")
+_LB_ELO  = re.compile(r"leaderboard-wins-cell.*?<p[^>]*>\s*([\d,]+)\s*</p>", re.S)
 
 
-def _scrape_leaderboard_page(page_url):
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0.0.0 Safari/537.36"
-        ),
-        "Accept":          "text/html,application/xhtml+xml,*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer":         "https://olitracker.com/",
-    }
-    req = urllib.request.Request(page_url, headers=headers)
-    with urllib.request.urlopen(req, timeout=15) as r:
-        raw = r.read().decode("utf-8", "replace")
-    parser = _LeaderboardParser()
-    parser.feed(raw)
-    return parser.rows
+def _int(text):
+    try:
+        return int(str(text).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_leaderboard_rows(html):
+    rows = []
+    for chunk in _LB_ROW.findall(html):
+        rank = _LB_RANK.search(chunk)
+        elo  = _LB_ELO.search(chunk)
+        if not rank or not elo:
+            continue
+        placement = _int(rank.group(1))
+        elo_value = _int(elo.group(1))
+        if placement is None or elo_value is None:
+            continue
+        acct = _LB_ACCT.search(chunk)
+        rows.append({
+            "placement":  placement,
+            "elo":        elo_value,
+            "account_id": acct.group(1).lower() if acct else None,
+        })
+    rows.sort(key=lambda r: r["placement"])
+    return rows
+
+
+def _http_get_text(url, timeout=15):
+    headers = dict(BROWSER_HEADERS)
+    headers["Accept"] = "text/html,application/xhtml+xml,*/*"
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def _leaderboard_page(slug, page):
+    """Rows of one leaderboard page, cached for LEADERBOARD_TTL seconds.
+
+    The poll loop runs every POLL_SECONDS; without the cache that would mean
+    re-downloading a ~180KB page from OliTracker several times a minute.
+    """
+    if page < 1 or page > LEADERBOARD_MAX_PAGE:
+        return []
+    key = (slug, page)
+    now = time.time()
+    with _lb_lock:
+        hit = _lb_cache.get(key)
+        if hit and now - hit[0] < LEADERBOARD_TTL:
+            return hit[1]
+
+    url = f"https://olitracker.com/ranked/{slug}"
+    if page > 1:
+        url += f"?page={page}"
+    try:
+        rows = _parse_leaderboard_rows(_http_get_text(url))
+    except Exception as e:
+        print(f"[overlay] leaderboard {slug} page {page} failed: {e}")
+        # Serve the stale copy rather than blanking the ELO on one bad fetch.
+        return hit[1] if hit else []
+
+    with _lb_lock:
+        _lb_cache[key] = (now, rows)
+    return rows
 
 
 def _slug_for_mode(path):
+    """Which OliTracker leaderboard page carries this mode's ELO, if any.
+
+    Unknown modes return None on purpose. Guessing "battle-royale" for anything
+    unrecognised would read a completely unrelated player's ELO off the wrong
+    board, which is worse than showing no ELO at all.
+    """
     ps = _path_str(path)
-    if "reload" in ps and ("zero" in ps or "zb" in ps or "nobuild" in ps):
-        return "reload-zb"
+    if "squareclub" in ps or "boxfight" in ps:
+        return None   # OliTracker publishes no Boxfights leaderboard
     if "reload" in ps or "blastberry" in ps:
+        if "zero" in ps or "zb" in ps or "nobuild" in ps:
+            return "reload-zb"
         return "reload"
+    if "rocket" in ps or "racing" in ps:
+        return "rocket-racing"
+    if "og" in ps.split("-") or "og" in ps.split("_"):
+        return "og"
     if "zero" in ps or "zb" in ps or "nobuild" in ps:
         return "zero-build"
-    return "battle-royale"
-
-
-def fetch_elo_to_next(target_placement, mode_path):
-    if not ENABLE_NEXT_LOOKUP or not target_placement or target_placement < 1:
-        return None
-    slug     = _slug_for_mode(mode_path)
-    base_url = f"https://olitracker.com/ranked/{slug}"
-    pages_to_try = set()
-    page_num = max(1, (target_placement - 1) // 100 + 1)
-    pages_to_try.add(page_num)
-    if page_num > 1:
-        pages_to_try.add(page_num - 1)
-    pages_to_try.add(1)
-
-    for page in sorted(pages_to_try):
-        url = f"{base_url}?page={page}" if page > 1 else base_url
-        try:
-            rows = _scrape_leaderboard_page(url)
-        except Exception as e:
-            print(f"[overlay] leaderboard page {page} fetch failed: {e}")
-            continue
-        for row in rows:
-            if row["placement"] == target_placement:
-                return row["elo"]
+    if "br-combined" in ps or "br_combined" in ps or "battle" in ps:
+        return "battle-royale"
     return None
+
+
+def _find_own_row(slug, placement, account_id):
+    """The leaderboard row to read this account's ELO from.
+
+    Thousands of players tie on the same score up here, and the board reshuffles
+    within a tie block between renders, so the account's own row is not
+    dependably on the page its placement points at. The row *at* the placement
+    OliTracker reports is the stable answer -- an account sitting at placement N
+    has, by definition, the ELO shown at placement N. Matching the account id is
+    kept as a refinement for when it does land on the page.
+    """
+    page = (placement - 1) // LEADERBOARD_PAGE_SIZE + 1
+    rows = _leaderboard_page(slug, page)
+    if not rows:
+        return page, rows, None
+
+    acct = (account_id or "").lower()
+    if acct:
+        for row in rows:
+            if row["account_id"] == acct:
+                return page, rows, row
+
+    for row in rows:
+        if row["placement"] == placement:
+            return page, rows, row
+
+    nearest = min(rows, key=lambda r: abs(r["placement"] - placement))
+    return page, rows, nearest
+
+
+def lookup_leaderboard_elo(mode_path, placement, account_id=EPIC_ACCOUNT_ID):
+    """(own ELO, target placement, ELO gap) for an Unreal mode.
+
+    The stats endpoint reports `elo: null` for this account on every mode, so
+    the leaderboard is the only place the number exists. The target is the
+    nearest placement above that actually sits on a *higher* ELO: hundreds of
+    players tie on the same score, and "0 ELO to #9413" tells a streamer
+    nothing.
+    """
+    if not ENABLE_NEXT_LOOKUP or not placement or placement < 1:
+        return None, None, None
+    slug = _slug_for_mode(mode_path)
+    if slug is None or placement > LEADERBOARD_MAX_PLACEMENT:
+        # Outside the published top 10,000 there is no row to read.
+        return None, None, None
+
+    page, rows, me = _find_own_row(slug, placement, account_id)
+    if me is None:
+        return None, None, None
+
+    my_elo, my_place = me["elo"], me["placement"]
+
+    target = None
+    for step in range(LEADERBOARD_PAGES_BACK):
+        above = [r for r in rows if r["placement"] < my_place and r["elo"] > my_elo]
+        if above:
+            target = max(above, key=lambda r: r["placement"])
+            break
+        if page - 1 < 1 or step == LEADERBOARD_PAGES_BACK - 1:
+            break
+        page -= 1
+        rows = _leaderboard_page(slug, page)
+        if not rows:
+            break
+
+    if target is None:
+        return my_elo, None, None
+    return my_elo, target["placement"], target["elo"] - my_elo
+
+
+def _today_key():
+    return datetime.date.today().isoformat()
+
+
+def _load_baselines():
+    """Restore today's starting ELO so "TODAY" survives an overlay restart."""
+    global _baseline_day
+    try:
+        with open(BASELINE_FILE, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        return
+    if not isinstance(saved, dict) or saved.get("day") != _today_key():
+        return   # yesterday's numbers; today starts from scratch
+    with _lock:
+        _baseline_day = saved["day"]
+        for key, value in (saved.get("elos") or {}).items():
+            if _num(value) is not None:
+                _start_elos[key] = _num(value)
+        for key, value in (saved.get("progressions") or {}).items():
+            if _num(value) is not None:
+                _start_progressions[key] = _num(value)
+    print(f"[overlay] restored today's baseline from {BASELINE_FILE}")
+
+
+def _save_baselines():
+    with _lock:
+        payload = {
+            "day":          _baseline_day,
+            "elos":         dict(_start_elos),
+            "progressions": dict(_start_progressions),
+        }
+    try:
+        os.makedirs(os.path.dirname(BASELINE_FILE), exist_ok=True)
+        with open(BASELINE_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+    except OSError as e:
+        print(f"[overlay] could not save today's baseline: {e}")
+
+
+def _roll_day_if_needed():
+    global _baseline_day
+    today = _today_key()
+    with _lock:
+        if _baseline_day == today:
+            return
+        _baseline_day = today
+        _start_elos.clear()
+        _start_progressions.clear()
+    print(f"[overlay] new day ({today}) - today's counters reset")
+
+
+def _record_baseline(mode_key, elo, points):
+    with _lock:
+        if elo is not None and mode_key not in _start_elos:
+            _start_elos[mode_key] = elo
+        if points is not None and mode_key not in _start_progressions:
+            _start_progressions[mode_key] = points
+
+
+def _day_elo_change(data, mode_key):
+    """Today's ELO swing straight from OliTracker, if it publishes one.
+
+    Each match_history day carries an `elo` block shaped
+    {"<mode>": {"start": .., "end": .., "change": ..}}. When it is there it
+    beats anything measured locally, because it covers the whole day rather
+    than only the stretch since the overlay was started.
+    """
+    if not isinstance(data, dict):
+        return None
+    days = data.get("match_history") or []
+    if not days:
+        return None
+    today = _today_key()
+    want  = _normalize_mode_key(mode_key)
+    for day in days:
+        date = str(day.get("date") or "")[:10]
+        if date and date != today:
+            continue
+        block = day.get("elo") or {}
+        if not isinstance(block, dict):
+            continue
+        for key, value in block.items():
+            if _normalize_mode_key(key) != want or not isinstance(value, dict):
+                continue
+            change = _num(value.get("change"))
+            if change is not None:
+                return change
+            start, end = _num(value.get("start")), _num(value.get("end"))
+            if start is not None and end is not None:
+                return end - start
+        break   # only the newest day is "today"
+    return None
+
+
+def _deltas(mode_key, elo, points, data=None):
+    published = _day_elo_change(data, mode_key)
+    with _lock:
+        start_elo  = _start_elos.get(mode_key)
+        start_prog = _start_progressions.get(mode_key)
+    if published is not None:
+        elo_delta = published
+    elif elo is not None and start_elo is not None:
+        elo_delta = elo - start_elo
+    else:
+        elo_delta = 0
+    prog_delta = (points - start_prog) if (points is not None and start_prog is not None) else 0
+    return elo_delta, prog_delta
+
+
+def _elo_series(data, ranking_id):
+    """Every (timestamp, ELO) point OliTracker records for one mode."""
+    points = []
+    want   = _normalize_mode_key(ranking_id) if ranking_id else None
+    for day in ((data or {}).get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if want and _normalize_mode_key(rd.get("ranking_id")) != want:
+                continue
+            elo = _num(rd.get("elo"))
+            ts  = grp.get("last_modified")
+            if elo is not None and ts:
+                points.append((int(ts), elo))
+    points.sort()
+    return points
+
+
+def _earliest_day_start_elo(data, ranking_id):
+    want = _normalize_mode_key(ranking_id) if ranking_id else None
+    for day in reversed((data or {}).get("match_history") or []):
+        for key, value in (day.get("elo") or {}).items():
+            if want and _normalize_mode_key(key) != want:
+                continue
+            start = _num((value or {}).get("start"))
+            if start is not None:
+                return start
+    return None
+
+
+def windowed_elo_delta(data, window, current_elo, ranking_id=None):
+    """ELO gained over the last 12h/24h, or None when history is too thin."""
+    if current_elo is None or data is None:
+        return None
+    secs = _WINDOW_SECS.get(window)
+    if secs is None:
+        return None
+    cutoff = int(time.time()) - secs
+    rid    = ranking_id or _detect_ranking_id(data)
+    points = _elo_series(data, rid)
+    if not points:
+        return None
+    baseline = None
+    for ts, elo in points:
+        if ts <= cutoff:
+            baseline = elo
+        else:
+            break
+    if baseline is None:
+        baseline = _earliest_day_start_elo(data, rid)
+        if baseline is None:
+            baseline = points[0][1]
+    return current_elo - baseline
+
+
+def mode_view(path, mode_obj):
+    """Everything the overlay shows for one ranked mode, resolved in one place.
+
+    refresh_once() and snapshot() used to each derive this themselves, which is
+    why the ELO gap only ever appeared for the mode refresh_once happened to
+    pick -- switching modes in the overlay dropped it.
+    """
+    key       = _path_str(path) if path else ""
+    label     = extract_label(mode_obj)
+    placement = extract_placement(mode_obj)
+    is_unreal = (label == "UNREAL")
+
+    with _lock:
+        cached = dict(_elo_lookup.get(key) or {})
+
+    elo = extract_elo(mode_obj)
+    if elo is None and is_unreal:
+        elo = cached.get("elo")
+
+    return {
+        "key":         key,
+        "label":       label,
+        "placement":   placement,
+        "progression": extract_progression(mode_obj),
+        "is_unreal":   is_unreal,
+        "elo":         elo,
+        "next_pos":    cached.get("next_pos"),
+        "next_gap":    cached.get("gap"),
+        "points":      _progress_points(mode_obj),
+    }
 
 
 def _set_error(msg):
@@ -434,7 +818,7 @@ def _set_error(msg):
 
 
 def refresh_once():
-    global _start_elos, _start_progressions, _last_raw, _last_modes
+    global _last_raw, _last_modes
     url = f"{API_BASE}/stats/{EPIC_ACCOUNT_ID}"
     try:
         data = _http_get_json(url)
@@ -453,57 +837,66 @@ def refresh_once():
         _set_error("no ranked data found")
         return
 
+    _roll_day_if_needed()
+
+    # Resolve ELO for every mode, not just the active one. The overlay's mode
+    # buttons can select a mode pick_best_mode() didn't choose, and snapshot()
+    # reads these results instead of scraping on the request path.
+    for mpath, mobj in modes:
+        mkey      = _path_str(mpath)
+        api_elo   = extract_elo(mobj)
+        placement = extract_placement(mobj)
+        lb_elo = next_pos = gap = None
+        if placement is not None:
+            lb_elo, next_pos, gap = lookup_leaderboard_elo(mpath, placement)
+        with _lock:
+            _elo_lookup[mkey] = {
+                "elo":      api_elo if api_elo is not None else lb_elo,
+                "next_pos": next_pos,
+                "gap":      gap,
+            }
+
+    # Best mode first, so the button order matches the mode the overlay opens on.
     modes_available = []
-    for path, obj in modes:
-        key = _path_str(path)
-        modes_available.append({"key": key, "label": _mode_label(key)})
+    for mpath, _mobj in sorted(modes, key=_mode_rank_key, reverse=True):
+        mkey = _path_str(mpath)
+        modes_available.append({"key": mkey, "label": _mode_label(mkey)})
 
-    path, mode  = pick_best_mode(modes)
-    mode_key    = _path_str(path) if path else ""
-    elo         = extract_elo(mode)
-    label       = extract_label(mode)
-    placement   = extract_placement(mode)
-    progression = extract_progression(mode)
-    is_unreal   = (label == "UNREAL")
+    # Baseline every mode so each one's "today" delta starts from a real
+    # number the first time the overlay switches to it.
+    for mpath, mobj in modes:
+        v = mode_view(mpath, mobj)
+        _record_baseline(v["key"], v["elo"], v["points"])
+    _save_baselines()
 
-    next_pos    = (placement - 1) if (is_unreal and placement and placement > 1) else None
-    elo_to_next = None
-    if is_unreal and elo is not None and next_pos:
-        nxt = fetch_elo_to_next(next_pos, path)
-        if nxt is not None and nxt >= elo:
-            elo_to_next = nxt - elo
+    path, mode = pick_best_mode(modes)
+    v = mode_view(path, mode)
+    session_delta, prog_delta = _deltas(v["key"], v["elo"], v["points"], data)
 
     with _lock:
-        if elo is not None and mode_key not in _start_elos:
-            _start_elos[mode_key] = elo
-        session_delta = (elo - _start_elos[mode_key]) if (elo is not None and mode_key in _start_elos) else 0
-
-        if progression is not None and mode_key not in _start_progressions:
-            _start_progressions[mode_key] = progression
-        prog_delta = (progression - _start_progressions[mode_key]) if (progression is not None and mode_key in _start_progressions) else 0
-
         STATE.update({
             "ok":               True,
-            "rank_number":      placement,
-            "rank_label":       label,
-            "elo":              elo,
-            "is_unreal":        is_unreal,
-            "next_position":    next_pos,
-            "elo_to_next":      elo_to_next,
+            "rank_number":      v["placement"],
+            "rank_label":       v["label"],
+            "elo":              v["elo"],
+            "is_unreal":        v["is_unreal"],
+            "next_position":    v["next_pos"],
+            "elo_to_next":      v["next_gap"],
             "session_delta":    session_delta,
             "prog_delta":       prog_delta,
             "updated_at":       int(time.time()),
             "error":            None,
-            "active_mode_key":  mode_key,
+            "active_mode_key":  v["key"],
             "modes_available":  modes_available,
         })
 
-    sess   = compute_windowed_stats(data, "session", mode_key)
-    kd_txt = f"{sess['kd']:.2f}" if sess["kd"] is not None else "-"
+    sess   = compute_windowed_stats(data, "session", v["key"])
+    kd_txt = f"{sess['kd']:.2f}"  if sess["kd"] is not None else "-"
     wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "-"
     ts = datetime.datetime.now().strftime("%H:%M:%S")
-    elo_str = f"{elo} ELO" if elo is not None else label
-    print(f"[overlay] {ts}  {elo_str}  |  session {session_delta:+d}")
+    elo_str = f"{v['elo']} ELO" if v["elo"] is not None else (v["label"] or "-")
+    gap_str = f"   next #{v['next_pos']} in {v['next_gap']} ELO" if v["next_gap"] is not None else ""
+    print(f"[overlay] {ts}  {elo_str}  |  today {session_delta:+d}{gap_str}")
     print(f"          session: {sess['wins']}W / {sess['losses']}L   KD {kd_txt}   WR {wr_txt}")
 
 
@@ -528,34 +921,44 @@ def snapshot(window="session", mode_key=None):
         path, mode = pick_best_mode(mds) if mds else (None, None)
 
     if mode is not None:
-        resolved_key = _path_str(path) if path else ""
-        elo         = extract_elo(mode)
-        label       = extract_label(mode)
-        placement   = extract_placement(mode)
-        progression = extract_progression(mode)
-        is_unreal   = (label == "UNREAL")
-        nxt         = (placement - 1) if (is_unreal and placement and placement > 1) else None
-        gap         = s.get("elo_to_next") if resolved_key == s.get("active_mode_key") else None
-        with _lock:
-            start      = _start_elos.get(resolved_key)
-            start_prog = _start_progressions.get(resolved_key)
-        delta      = (elo - start) if (elo is not None and start is not None) else 0
-        prog_delta = (progression - start_prog) if (progression is not None and start_prog is not None) else 0
+        v = mode_view(path, mode)
+        delta, prog_delta = _deltas(v["key"], v["elo"], v["points"], raw)
     else:
-        resolved_key = ""
-        elo         = s.get("elo")
-        label       = s.get("rank_label") or ""
-        placement   = s.get("rank_number")
-        progression = None
-        is_unreal   = s.get("is_unreal", False)
-        nxt         = s.get("next_position")
-        gap         = s.get("elo_to_next")
-        delta       = s.get("session_delta", 0) or 0
-        prog_delta  = s.get("prog_delta", 0) or 0
+        v = {
+            "key":         "",
+            "label":       s.get("rank_label") or "",
+            "placement":   s.get("rank_number"),
+            "progression": None,
+            "is_unreal":   s.get("is_unreal", False),
+            "elo":         s.get("elo"),
+            "next_pos":    s.get("next_position"),
+            "next_gap":    s.get("elo_to_next"),
+            "points":      None,
+        }
+        delta      = s.get("session_delta", 0) or 0
+        prog_delta = s.get("prog_delta", 0) or 0
+
+    resolved_key = v["key"]
+    elo          = v["elo"]
+    label        = v["label"] or ""
+    placement    = v["placement"]
+    progression  = v["progression"]
+    is_unreal    = v["is_unreal"]
+    nxt          = v["next_pos"]
+    gap          = v["next_gap"]
 
     season_stats = compute_windowed_stats(raw, "season", resolved_key or None)
 
+    # Answer for the mode that was actually asked about, not whichever one the
+    # poll loop last picked.
+    s["active_mode_key"] = resolved_key or s.get("active_mode_key", "")
+    s["rank_number"]     = placement
+    s["rank_label"]      = label
+    s["elo"]             = elo
+    s["session_delta"]   = delta
+
     s["is_unreal"]       = is_unreal
+    s["elo_unavailable"] = bool(is_unreal and elo is None)
     s["progression_pct"] = progression if not is_unreal else None
     s["prog_delta"]      = prog_delta if not is_unreal else None
     s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
@@ -566,33 +969,53 @@ def snapshot(window="session", mode_key=None):
     s["season_wins"]  = season_stats["wins"]
     s["season_kills"] = season_stats["kills"]
 
+    next_div_name = None
+    if not is_unreal:
+        div = _num(mode.get("division")) if mode is not None else None
+        if div is not None and (div + 1) in DIVISION_NAMES:
+            next_div_name = division_name(div + 1)
+    s["next_rank_name"] = next_div_name
+
     if is_unreal and nxt and gap is not None:
         s["next_gap"] = str(gap)
         s["next_pos"] = str(nxt)
     elif is_unreal and nxt:
         s["next_gap"] = None
         s["next_pos"] = str(nxt)
+    elif not is_unreal and progression is not None:
+        # Designs that reuse the same "next" row below Unreal want the climb
+        # expressed as a percentage toward the next division.
+        s["next_gap"] = f"{100 - progression}%"
+        s["next_pos"] = next_div_name or "NEXT RANK"
     else:
         s["next_gap"] = None
         s["next_pos"] = None
 
     if is_unreal:
-        sign = "+" if delta >= 0 else ""
-        s["session_text"] = f"{sign}{delta} ELO TODAY"
-        s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
-    else:
-        pct_left = (100 - progression) if progression is not None else None
-        s["pct_to_next"] = pct_left
-        sign = "+" if prog_delta >= 0 else ""
-        s["session_text"] = f"{sign}{prog_delta}% TODAY" if prog_delta != 0 else "+0% TODAY"
-        s["session_sign"] = "pos" if prog_delta > 0 else ("neg" if prog_delta < 0 else "zero")
-        div = _num(mode.get("division")) if mode is not None else None
-        if div is not None:
-            next_div_name = division_name(div + 1) if (div + 1) in DIVISION_NAMES else None
+        if window == "season":
+            s["session_text"] = f"+{elo} ALL SEASON" if elo is not None else "- ALL SEASON"
+            s["session_sign"] = "pos" if elo is not None else "zero"
+        elif window in ("12h", "24h"):
+            wd    = windowed_elo_delta(raw, window, elo, resolved_key or None)
+            label_str = "PAST 12H" if window == "12h" else "PAST 24H"
+            if wd is None:
+                s["session_text"] = f"+0 ELO {label_str}"
+                s["session_sign"] = "zero"
+            else:
+                sign = "+" if wd >= 0 else ""
+                s["session_text"] = f"{sign}{wd} ELO {label_str}"
+                s["session_sign"] = "pos" if wd > 0 else ("neg" if wd < 0 else "zero")
         else:
-            next_div_name = None
-        s["next_rank_name"] = next_div_name
+            sign = "+" if delta >= 0 else ""
+            s["session_text"] = f"{sign}{delta} ELO TODAY"
+            s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
+    else:
+        s["pct_to_next"] = (100 - progression) if progression is not None else None
+        sign = "+" if prog_delta >= 0 else ""
+        s["session_text"] = f"{sign}{prog_delta}% TODAY"
+        s["session_sign"] = "pos" if prog_delta > 0 else ("neg" if prog_delta < 0 else "zero")
 
+    s["gap_unavailable"] = bool(is_unreal and (s.get("next_gap") is None or s.get("next_pos") is None))
     s["session_start"] = SESSION_START
     s["window"]        = window
     return s
@@ -626,10 +1049,21 @@ def debug_report():
     out.append("")
     out.append(f"ranked-mode candidates: {len(_last_modes)}")
     for path, obj in _last_modes:
+        key  = _path_str(path)
+        v    = mode_view(path, obj)
+        seas = compute_windowed_stats(_last_raw, "season", key)
         out.append(
-            "  - " + "/".join(map(str, path))
+            "  - " + key
             + f"  div={obj.get('division')} ({division_name(_num(obj.get('division')))})"
-            + f"  unreal={obj.get('unreal_placement')}  elo={obj.get('elo')}"
+            + f"  unreal={_unreal_placement(obj)}  api_elo={obj.get('elo')}"
+        )
+        out.append(
+            f"      resolved elo={v['elo']}  next=#{v['next_pos']}"
+            + f"  gap={v['next_gap']}  stat_path={_mode_stat_path(key)}"
+        )
+        out.append(
+            f"      season: {seas['wins']}W/{seas['losses']}L  kills={seas['kills']}"
+            + f"  kd={seas['kd']}  wr={seas['wr']}"
         )
     if _last_modes:
         cp, _ = pick_best_mode(_last_modes)
@@ -820,6 +1254,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         #codeInput.mode-btn::placeholder {
             color: rgba(220, 220, 220, 0.35);
         }
+        /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
+        .elo-na { display: none !important; }
     </style>
 </head>
 <body>
@@ -1049,6 +1485,22 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
             $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
 
+            // OliTracker only publishes ELO for the ranks it tracks. Below that
+            // there is no ELO and no leaderboard row to measure a gap against,
+            // so hide those widgets rather than render empty placeholders.
+            var _eloNA = !!d.elo_unavailable;
+            ['#eloRight', '#subRow'].forEach(function(sel) {
+                var el = document.querySelector(sel);
+                if (el) el.classList.toggle('elo-na', _eloNA);
+            });
+            // No ELO means no gap either, so the gap row goes with it.
+            var _gapNA = _eloNA || !!d.gap_unavailable;
+            ['#nextContainer'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) {
+                    el.classList.toggle('elo-na', _gapNA);
+                });
+            });
+
             var modes = d.modes_available;
             if (modes && modes.length > 0) {
                 if (!activeMode) activeMode = d.active_mode_key || modes[0].key;
@@ -1122,6 +1574,7 @@ def main():
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
     print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
+    _load_baselines()
     threading.Thread(target=poll_loop, daemon=True).start()
 
     try:

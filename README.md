@@ -64,9 +64,10 @@ It walks you through everything in a console window: picks a design from a small
 
 ## ✨ Features
 
-- **Live rank, ELO, and leaderboard position**, pulled every 10 seconds
-- **Session ELO delta**: tracks how much you've gained or lost since you started the overlay
+- **Live rank, ELO, and leaderboard position**, pulled every 30 seconds
+- **Daily ELO delta**: tracks how much you've gained or lost today, and it survives a restart, so closing the overlay mid-stream doesn't reset the counter back to +0
 - **Unreal leaderboard tracking**: shows ELO to next rank (`NEXT 14 ELO to #66`)
+- **Works down to placement #10,000**: OliTracker only publishes ELO for the top 10,000 of each mode's leaderboard, so the ELO row shows automatically once you're inside it and hides again if you drop out, no restart needed
 - **Non-Unreal progress tracking**: shows promotion progress % and percent gained today (`53% TO GOLD III`)
 - **Mode switcher** for BR, Reload, and Boxfights, each with its own independent stats, and your last selected mode is remembered the next time the overlay loads
 - **Live stats / creator code toggle**, right in the browser, no restart needed, see [below](#-switching-between-stats-and-creator-code)
@@ -216,7 +217,7 @@ That's the actual error from the server. For example, `HTTP 404 from OliTracker`
 Something else is using port 8888. Run `stop.bat` first, then start it again. If the issue persists, change `PORT = 8888` to another number like `8889` in `server.py` and update the OBS URL to match.
 
 **Stats look wrong after switching modes**
-Give it one poll cycle (about 10 seconds) after clicking a mode button. The server fetches fresh data on each cycle.
+Give it one poll cycle (about 30 seconds) after clicking a mode button. The server fetches fresh data on each cycle.
 
 **OBS shows a black box instead of the overlay**
 Make sure `start.bat` has been run first, the browser source needs the local server running. Also double check the URL in OBS is exactly `http://localhost:8888/overlay`.
@@ -250,7 +251,7 @@ Yes! Run `python server.py` from a terminal instead of `start.bat`, and look up 
 Yes, see the port note under Setup above. Change the port in one of them so they don't collide.
 
 **Does this slow down Fortnite or use a lot of resources?**
-Nope. It's a tiny local web server that polls OliTracker every 10 seconds. CPU and memory use are both negligible.
+Nope. It's a tiny local web server that polls OliTracker every 30 seconds. CPU and memory use are both negligible.
 
 **Can I resize or reposition the overlay?**
 Yes, it's a normal OBS Browser Source. Resize, move, and add filters to it exactly like any other source.
@@ -265,7 +266,7 @@ No. The server only talks to the OliTracker API to pull your stats, and serves t
 
 ## ⚙️ How it works
 
-This Fortnite rank tracker is a small Python web server that runs locally on your PC. It polls the OliTracker API every 10 seconds, parses your ranked stats, and serves a single HTML page at `localhost:8888/overlay`. OBS loads that page as a browser source and auto-refreshes the displayed data, turning it into a live Fortnite stream overlay with zero manual updates. No data ever leaves your machine other than the API request to OliTracker.
+This Fortnite rank tracker is a small Python web server that runs locally on your PC. It polls the OliTracker API every 30 seconds, parses your ranked stats, and serves a single HTML page at `localhost:8888/overlay`. OBS loads that page as a browser source and auto-refreshes the displayed data, turning it into a live Fortnite stream overlay with zero manual updates. No data ever leaves your machine other than the API request to OliTracker.
 
 ---
 
