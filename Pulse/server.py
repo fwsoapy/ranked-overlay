@@ -29,7 +29,7 @@ ENABLE_NEXT_LOOKUP = True
 # the overlay checks this repo for a newer tagged version on startup and once a
 # day after that, and quietly installs it. Your settings above, your accent
 # colour and your port are carried across; nothing is uploaded anywhere.
-VERSION              = "2.0.0"
+VERSION              = "2.0.1"
 DESIGN               = "Pulse"
 AUTO_UPDATE          = True
 UPDATE_REPO          = "fwsoapy/ranked-overlay"
@@ -718,7 +718,12 @@ def _roll_season_if_needed(data):
 
     Season rollover wipes the seasonal totals and resets rank, so a baseline
     taken last season would read as an enormous overnight loss. The tell is
-    seasonal matches going *down*, which cannot happen inside a season.
+    seasonal matches collapsing, which cannot happen inside a season.
+
+    It has to be a collapse rather than any decrease. OliTracker recounting, or
+    answering with a half-built profile, can shave a few matches off the total,
+    and that must not be mistaken for a new season and wipe someone's counter
+    mid-stream. A real rollover drops the count to near zero.
     """
     global _season_fp
     fp = _season_fingerprint(data)
@@ -727,7 +732,7 @@ def _roll_season_if_needed(data):
     with _lock:
         previous = _season_fp
         _season_fp = fp
-        if previous is not None and fp < previous:
+        if previous is not None and fp * 2 < previous:
             _start_elos.clear()
             _start_progressions.clear()
         else:
