@@ -29,7 +29,7 @@ ENABLE_NEXT_LOOKUP = True
 # the overlay checks this repo for a newer tagged version on startup and once a
 # day after that, and quietly installs it. Your settings above, your accent
 # colour and your port are carried across; nothing is uploaded anywhere.
-VERSION              = "2.0.1"
+VERSION              = "2.1.0"
 DESIGN               = "Slash"
 AUTO_UPDATE          = True
 UPDATE_REPO          = "fwsoapy/ranked-overlay"
@@ -53,7 +53,6 @@ _start_elos         = {}
 _start_progressions = {}
 _last_raw           = None
 _last_modes         = []
-_baseline_day       = None
 _season_fp          = None
 
 # mode key -> {"elo", "next_pos", "gap"}. Filled by the poll loop for every
@@ -134,8 +133,6 @@ def _state_dir():
     )
     return os.path.join(base, "FortniteRankOverlay")
 
-
-BASELINE_FILE = os.path.join(_state_dir(), "elo_baseline.json")
 
 _WINDOW_SECS = {"12h": 43200, "24h": 86400}
 
@@ -663,48 +660,6 @@ def lookup_leaderboard_elo(mode_path, placement, account_id=EPIC_ACCOUNT_ID):
     return my_elo, target["placement"], target["elo"] - my_elo
 
 
-def _today_key():
-    return datetime.date.today().isoformat()
-
-
-def _load_baselines():
-    """Restore today's starting ELO so "TODAY" survives an overlay restart."""
-    global _baseline_day, _season_fp
-    try:
-        with open(BASELINE_FILE, "r", encoding="utf-8") as f:
-            saved = json.load(f)
-    except (OSError, ValueError):
-        return
-    if not isinstance(saved, dict) or saved.get("day") != _today_key():
-        return   # yesterday's numbers; today starts from scratch
-    with _lock:
-        _baseline_day = saved["day"]
-        _season_fp    = _num(saved.get("season_fp"))
-        for key, value in (saved.get("elos") or {}).items():
-            if _num(value) is not None:
-                _start_elos[key] = _num(value)
-        for key, value in (saved.get("progressions") or {}).items():
-            if _num(value) is not None:
-                _start_progressions[key] = _num(value)
-    print(f"[overlay] restored today's baseline from {BASELINE_FILE}")
-
-
-def _save_baselines():
-    with _lock:
-        payload = {
-            "day":          _baseline_day,
-            "season_fp":    _season_fp,
-            "elos":         dict(_start_elos),
-            "progressions": dict(_start_progressions),
-        }
-    try:
-        os.makedirs(os.path.dirname(BASELINE_FILE), exist_ok=True)
-        with open(BASELINE_FILE, "w", encoding="utf-8") as f:
-            json.dump(payload, f)
-    except OSError as e:
-        print(f"[overlay] could not save today's baseline: {e}")
-
-
 def _season_fingerprint(data):
     """A number that only ever grows inside one season: total matches played."""
     try:
@@ -741,18 +696,6 @@ def _roll_season_if_needed(data):
         print(f"[overlay] new season detected ({previous} -> {fp} matches) - counters re-baselined")
 
 
-def _roll_day_if_needed():
-    global _baseline_day
-    today = _today_key()
-    with _lock:
-        if _baseline_day == today:
-            return
-        _baseline_day = today
-        _start_elos.clear()
-        _start_progressions.clear()
-    print(f"[overlay] new day ({today}) - today's counters reset")
-
-
 def _record_baseline(mode_key, elo, points):
     with _lock:
         if elo is not None and mode_key not in _start_elos:
@@ -761,52 +704,18 @@ def _record_baseline(mode_key, elo, points):
             _start_progressions[mode_key] = points
 
 
-def _day_elo_change(data, mode_key):
-    """Today's ELO swing straight from OliTracker, if it publishes one.
+def _deltas(mode_key, elo, points):
+    """How much this mode has moved since the overlay was started.
 
-    Each match_history day carries an `elo` block shaped
-    {"<mode>": {"start": .., "end": .., "change": ..}}. When it is there it
-    beats anything measured locally, because it covers the whole day rather
-    than only the stretch since the overlay was started.
+    Measured from the first reading taken after launch, not from midnight and
+    not from anything OliTracker publishes per calendar day. Close the overlay
+    and open it again and the count starts over, which is the point: it shows
+    what this session earned.
     """
-    if not isinstance(data, dict):
-        return None
-    days = data.get("match_history") or []
-    if not days:
-        return None
-    today = _today_key()
-    want  = _normalize_mode_key(mode_key)
-    for day in days:
-        date = str(day.get("date") or "")[:10]
-        if date and date != today:
-            continue
-        block = day.get("elo") or {}
-        if not isinstance(block, dict):
-            continue
-        for key, value in block.items():
-            if _normalize_mode_key(key) != want or not isinstance(value, dict):
-                continue
-            change = _num(value.get("change"))
-            if change is not None:
-                return change
-            start, end = _num(value.get("start")), _num(value.get("end"))
-            if start is not None and end is not None:
-                return end - start
-        break   # only the newest day is "today"
-    return None
-
-
-def _deltas(mode_key, elo, points, data=None):
-    published = _day_elo_change(data, mode_key)
     with _lock:
         start_elo  = _start_elos.get(mode_key)
         start_prog = _start_progressions.get(mode_key)
-    if published is not None:
-        elo_delta = published
-    elif elo is not None and start_elo is not None:
-        elo_delta = elo - start_elo
-    else:
-        elo_delta = 0
+    elo_delta  = (elo - start_elo)     if (elo    is not None and start_elo  is not None) else 0
     prog_delta = (points - start_prog) if (points is not None and start_prog is not None) else 0
     return elo_delta, prog_delta
 
@@ -925,7 +834,6 @@ def refresh_once():
         _set_error("no ranked data found")
         return
 
-    _roll_day_if_needed()
     _roll_season_if_needed(data)
 
     # Resolve ELO for every mode, not just the active one. The overlay's mode
@@ -956,11 +864,10 @@ def refresh_once():
     for mpath, mobj in modes:
         v = mode_view(mpath, mobj)
         _record_baseline(v["key"], v["elo"], v["points"])
-    _save_baselines()
 
     path, mode = pick_best_mode(modes)
     v = mode_view(path, mode)
-    session_delta, prog_delta = _deltas(v["key"], v["elo"], v["points"], data)
+    session_delta, prog_delta = _deltas(v["key"], v["elo"], v["points"])
 
     with _lock:
         STATE.update({
@@ -1137,7 +1044,7 @@ def snapshot(window="session", mode_key=None):
 
     if mode is not None:
         v = mode_view(path, mode)
-        delta, prog_delta = _deltas(v["key"], v["elo"], v["points"], raw)
+        delta, prog_delta = _deltas(v["key"], v["elo"], v["points"])
     else:
         v = {
             "key":         "",
@@ -1972,7 +1879,6 @@ def main():
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
     print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
-    _load_baselines()
     threading.Thread(target=poll_loop, daemon=True).start()
     if AUTO_UPDATE:
         threading.Thread(target=update_loop, daemon=True).start()

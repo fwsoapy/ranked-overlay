@@ -66,15 +66,15 @@ It walks you through everything in a console window: picks a design from a small
 ## ✨ Features
 
 - **Live rank, ELO, and leaderboard position**, pulled every 30 seconds
-- **Daily ELO delta**: tracks how much you've gained or lost today, and it survives a restart, so closing the overlay mid-stream doesn't reset the counter back to +0
+- **Session ELO delta**: tracks how much you've gained or lost since you started the overlay. Close it and reopen it and the count starts fresh
 - **Unreal leaderboard tracking**: shows ELO to next rank (`NEXT 14 ELO to #66`)
 - **Works down to placement #10,000**: OliTracker only publishes ELO for the top 10,000 of each mode's leaderboard, so the ELO row shows automatically once you're inside it and hides again if you drop out, no restart needed
-- **Non-Unreal progress tracking**: shows promotion progress % and percent gained today (`53% TO GOLD III`)
+- **Non-Unreal progress tracking**: shows promotion progress % and percent gained this session (`53% TO GOLD III`)
 - **Mode switcher** for BR, Reload, and Boxfights, each with its own independent stats, and your last selected mode is remembered the next time the overlay loads
 - **Live stats / creator code toggle**, right in the browser, no restart needed, see [below](#-switching-between-stats-and-creator-code)
 - **Season stats** (K/D, Win%, Kills, Wins), accurate per game mode
 - **Keeps itself current**: checks this repo for a newer tagged version on startup and once a day after, then installs it on its own. Your account ID, creator code, accent color and port carry across. One line turns it off, see [below](#-auto-updates)
-- **Survives new seasons**: season stats reset with the season, a ranked playlist added in a future season turns up as its own button with its own stats and ELO, and the daily counter re-baselines on rollover instead of reading as a huge overnight loss
+- **Survives new seasons**: season stats reset with the season, a ranked playlist added in a future season turns up as its own button with its own stats and ELO, and the ELO counter re-baselines on rollover instead of reading as a huge loss
 - **8 overlay designs**, any accent color you want
 - **Built-in error messages**: if something goes wrong (bad account ID, OliTracker is down, etc.) a small message shows under the card instead of the overlay just sitting there blank
 
