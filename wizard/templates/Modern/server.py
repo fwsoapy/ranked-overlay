@@ -1,6 +1,9 @@
+import ast
 import json
 import os
 import re
+import subprocess
+import sys
 import tempfile
 import time
 import datetime
@@ -22,6 +25,16 @@ RANKED_MODE_HINT   = ""
 RANKED_MODE_KEY    = ""
 ENABLE_NEXT_LOOKUP = True
 
+# Set AUTO_UPDATE to False to stop the overlay updating itself. When it is on,
+# the overlay checks this repo for a newer tagged version on startup and once a
+# day after that, and quietly installs it. Your settings above, your accent
+# colour and your port are carried across; nothing is uploaded anywhere.
+VERSION              = "2.0.0"
+DESIGN               = "Modern"
+AUTO_UPDATE          = True
+UPDATE_REPO          = "fwsoapy/ranked-overlay"
+UPDATE_CHECK_SECONDS = 86400
+
 SESSION_START = int(time.time())
 
 BROWSER_HEADERS = {
@@ -41,6 +54,7 @@ _start_progressions = {}
 _last_raw           = None
 _last_modes         = []
 _baseline_day       = None
+_season_fp          = None
 
 # mode key -> {"elo", "next_pos", "gap"}. Filled by the poll loop for every
 # mode, so snapshot() can answer for whichever mode the overlay asks about
@@ -98,13 +112,14 @@ MODE_STAT_PATH = {
     "ranked-rocket-racing":    None,
 }
 
-# OliTracker's public leaderboard stops at page 100 (100 rows a page). Past
-# that there is no ELO to read for a placement, at any price.
+# OliTracker publishes 100 rows a page and, today, stops around the top
+# 10,000 of each mode. That ceiling is never assumed: a page either comes back
+# with rows or it does not, so if a future season publishes a deeper board the
+# overlay picks the extra ELO up on its own.
 LEADERBOARD_PAGE_SIZE     = 100
-LEADERBOARD_MAX_PAGE      = 100
-LEADERBOARD_MAX_PLACEMENT = LEADERBOARD_PAGE_SIZE * LEADERBOARD_MAX_PAGE
-LEADERBOARD_TTL           = 60    # seconds; keeps pace with POLL_SECONDS
-LEADERBOARD_PAGES_BACK    = 4     # pages to walk up through an ELO tie
+LEADERBOARD_PAGE_LIMIT    = 100000  # sanity stop, not a real ceiling
+LEADERBOARD_TTL           = 60      # seconds; keeps pace with POLL_SECONDS
+LEADERBOARD_PAGES_BACK    = 4       # pages to walk up through an ELO tie
 
 def _state_dir():
     """Where the daily ELO baseline is kept.
@@ -176,7 +191,18 @@ def division_name(div):
     return DIVISION_NAMES.get(div, f"DIVISION {div}")
 
 
+# Words that describe how a playlist is packaged rather than what it is, so
+# they get dropped when naming a button for a mode we have not seen before.
+_LABEL_NOISE = {"ranked", "combined", "build", "competitive", "playlist"}
+
+
 def _mode_label(key):
+    """A short button label for a ranked mode.
+
+    Unrecognised keys are tidied up rather than printed raw, so a playlist
+    added in a future season still gets a readable button instead of
+    "ranked-og-combined" sprawling across the mode bar.
+    """
     if key in MODE_LABELS:
         return MODE_LABELS[key]
     lower = key.lower()
@@ -186,7 +212,12 @@ def _mode_label(key):
         return "Reload"
     if "br-combined" in lower or "br_combined" in lower:
         return "BR"
-    return key
+    if "rocket" in lower or "racing" in lower:
+        return "Racing"
+    words = [w for w in re.split(r"[-_\s]+", lower) if w and w not in _LABEL_NOISE]
+    if not words:
+        return key
+    return " ".join(w.upper() if len(w) <= 3 else w.capitalize() for w in words)
 
 
 def _looks_like_ranked_mode(d):
@@ -327,7 +358,20 @@ def _detect_ranking_id(data, preferred_mode_key=None):
     return max(tally, key=tally.get) if tally else None
 
 
-def _mode_stat_path(ranking_id):
+# Tokens that name a mode family rather than a stats bucket, so they must not
+# be matched against bucket names when guessing at an unfamiliar playlist.
+_BUCKET_STOPWORDS = {"ranked", "combined", "build", "br", "all", "competitive"}
+
+
+def _mode_stat_path(ranking_id, available=None):
+    """Which stats bucket belongs to a ranked mode.
+
+    `available` is the set of bucket names OliTracker actually returned. A new
+    season can introduce a playlist this build has never heard of, so rather
+    than giving up, an unknown key is matched against the buckets on offer. If
+    nothing matches, the mode is counted from its own match history instead,
+    which is always correct even if it reaches back fewer days.
+    """
     if not ranking_id:
         return ("ranked",)
     key = _normalize_mode_key(ranking_id)
@@ -338,6 +382,9 @@ def _mode_stat_path(ranking_id):
         return ("reload",)
     if label == "BR":
         return ("ranked",)
+    for token in re.split(r"[-_]", key):
+        if len(token) >= 2 and token not in _BUCKET_STOPWORDS and token in (available or ()):
+            return (token,)
     return None
 
 
@@ -349,7 +396,11 @@ def _stat_block(data, timeframe, ranking_id):
     and quietly borrowing `ranked` when it was missing is what made BR and
     Reload report identical KD/WR/kills/wins.
     """
-    path_key = _mode_stat_path(ranking_id)
+    try:
+        available = set(data["stats"][timeframe].keys())
+    except (KeyError, TypeError, AttributeError):
+        available = set()
+    path_key = _mode_stat_path(ranking_id, available)
     if path_key is None:
         return None
     try:
@@ -495,7 +546,7 @@ def _leaderboard_page(slug, page):
     The poll loop runs every POLL_SECONDS; without the cache that would mean
     re-downloading a ~180KB page from OliTracker several times a minute.
     """
-    if page < 1 or page > LEADERBOARD_MAX_PAGE:
+    if page < 1 or page > LEADERBOARD_PAGE_LIMIT:
         return []
     key = (slug, page)
     now = time.time()
@@ -585,8 +636,7 @@ def lookup_leaderboard_elo(mode_path, placement, account_id=EPIC_ACCOUNT_ID):
     if not ENABLE_NEXT_LOOKUP or not placement or placement < 1:
         return None, None, None
     slug = _slug_for_mode(mode_path)
-    if slug is None or placement > LEADERBOARD_MAX_PLACEMENT:
-        # Outside the published top 10,000 there is no row to read.
+    if slug is None:
         return None, None, None
 
     page, rows, me = _find_own_row(slug, placement, account_id)
@@ -619,7 +669,7 @@ def _today_key():
 
 def _load_baselines():
     """Restore today's starting ELO so "TODAY" survives an overlay restart."""
-    global _baseline_day
+    global _baseline_day, _season_fp
     try:
         with open(BASELINE_FILE, "r", encoding="utf-8") as f:
             saved = json.load(f)
@@ -629,6 +679,7 @@ def _load_baselines():
         return   # yesterday's numbers; today starts from scratch
     with _lock:
         _baseline_day = saved["day"]
+        _season_fp    = _num(saved.get("season_fp"))
         for key, value in (saved.get("elos") or {}).items():
             if _num(value) is not None:
                 _start_elos[key] = _num(value)
@@ -642,6 +693,7 @@ def _save_baselines():
     with _lock:
         payload = {
             "day":          _baseline_day,
+            "season_fp":    _season_fp,
             "elos":         dict(_start_elos),
             "progressions": dict(_start_progressions),
         }
@@ -651,6 +703,37 @@ def _save_baselines():
             json.dump(payload, f)
     except OSError as e:
         print(f"[overlay] could not save today's baseline: {e}")
+
+
+def _season_fingerprint(data):
+    """A number that only ever grows inside one season: total matches played."""
+    try:
+        return int(data["stats"]["seasonal"]["all"]["both"]["overall"]["matches_played"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _roll_season_if_needed(data):
+    """Clear today's baselines when Fortnite starts a new ranked season.
+
+    Season rollover wipes the seasonal totals and resets rank, so a baseline
+    taken last season would read as an enormous overnight loss. The tell is
+    seasonal matches going *down*, which cannot happen inside a season.
+    """
+    global _season_fp
+    fp = _season_fingerprint(data)
+    if fp is None:
+        return
+    with _lock:
+        previous = _season_fp
+        _season_fp = fp
+        if previous is not None and fp < previous:
+            _start_elos.clear()
+            _start_progressions.clear()
+        else:
+            previous = None
+    if previous is not None:
+        print(f"[overlay] new season detected ({previous} -> {fp} matches) - counters re-baselined")
 
 
 def _roll_day_if_needed():
@@ -838,6 +921,7 @@ def refresh_once():
         return
 
     _roll_day_if_needed()
+    _roll_season_if_needed(data)
 
     # Resolve ELO for every mode, not just the active one. The overlay's mode
     # buttons can select a mode pick_best_mode() didn't choose, and snapshot()
@@ -898,6 +982,132 @@ def refresh_once():
     gap_str = f"   next #{v['next_pos']} in {v['next_gap']} ELO" if v["next_gap"] is not None else ""
     print(f"[overlay] {ts}  {elo_str}  |  today {session_delta:+d}{gap_str}")
     print(f"          session: {sess['wins']}W / {sess['losses']}L   KD {kd_txt}   WR {wr_txt}")
+
+
+# Keeping itself current
+#
+# Fortnite seasons come and go and OliTracker changes shape with them. Rather
+# than leaving everyone on a build that slowly stops matching the API, the
+# overlay looks at the repo's version tags and installs a newer one itself.
+# It only ever reads from UPDATE_REPO over HTTPS, it refuses anything that
+# will not parse, and it keeps a copy of the outgoing file.
+
+def _parse_version(text):
+    parts = re.findall(r"\d+", str(text or ""))
+    return tuple(int(p) for p in parts[:3]) if parts else (0,)
+
+
+def _latest_version_tag():
+    """The newest version tag on the repo, or None if that cannot be read."""
+    url = f"https://api.github.com/repos/{UPDATE_REPO}/tags?per_page=100"
+    headers = {"User-Agent": "fortnite-rank-overlay", "Accept": "application/vnd.github+json"}
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=15) as r:
+        tags = json.loads(r.read().decode("utf-8", "replace"))
+    best = None
+    for tag in tags if isinstance(tags, list) else []:
+        name = (tag or {}).get("name") or ""
+        if not re.fullmatch(r"v?\d+(?:\.\d+)*", name):
+            continue
+        if best is None or _parse_version(name) > _parse_version(best):
+            best = name
+    return best
+
+
+def _carry_over_settings(old_text, new_text):
+    """Move this install's own settings into the downloaded file.
+
+    An update must never cost someone their account ID, creator code, accent
+    colour or port, so each of those is lifted out of the running file and
+    written into the new one before anything is installed. Everything else,
+    including the overlay markup itself, comes from the new build.
+    """
+    def carry(pattern, group):
+        """Copy one setting across, keeping the new file's own spacing."""
+        nonlocal new_text
+        old = re.search(pattern, old_text)
+        if old is None or re.search(pattern, new_text) is None:
+            return
+        value = old.group(group)
+        new_text = re.sub(
+            pattern,
+            lambda m: m.group(0)[:m.start(group) - m.start(0)] + value
+                      + m.group(0)[m.end(group) - m.start(0):],
+            new_text, count=1)
+
+    for name in ("EPIC_USERNAME", "EPIC_ACCOUNT_ID", "CREATOR_CODE",
+                 "RANKED_MODE_HINT", "RANKED_MODE_KEY"):
+        carry(name + r'\s*=\s*"([^"]*)"', 1)
+
+    carry(r"PORT \s*=\s*(\d+)".replace(" ", ""), 1)
+    carry(r"AUTO_UPDATE\s*=\s*(True|False)", 1)
+    carry(r"UPDATE_CHECK_SECONDS\s*=\s*(\d+)", 1)
+
+    # Accent colour lives in the stylesheet rather than the config block.
+    carry(r"--accent:\s*(#[0-9a-fA-F]{6});", 1)
+    carry(r"--accent-rgb:\s*(\d+,\s*\d+,\s*\d+);", 1)
+    carry(r"--stat-label-color:\s*(#[0-9a-fA-F]{6});", 1)
+
+    return new_text
+
+
+def _install_update(tag):
+    """Download the tagged build of this design and put it in place."""
+    url = (f"https://raw.githubusercontent.com/{UPDATE_REPO}/{tag}"
+           f"/wizard/templates/{DESIGN}/server.py")
+    downloaded = _http_get_text(url, timeout=30)
+
+    if "OVERLAY_HTML" not in downloaded or "def refresh_once" not in downloaded:
+        raise ValueError("that download does not look like an overlay server")
+    ast.parse(downloaded)
+
+    here = os.path.abspath(__file__)
+    with open(here, encoding="utf-8") as f:
+        current = f.read()
+    merged = _carry_over_settings(current, downloaded)
+    ast.parse(merged)          # refuse to install something that will not run
+
+    os.makedirs(_state_dir(), exist_ok=True)
+    backup = os.path.join(_state_dir(), f"server-{VERSION}-backup.py")
+    with open(backup, "w", encoding="utf-8") as f:
+        f.write(current)
+    with open(here, "w", encoding="utf-8") as f:
+        f.write(merged)
+    return here, backup
+
+
+def _restart_self():
+    """Hand over to the freshly written file."""
+    script = os.path.abspath(__file__)
+    subprocess.Popen([sys.executable, script], cwd=os.path.dirname(script))
+    os._exit(0)
+
+
+def check_for_update():
+    if not AUTO_UPDATE:
+        return False
+    if DESIGN not in ("Classic", "Minimal", "Modern", "Pulse",
+                      "Rainbow", "Sharp", "Slash", "Wide"):
+        return False                      # unknown design, nothing to fetch
+    tag = _latest_version_tag()
+    if not tag or _parse_version(tag) <= _parse_version(VERSION):
+        return False
+    print(f"[overlay] version {tag} is out, updating from {VERSION}")
+    _, backup = _install_update(tag)
+    print(f"[overlay] installed. previous version kept at {backup}")
+    print("[overlay] restarting...")
+    _restart_self()
+    return True
+
+
+def update_loop():
+    while AUTO_UPDATE:
+        try:
+            check_for_update()
+        except Exception as e:
+            # An update is a nice-to-have, never a reason to stop the overlay.
+            print(f"[overlay] update check skipped: {e}")
+        time.sleep(max(3600, UPDATE_CHECK_SECONDS))
 
 
 def poll_loop():
@@ -1653,22 +1863,44 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/raw":
             body = json.dumps(_last_raw, indent=2, default=str) if _last_raw else "{}"
             self._send(200, body, "application/json")
+        elif path == "/version":
+            body = json.dumps({"version": VERSION, "design": DESIGN,
+                               "auto_update": AUTO_UPDATE, "repo": UPDATE_REPO})
+            self._send(200, body, "application/json")
         elif path == "/debug":
             self._send(200, debug_report(), "text/plain; charset=utf-8")
         else:
             self._send(404, "not found", "text/plain")
 
 
+def _bind(port, attempts=20):
+    """Bind the port, waiting out a version of ourselves that is still exiting.
+
+    After an auto-update the outgoing process can hold the socket for a moment,
+    so a first refusal is not a reason to give up.
+    """
+    last = None
+    for _ in range(attempts):
+        try:
+            return ThreadingHTTPServer(("0.0.0.0", port), Handler)
+        except OSError as e:
+            last = e
+            time.sleep(1)
+    raise last
+
+
 def main():
-    print(f"Fortnite Ranked Overlay - port {PORT}")
+    print(f"Fortnite Ranked Overlay {VERSION} ({DESIGN}) - port {PORT}")
     print(f"OBS Browser Source: http://localhost:{PORT}/overlay")
     print(f"Polling OliTracker every {POLL_SECONDS}s - Ctrl+C to stop\n")
 
     _load_baselines()
     threading.Thread(target=poll_loop, daemon=True).start()
+    if AUTO_UPDATE:
+        threading.Thread(target=update_loop, daemon=True).start()
 
     try:
-        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+        server = _bind(PORT)
     except OSError as e:
         print(f"Could not start on port {PORT}: {e}")
         print("Another program may be using that port.")

@@ -29,6 +29,7 @@ A start-to-finish video showing how to download, set up, and use the overlay:
 - [Setup](#-setup)
 - [Switching game modes](#-switching-game-modes)
 - [Switching between stats and creator code](#-switching-between-stats-and-creator-code)
+- [Auto updates](#-auto-updates)
 - [Troubleshooting](#-troubleshooting)
 - [Changing the accent color](#-changing-the-accent-color)
 - [FAQ](#-faq)
@@ -72,6 +73,8 @@ It walks you through everything in a console window: picks a design from a small
 - **Mode switcher** for BR, Reload, and Boxfights, each with its own independent stats, and your last selected mode is remembered the next time the overlay loads
 - **Live stats / creator code toggle**, right in the browser, no restart needed, see [below](#-switching-between-stats-and-creator-code)
 - **Season stats** (K/D, Win%, Kills, Wins), accurate per game mode
+- **Keeps itself current**: checks this repo for a newer tagged version on startup and once a day after, then installs it on its own. Your account ID, creator code, accent color and port carry across. One line turns it off, see [below](#-auto-updates)
+- **Survives new seasons**: season stats reset with the season, a ranked playlist added in a future season turns up as its own button with its own stats and ELO, and the daily counter re-baselines on rollover instead of reading as a huge overnight loss
 - **8 overlay designs**, any accent color you want
 - **Built-in error messages**: if something goes wrong (bad account ID, OliTracker is down, etc.) a small message shows under the card instead of the overlay just sitting there blank
 
@@ -202,6 +205,24 @@ The overlay shows mode buttons (**BR**, **Reload**, **Boxfights**) below the wid
 Below the mode buttons there are two more buttons, **Stats** and **Creator Code**. Click between them to switch what shows on the card, live, with no server restart needed. Pick **Creator Code** and a text box appears where you can type your own code directly in the browser, it updates the overlay instantly as you type. Switching between the two never changes the size of the overlay, so nothing else in your OBS scene shifts around.
 
 Your choice and the code you typed are remembered per design the next time the overlay loads, the same way the BR/Reload/Boxfights choice is remembered. The `CREATOR_CODE` value in `server.py` (or whatever you picked in the wizard) sets the starting default: that's what shows the first time, and if you later change it there and restart, the new setting takes over again.
+
+---
+
+## 🔄 Auto updates
+
+Fortnite seasons come and go and OliTracker changes shape with them, so the overlay keeps itself current instead of slowly drifting out of date. On startup, and once a day after that, it looks at this repo's version tags. If there is a newer one it downloads that version of your design, moves your settings across, and restarts itself. Your Epic account ID, creator code, accent color, port and mode preference all carry over untouched, and the version it replaced is kept in `%LOCALAPPDATA%\FortniteRankOverlay` in case you want it back.
+
+It only ever reads from this repo over HTTPS, and nothing about you is uploaded anywhere. If the download is unreachable, incomplete, or does not parse as a working overlay, it gets thrown away and your existing version carries on running.
+
+To turn it off, open `server.py` and change this line to `False`:
+
+```python
+AUTO_UPDATE          = True
+```
+
+You can check what you are running at any time at `http://localhost:8888/version`.
+
+> ℹ️ Coming from a version before 2.0? You will need to download once by hand. Older builds have no updater in them to do it for you.
 
 ---
 
