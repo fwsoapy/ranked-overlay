@@ -1,0 +1,10 @@
+{
+  "latest": "2.2.0",
+  "min_supported": "2.0.0",
+  "ref": "v2.2.0",
+  "notes": "One launcher instead of three, and your settings now live in config.json where updates can't touch them.",
+  "files": [
+    "server.py",
+    "overlay.bat"
+  ]
+}

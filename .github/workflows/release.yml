@@ -1,0 +1,72 @@
+name: Release
+
+# Push a version tag and this builds the setup tool on a real Windows machine,
+# zips it, and attaches it to the release. Nothing has to be built by hand.
+#
+#   python tools/release.py 2.3.0 --notes "..."
+#   git add -A && git commit -m "v2.3.0" && git tag v2.3.0
+#   git push origin main --tags
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and attach to"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build the setup tool
+        working-directory: wizard
+        run: >
+          pyinstaller --noconfirm --onedir --console
+          --name FortniteOverlaySetup
+          --add-data "templates;templates"
+          --add-data "assets;assets"
+          wizard.py
+
+      # Shipped as a folder in a zip rather than a single .exe: one-file
+      # PyInstaller builds get flagged by antivirus heuristics far more often.
+      - name: Zip it
+        shell: pwsh
+        run: |
+          Compress-Archive -Path wizard/dist/FortniteOverlaySetup/* `
+                           -DestinationPath FortniteOverlaySetup.zip
+
+      - name: Check it actually runs
+        shell: pwsh
+        run: |
+          $exe = "wizard/dist/FortniteOverlaySetup/FortniteOverlaySetup.exe"
+          if (-not (Test-Path $exe)) { throw "the exe was not built" }
+          $size = (Get-Item "FortniteOverlaySetup.zip").Length
+          Write-Host "FortniteOverlaySetup.zip is $([math]::Round($size/1MB,1)) MB"
+          if ($size -lt 1MB) { throw "that zip is too small to be right" }
+
+      - name: Attach it to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" FortniteOverlaySetup.zip --clobber

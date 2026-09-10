@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortnite Rank Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --accent: #ac46ff;
+            --accent-rgb: 172, 70, 255;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
+        }
+
+        body {
+            background: transparent;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: flex-start;
+            height: 100vh;
+            padding: 16px;
+        }
+
+        .wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+        }
+
+        .overlay-container {
+            display: flex;
+            flex-direction: column;
+            background: rgba(12, 10, 16, 0.85);
+            backdrop-filter: blur(8px);
+            border-left: 6px solid var(--accent);
+            padding: 18px 20px;
+            min-width: 560px;
+            letter-spacing: -0.02em;
+            user-select: none;
+        }
+
+        .main-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 10px;
+        }
+
+        .rank-text {
+            font-weight: 800;
+            font-size: 44px;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+
+        .rank-text .purple { color: var(--accent); }
+
+        .elo-text {
+            font-weight: 800;
+            font-size: 44px;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        .sub-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 22px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.75);
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            visibility: visible;
+        }
+
+        .sub-row.hidden { visibility: hidden; }
+
+        .next-target {
+            display: flex;
+            gap: 6px;
+            align-items: baseline;
+        }
+
+        .next-target .highlight { color: #ffffff; }
+        .next-target .purple    { color: var(--accent-light); }
+
+        .session-delta { font-weight: 700; }
+        .session-pos  { color: #2ed573; }
+        .session-neg  { color: #ff4757; }
+        .session-zero { color: #ffffff; }
+
+        .season-row {
+            display: flex;
+            gap: 24px;
+            margin-top: 12px;
+            min-height: 32px;
+            align-items: center;
+            font-weight: 500;
+            font-size: 22px;
+            color: rgba(255, 255, 255, 0.75);
+        }
+
+        .creator-row {
+            margin-top: 12px;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            font-weight: 700;
+            font-size: 24px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+        }
+
+        .stat-item span {
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.90);
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
+        }
+
+        .mode-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            width: 100%;
+            margin-top: 50px;
+        }
+
+        .mode-btn {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(220, 220, 220, 0.55);
+            background: rgba(20, 20, 20, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 13px 18px;
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+            text-align: center;
+            transition: color 0.12s, background 0.12s, border-color 0.12s;
+        }
+
+        .mode-btn:hover {
+            color: rgba(255, 255, 255, 0.90);
+            background: rgba(40, 40, 40, 0.95);
+            border-color: rgba(255, 255, 255, 0.20);
+        }
+
+        .mode-btn.active {
+            color: #ffffff;
+            background: rgba(55, 55, 55, 0.98);
+            border-color: rgba(255, 255, 255, 0.30);
+        }
+
+        #codeInput.mode-btn {
+            text-align: left;
+            cursor: text;
+        }
+
+        #codeInput.mode-btn::placeholder {
+            color: rgba(220, 220, 220, 0.35);
+        }
+        /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
+        .elo-na { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="overlay-container">
+            <div class="main-row">
+                <div class="rank-text" id="rankText">#- UNREAL</div>
+                <div class="elo-text" id="eloRight">-- ELO</div>
+            </div>
+
+            <div class="sub-row" id="subRow">
+                <div class="next-target" id="nextContainer">
+                    <span>Next:</span>
+                    <span class="highlight">-</span>
+                    <span>to</span>
+                    <span class="highlight">#-</span>
+                </div>
+                <div class="session-delta">
+                    <span class="session-zero" id="sessionText">+0 ELO TODAY</span>
+                </div>
+            </div>
+
+            <div class="season-row" id="statsRow">
+                <div class="stat-item">KD: <span id="seasonKd">-</span></div>
+                <div class="stat-item">WR: <span id="seasonWr">-%</span></div>
+                <div class="stat-item">KILLS: <span id="seasonKills">-</span></div>
+                <div class="stat-item">WINS: <span id="seasonWins">-</span></div>
+            </div>
+            <div class="creator-row" id="creatorRow"></div>
+        </div>
+
+        <div class="error-text" id="errorText" style="display:none"></div>
+        <div class="mode-bar" id="modeBar"></div>
+        <div class="mode-bar" id="displayToggleBar">
+            <button class="mode-btn" id="statsToggleBtn">Stats</button>
+            <button class="mode-btn" id="codeToggleBtn">Creator Code</button>
+            <input class="mode-btn" id="codeInput" type="text" placeholder="Enter creator code" style="display:none;">
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
+        var POLL_MS      = __POLL_MS__;
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
+        var modeBarBuilt = false;
+
+        function $(s) { return document.querySelector(s); }
+
+        var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
+        // localStorage is shared by every overlay on localhost, so namespace the
+        // keys per design and gate them on a signature of the server's config.
+        // That way the wizard's choice (stats vs. code) and the configured code
+        // always win on first load, and only an in-browser toggle for THIS
+        // overlay persists, instead of one typed code bleeding across overlays.
+        var FN_NS  = "Minimal";
+        var K_MODE = 'fn_display_mode_' + FN_NS;
+        var K_CODE = 'fn_creator_code_' + FN_NS;
+        var K_SIG  = 'fn_config_sig_' + FN_NS;
+
+        var displayMode, creatorCode;
+        if (localStorage.getItem(K_SIG) === INITIAL_CREATOR_CODE) {
+            displayMode = localStorage.getItem(K_MODE) || (INITIAL_CREATOR_CODE ? 'code' : 'stats');
+            var _savedCode = localStorage.getItem(K_CODE);
+            creatorCode = (_savedCode === null) ? INITIAL_CREATOR_CODE : _savedCode;
+        } else {
+            displayMode = INITIAL_CREATOR_CODE ? 'code' : 'stats';
+            creatorCode = INITIAL_CREATOR_CODE;
+            localStorage.setItem(K_SIG, INITIAL_CREATOR_CODE);
+            localStorage.setItem(K_MODE, displayMode);
+            localStorage.setItem(K_CODE, creatorCode);
+        }
+
+        function renderCreatorText() {
+            $('#creatorRow').textContent = creatorCode ? ('Use Code ' + creatorCode + ' #ad') : '';
+        }
+
+        function applyDisplayMode() {
+            var statsEl = $('#statsRow');
+            var codeEl  = $('#creatorRow');
+            var input   = $('#codeInput');
+            if (displayMode === 'code') {
+                statsEl.style.display = 'none';
+                codeEl.style.display  = '';
+                input.style.display   = '';
+            } else {
+                statsEl.style.display = '';
+                codeEl.style.display  = 'none';
+                input.style.display   = 'none';
+            }
+            $('#statsToggleBtn').classList.toggle('active', displayMode === 'stats');
+            $('#codeToggleBtn').classList.toggle('active', displayMode === 'code');
+        }
+
+        $('#statsToggleBtn').addEventListener('click', function() {
+            displayMode = 'stats';
+            localStorage.setItem(K_MODE, displayMode);
+            applyDisplayMode();
+        });
+        $('#codeToggleBtn').addEventListener('click', function() {
+            displayMode = 'code';
+            localStorage.setItem(K_MODE, displayMode);
+            applyDisplayMode();
+        });
+        $('#codeInput').addEventListener('input', function(e) {
+            creatorCode = e.target.value;
+            localStorage.setItem(K_CODE, creatorCode);
+            renderCreatorText();
+        });
+        $('#codeInput').value = creatorCode || '';
+        renderCreatorText();
+        applyDisplayMode();
+
+        var ROMAN = {'I':true,'II':true,'III':true,'IV':true,'V':true,'VI':true};
+
+        function purpleNumeral(text) {
+            if (!text) return '';
+            var parts = text.split(' ');
+            var last  = parts[parts.length - 1];
+            if (ROMAN[last]) {
+                return parts.slice(0, -1).join(' ') + ' <span class="purple">' + last + '</span>';
+            }
+            return text;
+        }
+
+        function buildModeBar(modes) {
+            if (modeBarBuilt) return;
+            modeBarBuilt = true;
+            var bar = $('#modeBar');
+            bar.innerHTML = '';
+            modes.forEach(function(m) {
+                var btn = document.createElement('button');
+                btn.className   = 'mode-btn';
+                btn.textContent = m.label;
+                btn.dataset.key = m.key;
+                btn.addEventListener('click', function() {
+                    if (activeMode === m.key) return;
+                    activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
+                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                        b.classList.toggle('active', b.dataset.key === activeMode);
+                    });
+                    tick();
+                });
+                bar.appendChild(btn);
+            });
+        }
+
+        function applyData(d) {
+            if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
+
+            var rankEl    = $('#rankText');
+            var eloRight  = $('#eloRight');
+            var subRow    = $('#subRow');
+            var nextCont  = $('#nextContainer');
+            var sessEl    = $('#sessionText');
+
+            if (d.is_unreal) {
+                var m = d.rank_display.match(/^(#\d+)\s+(.+)$/);
+                if (m) {
+                    rankEl.innerHTML = '<span class="purple">' + m[1] + '</span> ' + m[2];
+                } else {
+                    rankEl.textContent = d.rank_display;
+                }
+
+                eloRight.textContent = d.elo_text || '-- ELO';
+
+                if (d.next_gap && d.next_pos) {
+                    nextCont.innerHTML =
+                        'Next: <span class="highlight">' + d.next_gap + ' ELO</span>' +
+                        ' to <span class="purple">#</span><span class="highlight">' + d.next_pos + '</span>';
+                } else {
+                    nextCont.innerHTML =
+                        'Next: <span class="highlight">-</span> to ' +
+                        '<span class="purple">#</span><span class="highlight">-</span>';
+                }
+
+                sessEl.textContent = d.session_text || '+0 ELO TODAY';
+                sessEl.className   = 'session-' + (d.session_sign || 'zero');
+                subRow.classList.remove('hidden');
+
+            } else {
+                rankEl.innerHTML = purpleNumeral(d.rank_display);
+                eloRight.textContent = (d.progression_pct !== null && d.progression_pct !== undefined)
+                    ? d.progression_pct + '%' : '-%';
+
+                if (d.pct_to_next !== null && d.pct_to_next !== undefined && d.next_rank_name) {
+                    nextCont.innerHTML =
+                        '<span class="highlight">' + d.pct_to_next + '%</span>' +
+                        ' TO ' + purpleNumeral(d.next_rank_name);
+                } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
+                    nextCont.innerHTML =
+                        '<span class="highlight">' + d.pct_to_next + '%</span> TO NEXT';
+                } else {
+                    nextCont.textContent = '-';
+                }
+
+                sessEl.textContent = d.session_text || '+0% TODAY';
+                sessEl.className   = 'session-' + (d.session_sign || 'zero');
+                subRow.classList.remove('hidden');
+            }
+
+            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
+
+            // OliTracker only publishes ELO for the ranks it tracks. Below that
+            // there is no ELO and no leaderboard row to measure a gap against,
+            // so hide those widgets rather than render empty placeholders.
+            var _eloNA = !!d.elo_unavailable;
+            ['#eloRight', '#subRow'].forEach(function(sel) {
+                var el = document.querySelector(sel);
+                if (el) el.classList.toggle('elo-na', _eloNA);
+            });
+            // No ELO means no gap either, so the gap row goes with it.
+            var _gapNA = _eloNA || !!d.gap_unavailable;
+            ['#nextContainer'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) {
+                    el.classList.toggle('elo-na', _gapNA);
+                });
+            });
+
+            var modes = d.modes_available;
+            if (modes && modes.length > 0) {
+                if (!activeMode) activeMode = d.active_mode_key || modes[0].key;
+                buildModeBar(modes);
+                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    b.classList.toggle('active', b.dataset.key === activeMode);
+                });
+            }
+        }
+
+        function tick() {
+            var url = '/data?window=session' + (activeMode ? '&mode=' + encodeURIComponent(activeMode) : '');
+            fetch(url, { cache: 'no-store' })
+                .then(function(r) { return r.json(); })
+                .then(applyData)
+                .catch(function() {});
+        }
+
+        tick();
+        setInterval(tick, POLL_MS);
+    </script>
+</body>
+</html>

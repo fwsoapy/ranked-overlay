@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortnite Rank Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800;900&family=Barlow:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --accent: #38bdf8;
+            --accent-rgb: 56, 189, 248;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
+        }
+
+        body {
+            background: transparent;
+            font-family: 'Barlow Condensed', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: flex-start;
+            height: 100vh;
+            padding: 0;
+        }
+
+        .wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+        }
+
+        .overlay-container {
+            position: relative;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            min-width: 600px;
+            overflow: hidden;
+            background: rgba(4, 10, 18, 0.90);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(var(--accent-rgb), 0.18);
+            box-shadow:
+                0 0 0 1px rgba(0,0,0,0.6),
+                0 4px 32px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .accent-bar {
+            width: 7px;
+            background: linear-gradient(180deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, black) 100%);
+            flex-shrink: 0;
+        }
+
+        .accent-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: -20px;
+            width: 0;
+            height: 0;
+            border-top: 0 solid transparent;
+            border-bottom: 300px solid transparent;
+            border-left: 20px solid color-mix(in srgb, var(--accent) 70%, black);
+            opacity: 0.35;
+            pointer-events: none;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 14px 22px 14px 24px;
+            gap: 0;
+        }
+
+        .top-row {
+            display: flex;
+            align-items: baseline;
+            gap: 14px;
+            margin-bottom: 6px;
+        }
+
+        .top-divider {
+            font-weight: 300;
+            font-size: 34px;
+            color: rgba(var(--accent-rgb), 0.4);
+            align-self: center;
+        }
+
+        .elo-group {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-left: auto;
+        }
+
+        .rank-badge {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .rank-number {
+            font-weight: 900;
+            font-size: 42px;
+            color: var(--accent);
+            letter-spacing: -0.01em;
+            line-height: 1;
+        }
+
+        .rank-label {
+            font-weight: 900;
+            font-size: 42px;
+            color: #ffffff;
+            letter-spacing: 0.02em;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+
+        .elo-value {
+            font-weight: 900;
+            font-size: 42px;
+            letter-spacing: 0.02em;
+            line-height: 1;
+            text-transform: uppercase;
+            color: var(--accent);
+            text-shadow:
+                0 0 20px rgba(var(--accent-rgb), 0.7),
+                0 0 40px rgba(var(--accent-rgb), 0.3);
+        }
+
+        .prog-group {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+        }
+
+        .prog-group.visible { display: flex; }
+
+        .prog-pct {
+            font-weight: 900;
+            font-size: 38px;
+            color: var(--accent);
+            letter-spacing: 0.02em;
+            line-height: 1;
+            text-shadow:
+                0 0 20px rgba(var(--accent-rgb), 0.7),
+                0 0 40px rgba(var(--accent-rgb), 0.3);
+        }
+
+        .prog-track {
+            width: 90px;
+            height: 8px;
+            background: rgba(var(--accent-rgb), 0.15);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .prog-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, black));
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        .divider {
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg,
+                rgba(var(--accent-rgb),0.5) 0%,
+                rgba(var(--accent-rgb),0.1) 60%,
+                transparent 100%);
+            margin-bottom: 8px;
+        }
+
+        .mid-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 40px;
+        }
+
+        .next-value {
+            font-weight: 800;
+            font-size: 22px;
+            letter-spacing: 0.04em;
+            color: var(--accent-light);
+            text-transform: uppercase;
+            white-space: nowrap;
+            visibility: visible;
+        }
+
+        .next-value.hidden { visibility: hidden; }
+        .next-value .hl { color: #fff; }
+
+        .session-pill {
+            font-weight: 800;
+            font-size: 18px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 4px 12px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .session-pos  { color: #3ddc68; border-color: rgba(61,220,104,0.3);  background: rgba(61,220,104,0.08); }
+        .session-neg  { color: #ff4a5e; border-color: rgba(255,74,94,0.3);   background: rgba(255,74,94,0.08); }
+        .session-zero { color: #fff; }
+
+        .stats-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .stat-chip {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-chip .s-label {
+            font-family: 'Barlow', sans-serif;
+            font-weight: 600;
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            line-height: 1;
+        }
+
+        .stat-chip .s-value {
+            font-weight: 800;
+            font-size: 20px;
+            letter-spacing: 0.02em;
+            color: #ffffff;
+            line-height: 1;
+        }
+
+        .creator-row {
+            font-weight: 800;
+            font-size: 26px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            display: flex;
+            align-items: center;
+        }
+
+        .stat-sep {
+            width: 1px;
+            height: 30px;
+            background: rgba(var(--accent-rgb),0.2);
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
+        }
+
+        .mode-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            width: 100%;
+            margin-top: 50px;
+        }
+
+        .mode-btn {
+            font-family: 'Barlow', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            color: rgba(220, 220, 220, 0.55);
+            background: rgba(20, 20, 20, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 13px 18px;
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+            text-align: center;
+            transition: color 0.12s, background 0.12s, border-color 0.12s;
+        }
+
+        .mode-btn:hover {
+            color: rgba(255, 255, 255, 0.90);
+            background: rgba(40, 40, 40, 0.95);
+            border-color: rgba(255, 255, 255, 0.20);
+        }
+
+        .mode-btn.active {
+            color: #ffffff;
+            background: rgba(55, 55, 55, 0.98);
+            border-color: rgba(255, 255, 255, 0.30);
+        }
+    
+        #codeInput.mode-btn {
+            text-align: left;
+            cursor: text;
+        }
+
+        #codeInput.mode-btn::placeholder {
+            color: rgba(220, 220, 220, 0.35);
+        }
+        /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
+        .elo-na { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="overlay-container">
+            <div class="accent-bar"></div>
+            <div class="content">
+
+                <div class="top-row">
+                    <div class="rank-badge">
+                        <span class="rank-number" id="rankNumber">#-</span>
+                        <span class="rank-label" id="rankLabel">UNREAL</span>
+                    </div>
+                    <span class="top-divider" id="topDivider">|</span>
+                    <div class="elo-group" id="eloGroup">
+                        <div class="elo-value" id="eloText">-- ELO</div>
+                        <div class="session-pill session-zero" id="sessionText">+0 ELO TODAY</div>
+                    </div>
+                    <div class="prog-group" id="progGroup">
+                        <div class="prog-track">
+                            <div class="prog-fill" id="progFill" style="width:0%"></div>
+                        </div>
+                        <div class="prog-pct" id="progPct">0%</div>
+                        <div class="session-pill session-zero" id="sessionText2">+0% TODAY</div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="mid-row">
+                    <span class="next-value hidden" id="nextRow">
+                        <span id="nextLabel">NEXT</span> <span class="hl" id="nextGap">-</span><span id="nextUnit"> ELO</span> <span id="nextArrow">&rarr;</span> <span class="hl" id="nextPos">#-</span>
+                    </span>
+                    <div class="stats-row" id="statsRow">
+                        <div class="stat-chip">
+                            <span class="s-label">K/D</span>
+                            <span class="s-value" id="seasonKd">-</span>
+                        </div>
+                        <div class="stat-sep"></div>
+                        <div class="stat-chip">
+                            <span class="s-label">WIN%</span>
+                            <span class="s-value" id="seasonWr">-%</span>
+                        </div>
+                        <div class="stat-sep"></div>
+                        <div class="stat-chip">
+                            <span class="s-label">KILLS</span>
+                            <span class="s-value" id="seasonKills">-</span>
+                        </div>
+                        <div class="stat-sep"></div>
+                        <div class="stat-chip">
+                            <span class="s-label">WINS</span>
+                            <span class="s-value" id="seasonWins">-</span>
+                        </div>
+                    </div>
+                    <div class="creator-row" id="creatorRow"></div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="error-text" id="errorText" style="display:none"></div>
+        <div class="mode-bar" id="modeBar"></div>
+        <div class="mode-bar" id="displayToggleBar">
+            <button class="mode-btn" id="statsToggleBtn">Stats</button>
+            <button class="mode-btn" id="codeToggleBtn">Creator Code</button>
+            <input class="mode-btn" id="codeInput" type="text" placeholder="Enter creator code" style="display:none;">
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
+        var POLL_MS      = __POLL_MS__;
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
+        var modeBarBuilt = false;
+
+        function $(s) { return document.querySelector(s); }
+
+        var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
+        // localStorage is shared by every overlay on localhost, so namespace the
+        // keys per design and gate them on a signature of the server's config.
+        // That way the wizard's choice (stats vs. code) and the configured code
+        // always win on first load, and only an in-browser toggle for THIS
+        // overlay persists, instead of one typed code bleeding across overlays.
+        var FN_NS  = "Wide";
+        var K_MODE = 'fn_display_mode_' + FN_NS;
+        var K_CODE = 'fn_creator_code_' + FN_NS;
+        var K_SIG  = 'fn_config_sig_' + FN_NS;
+
+        var displayMode, creatorCode;
+        if (localStorage.getItem(K_SIG) === INITIAL_CREATOR_CODE) {
+            displayMode = localStorage.getItem(K_MODE) || (INITIAL_CREATOR_CODE ? 'code' : 'stats');
+            var _savedCode = localStorage.getItem(K_CODE);
+            creatorCode = (_savedCode === null) ? INITIAL_CREATOR_CODE : _savedCode;
+        } else {
+            displayMode = INITIAL_CREATOR_CODE ? 'code' : 'stats';
+            creatorCode = INITIAL_CREATOR_CODE;
+            localStorage.setItem(K_SIG, INITIAL_CREATOR_CODE);
+            localStorage.setItem(K_MODE, displayMode);
+            localStorage.setItem(K_CODE, creatorCode);
+        }
+
+        function renderCreatorText() {
+            var el = $('#creatorRowText') || $('#creatorRow');
+            el.textContent = creatorCode ? ('Use Code ' + creatorCode + ' #ad') : '';
+        }
+
+        function applyDisplayMode() {
+            var statsEl = $('#statsRow');
+            var codeEl  = $('#creatorRow');
+            var input   = $('#codeInput');
+            if (displayMode === 'code') {
+                statsEl.style.display = 'none';
+                codeEl.style.display  = '';
+                input.style.display   = '';
+            } else {
+                statsEl.style.display = '';
+                codeEl.style.display  = 'none';
+                input.style.display   = 'none';
+            }
+            $('#statsToggleBtn').classList.toggle('active', displayMode === 'stats');
+            $('#codeToggleBtn').classList.toggle('active', displayMode === 'code');
+        }
+
+        $('#statsToggleBtn').addEventListener('click', function() {
+            displayMode = 'stats';
+            localStorage.setItem(K_MODE, displayMode);
+            applyDisplayMode();
+        });
+        $('#codeToggleBtn').addEventListener('click', function() {
+            displayMode = 'code';
+            localStorage.setItem(K_MODE, displayMode);
+            applyDisplayMode();
+        });
+        $('#codeInput').addEventListener('input', function(e) {
+            creatorCode = e.target.value;
+            localStorage.setItem(K_CODE, creatorCode);
+            renderCreatorText();
+        });
+        $('#codeInput').value = creatorCode || '';
+        renderCreatorText();
+        applyDisplayMode();
+
+        function buildModeBar(modes) {
+            if (modeBarBuilt) return;
+            modeBarBuilt = true;
+            var bar = $('#modeBar');
+            bar.innerHTML = '';
+            modes.forEach(function(m) {
+                var btn = document.createElement('button');
+                btn.className   = 'mode-btn';
+                btn.textContent = m.label;
+                btn.dataset.key = m.key;
+                btn.addEventListener('click', function() {
+                    if (activeMode === m.key) return;
+                    activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
+                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                        b.classList.toggle('active', b.dataset.key === activeMode);
+                    });
+                    tick();
+                });
+                bar.appendChild(btn);
+            });
+        }
+
+        function splitRankDisplay(rd, isUnreal) {
+            if (!rd) return { num: '', label: 'UNREAL' };
+            if (isUnreal) {
+                var m = rd.match(/^(#\d+)\s+(.+)$/);
+                if (m) return { num: m[1], label: m[2] };
+            }
+            return { num: '', label: rd };
+        }
+
+        function applyData(d) {
+            if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
+
+            var parts = splitRankDisplay(d.rank_display, d.is_unreal);
+            $('#rankNumber').textContent = parts.num;
+            $('#rankLabel').textContent  = parts.label;
+
+            var eloGroup  = $('#eloGroup');
+            var progGroup = $('#progGroup');
+            var nextRow   = $('#nextRow');
+
+            if (d.is_unreal) {
+                $('#eloText').textContent = d.elo_text || '-- ELO';
+                var sessEl = $('#sessionText');
+                sessEl.textContent = d.session_text || '+0 ELO TODAY';
+                sessEl.className   = 'session-pill session-' + (d.session_sign || 'zero');
+                eloGroup.classList.remove('visible');
+                eloGroup.style.display = '';
+                progGroup.classList.remove('visible');
+
+                var hasGap = d.next_gap && d.next_pos;
+                if (hasGap) {
+                    $('#nextLabel').textContent = 'NEXT';
+                    $('#nextGap').textContent   = d.next_gap;
+                    $('#nextUnit').textContent  = ' ELO';
+                    $('#nextArrow').textContent = '→';
+                    $('#nextPos').textContent   = '#' + d.next_pos;
+                    nextRow.classList.remove('hidden');
+                } else {
+                    nextRow.classList.add('hidden');
+                }
+            } else {
+                eloGroup.style.display = 'none';
+                if (d.progression_pct !== null && d.progression_pct !== undefined) {
+                    $('#progFill').style.width = d.progression_pct + '%';
+                    $('#progPct').textContent  = d.progression_pct + '%';
+                }
+                var sess2 = $('#sessionText2');
+                sess2.textContent = d.session_text || '+0% TODAY';
+                sess2.className   = 'session-pill session-' + (d.session_sign || 'zero');
+                progGroup.classList.add('visible');
+
+                if (d.next_gap && d.next_pos) {
+                    $('#nextLabel').textContent = '';
+                    $('#nextGap').textContent   = d.next_gap;
+                    $('#nextUnit').textContent  = '';
+                    $('#nextArrow').textContent = 'TO';
+                    $('#nextPos').textContent   = d.next_pos;
+                    nextRow.classList.remove('hidden');
+                } else {
+                    nextRow.classList.add('hidden');
+                }
+            }
+
+            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
+
+            // OliTracker only publishes ELO for the ranks it tracks. Below that
+            // there is no ELO and no leaderboard row to measure a gap against,
+            // so hide those widgets rather than render empty placeholders.
+            var _eloNA = !!d.elo_unavailable;
+            ['#eloGroup', '#topDivider', '#nextRow'].forEach(function(sel) {
+                var el = document.querySelector(sel);
+                if (el) el.classList.toggle('elo-na', _eloNA);
+            });
+            // No ELO means no gap either, so the gap row goes with it.
+            var _gapNA = _eloNA || !!d.gap_unavailable;
+            ['#nextRow'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) {
+                    el.classList.toggle('elo-na', _gapNA);
+                });
+            });
+
+            var modes = d.modes_available;
+            if (modes && modes.length > 0) {
+                if (!activeMode) {
+                    activeMode = d.active_mode_key || modes[0].key;
+                }
+                buildModeBar(modes);
+                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    b.classList.toggle('active', b.dataset.key === activeMode);
+                });
+            }
+        }
+
+        function tick() {
+            var url = '/data?window=session' + (activeMode ? '&mode=' + encodeURIComponent(activeMode) : '');
+            fetch(url, { cache: 'no-store' })
+                .then(function(r) { return r.json(); })
+                .then(applyData)
+                .catch(function() {});
+        }
+
+        tick();
+        setInterval(tick, POLL_MS);
+    </script>
+</body>
+</html>

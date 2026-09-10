@@ -1,0 +1,35 @@
+name: Build check
+
+# The design folders are generated from src/. If someone edits a generated
+# server.py directly, the next release quietly overwrites it -- so the only
+# way to catch that is to check on every push that the folders in the repo are
+# still exactly what src/ produces.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generated folders match src/
+        run: python tools/build.py --check
+
+      - name: Every design compiles
+        run: |
+          for design in Minimal Classic Sharp Wide Slash Rainbow Modern Pulse; do
+            python -m py_compile "$design/server.py"
+            python -m py_compile "wizard/templates/$design/server.py"
+          done
+          python -m py_compile wizard/wizard.py
+
+      - name: update.json is valid and consistent
+        run: python tools/check_manifest.py

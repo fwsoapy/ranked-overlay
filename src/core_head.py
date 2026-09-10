@@ -1,0 +1,1690 @@
+import ast
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+import datetime
+import threading
+import urllib.request
+import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
+
+# ---------------------------------------------------------------------------
+# Settings
+#
+# You do not have to edit this file. Your settings live in config.json, right
+# next to it, and that is the file updates never touch. If config.json is not
+# there yet, the overlay writes one the first time it runs, seeded from the
+# values just below -- so an install that was set up by editing this file the
+# old way carries straight over without you doing anything.
+#
+# The literals below are seeds and fallbacks only. Once config.json exists, it
+# wins, and editing them here does nothing.
+# ---------------------------------------------------------------------------
+
+EPIC_USERNAME    = "YourUsername"
+EPIC_ACCOUNT_ID  = "your-account-id-here"
+CREATOR_CODE     = ""
+API_BASE         = "https://olitracker.com/api"
+PORT             = 8888
+POLL_SECONDS     = 30      # how often the server asks OliTracker for new data
+OVERLAY_POLL_MS  = 30000   # how often the browser page asks the server
+
+RANKED_MODE_HINT   = ""
+RANKED_MODE_KEY    = ""
+ENABLE_NEXT_LOOKUP = True
+
+# The overlay keeps itself current: it asks this repo what the newest build is
+# on startup and once a day after that, and offers to install it. See the
+# updater section further down for exactly what it does and does not do.
+#
+# AUTO_UPDATE accepts three settings:
+#   "prompt"  ask first, and install if you say yes            (default)
+#   "silent"  install newer versions without asking
+#   "off"     never check, never update
+VERSION              = "2.2.0"
+DESIGN               = "__DESIGN__"
+AUTO_UPDATE          = "prompt"
+UPDATE_REPO          = "fwsoapy/ranked-overlay"
+UPDATE_BRANCH        = "main"
+UPDATE_CHECK_SECONDS = 86400
+
+SESSION_START = int(time.time())
+
+
+# ---------------------------------------------------------------------------
+# config.json
+#
+# Everything a person actually sets lives in config.json next to this file.
+# Keeping it out of the code is what makes updating safe: a new version replaces
+# server.py wholesale and never has to reach into it to preserve anything.
+#
+# On first run, if there is no config.json, one is written from the module-level
+# values above. For an install that was configured the old way -- by editing
+# server.py -- those values *are* that person's settings, so the migration is
+# automatic and lossless. It happens exactly once.
+# ---------------------------------------------------------------------------
+
+CONFIG_FILENAME = "config.json"
+
+# key in config.json -> module-level global it feeds
+CONFIG_KEYS = {
+    "epic_username":        "EPIC_USERNAME",
+    "epic_account_id":      "EPIC_ACCOUNT_ID",
+    "creator_code":         "CREATOR_CODE",
+    "api_base":             "API_BASE",
+    "port":                 "PORT",
+    "poll_seconds":         "POLL_SECONDS",
+    "overlay_poll_ms":      "OVERLAY_POLL_MS",
+    "ranked_mode_hint":     "RANKED_MODE_HINT",
+    "ranked_mode_key":      "RANKED_MODE_KEY",
+    "enable_next_lookup":   "ENABLE_NEXT_LOOKUP",
+    "auto_update":          "AUTO_UPDATE",
+    "update_repo":          "UPDATE_REPO",
+    "update_branch":        "UPDATE_BRANCH",
+    "update_check_seconds": "UPDATE_CHECK_SECONDS",
+}
+
+# Colours are optional. Unset means "whatever this design ships with".
+# accent_rgb is not listed: it is derived from accent, never stored.
+COLOR_KEYS = ("accent", "stat_label_color")
+
+
+def _config_path():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_FILENAME)
+
+
+def _normalise_auto_update(value):
+    """Accept the old True/False as well as the current three settings."""
+    if value is True:
+        return "silent"        # what True used to mean
+    if value is False:
+        return "off"
+    value = str(value or "").strip().lower()
+    return value if value in ("prompt", "silent", "off") else "prompt"
+
+
+def _coerce(key, value, fallback):
+    """Keep a hand-edited config.json from taking the overlay down."""
+    try:
+        if key == "auto_update":
+            return _normalise_auto_update(value)
+        if isinstance(fallback, bool):
+            return bool(value)
+        if isinstance(fallback, int):
+            return int(value)
+        return str(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _seed_config():
+    """The settings this file was shipped or hand-edited with."""
+    data = {key: globals()[name] for key, name in CONFIG_KEYS.items()}
+    data["auto_update"] = _normalise_auto_update(data["auto_update"])
+    return data
+
+
+def load_config():
+    """Read config.json, writing a seeded one first if it is not there yet."""
+    path = _config_path()
+    seed = _seed_config()
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            stored = json.load(f)
+        if not isinstance(stored, dict):
+            raise ValueError("config.json is not an object")
+    except FileNotFoundError:
+        save_config(seed)
+        return dict(seed)
+    except (OSError, ValueError) as e:
+        # A broken config.json is not a reason to refuse to start. Keep the
+        # damaged file so it can be looked at, and carry on with the defaults.
+        print(f"[overlay] config.json could not be read ({e}); using defaults")
+        try:
+            os.replace(path, path + ".broken")
+        except OSError:
+            pass
+        save_config(seed)
+        return dict(seed)
+
+    merged = dict(seed)
+    for key, value in stored.items():
+        if key in CONFIG_KEYS:
+            merged[key] = _coerce(key, value, seed[key])
+        elif key in COLOR_KEYS:
+            merged[key] = value
+
+    # Deliberately not written back. Anything missing falls back to the default
+    # in memory, so a config.json someone wrote by hand stays as short as they
+    # left it instead of growing every setting the overlay happens to have.
+    return merged
+
+
+def save_config(data):
+    path = _config_path()
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.write("\n")
+        os.replace(tmp, path)
+    except OSError as e:
+        print(f"[overlay] could not write config.json: {e}")
+
+
+CONFIG = load_config()
+
+# Feed the settings back into the names the rest of the file already uses, so
+# there is exactly one way to read a setting no matter where it came from.
+for _key, _name in CONFIG_KEYS.items():
+    globals()[_name] = CONFIG[_key]
+del _key, _name
+
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept":          "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer":         "https://olitracker.com/",
+}
+
+_lock               = threading.Lock()
+_start_elos         = {}
+_start_progressions = {}
+_last_raw           = None
+_last_modes         = []
+_season_fp          = None
+
+# mode key -> {"elo", "next_pos", "gap"}. Filled by the poll loop for every
+# mode, so snapshot() can answer for whichever mode the overlay asks about
+# without doing a leaderboard fetch on the request path.
+_elo_lookup         = {}
+
+_lb_lock            = threading.Lock()
+_lb_cache           = {}   # (slug, page) -> (fetched_at, rows)
+
+STATE = {
+    "ok":              False,
+    "username":        EPIC_USERNAME,
+    "rank_number":     None,
+    "rank_label":      None,
+    "elo":             None,
+    "is_unreal":       False,
+    "next_position":   None,
+    "elo_to_next":     None,
+    "session_delta":   0,
+    "prog_delta":      0,
+    "updated_at":      None,
+    "error":           "starting up",
+    "active_mode_key": "",
+    "modes_available": [],
+}
+
+DIVISION_NAMES = {
+    0:  "BRONZE I",    1:  "BRONZE II",    2:  "BRONZE III",
+    3:  "SILVER I",    4:  "SILVER II",    5:  "SILVER III",
+    6:  "GOLD I",      7:  "GOLD II",      8:  "GOLD III",
+    9:  "PLATINUM I", 10:  "PLATINUM II", 11:  "PLATINUM III",
+    12: "DIAMOND I",  13:  "DIAMOND II",  14:  "DIAMOND III",
+    15: "ELITE I",    16:  "ELITE II",    17:  "ELITE III",
+    18: "CHAMPION I", 19:  "CHAMPION II", 20:  "CHAMPION III",
+    21: "UNREAL",
+}
+
+MODE_LABELS = {
+    "ranked-br-combined":      "BR",
+    "ranked_blastberry_build": "Reload",
+    "ranked_squareclub":       "Boxfights",
+    "ranked-squareclub":       "Boxfights",
+    "ranked-rocket-racing":    "Racing",
+    "delmar-competitive":      "Blitz",
+}
+
+# Which stats bucket belongs to which ranked mode. `None` means OliTracker
+# publishes no bucket for that mode at all, so its stats come from
+# match_history instead. Keys are normalised, so - and _ spellings both hit.
+MODE_STAT_PATH = {
+    "ranked-br-combined":      ("ranked",),
+    "ranked-blastberry-build": ("reload",),
+    "ranked-squareclub":       None,   # no bucket of its own, counted from history
+    "delmar-competitive":      None,
+    "ranked-rocket-racing":    None,
+}
+
+# OliTracker publishes 100 rows a page and, today, stops around the top
+# 10,000 of each mode. That ceiling is never assumed: a page either comes back
+# with rows or it does not, so if a future season publishes a deeper board the
+# overlay picks the extra ELO up on its own.
+LEADERBOARD_PAGE_SIZE     = 100
+LEADERBOARD_PAGE_LIMIT    = 100000  # sanity stop, not a real ceiling
+LEADERBOARD_TTL           = 60      # seconds; keeps pace with POLL_SECONDS
+LEADERBOARD_PAGES_BACK    = 4       # pages to walk up through an ELO tie
+
+def _state_dir():
+    """Where the daily ELO baseline is kept.
+
+    Deliberately not the overlay folder -- that stays as the four files it
+    ships with, so nothing extra shows up next to server.py.
+    """
+    base = (
+        os.environ.get("LOCALAPPDATA")
+        or os.environ.get("APPDATA")
+        or tempfile.gettempdir()
+    )
+    return os.path.join(base, "FortniteRankOverlay")
+
+
+_WINDOW_SECS = {"12h": 43200, "24h": 86400}
+
+_EMPTY_STATS = {
+    "wins": 0, "losses": 0, "kills": 0,
+    "matches": 0, "kd": None, "wr": None,
+}
+
+
+def _http_get_json(url, timeout=15):
+    req = urllib.request.Request(url, headers=BROWSER_HEADERS)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read().decode("utf-8", "replace")
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        snippet = raw[:200].replace("\n", " ").replace("\r", " ")
+        raise ValueError("response was not JSON: " + snippet)
+
+
+def _path_str(path):
+    return "/".join(str(p) for p in path).lower()
+
+
+def _normalize_mode_key(key):
+    """OliTracker spells mode keys with both - and _; fold them together."""
+    return str(key or "").lower().replace("_", "-")
+
+
+def _num(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return int(round(v))
+    return None
+
+
+def _unreal_placement(obj):
+    """Current Unreal leaderboard rank.
+
+    OliTracker calls this field `current_unreal_placement`; older responses
+    used `unreal_placement`, so accept either.
+    """
+    if not isinstance(obj, dict):
+        return None
+    v = _num(obj.get("current_unreal_placement"))
+    return v if v is not None else _num(obj.get("unreal_placement"))
+
+
+def division_name(div):
+    if div is None:
+        return None
+    return DIVISION_NAMES.get(div, f"DIVISION {div}")
+
+
+# Words that describe how a playlist is packaged rather than what it is, so
+# they get dropped when naming a button for a mode we have not seen before.
+_LABEL_NOISE = {"ranked", "combined", "build", "competitive", "playlist"}
+
+
+def _mode_label(key):
+    """A short button label for a ranked mode.
+
+    Unrecognised keys are tidied up rather than printed raw, so a playlist
+    added in a future season still gets a readable button instead of
+    "ranked-og-combined" sprawling across the mode bar.
+    """
+    if key in MODE_LABELS:
+        return MODE_LABELS[key]
+    lower = key.lower()
+    if "squareclub" in lower or "boxfight" in lower:
+        return "Boxfights"
+    if "blastberry" in lower or "reload" in lower:
+        return "Reload"
+    if "br-combined" in lower or "br_combined" in lower:
+        return "BR"
+    if "rocket" in lower or "racing" in lower:
+        return "Racing"
+    words = [w for w in re.split(r"[-_\s]+", lower) if w and w not in _LABEL_NOISE]
+    if not words:
+        return key
+    return " ".join(w.upper() if len(w) <= 3 else w.capitalize() for w in words)
+
+
+def _looks_like_ranked_mode(d):
+    return (
+        isinstance(d, dict)
+        and ("elo" in d or "current_unreal_placement" in d or "unreal_placement" in d)
+        and ("division" in d or "promotion_progression" in d)
+    )
+
+
+def find_ranked_modes(data):
+    modes = []
+    if isinstance(data, dict):
+        rs = data.get("ranked_stats")
+        if isinstance(rs, dict):
+            for key, obj in rs.items():
+                if _looks_like_ranked_mode(obj):
+                    modes.append(((key,), obj))
+    if modes:
+        return modes
+
+    def walk(obj, path):
+        if isinstance(obj, dict):
+            if _looks_like_ranked_mode(obj):
+                modes.append((tuple(path), obj))
+            for k, v in obj.items():
+                if k == "match_history":
+                    continue
+                walk(v, path + [str(k)])
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                walk(v, path + [i])
+
+    walk(data, [])
+    return modes
+
+
+def pick_mode_by_key(modes, mode_key):
+    for path, obj in modes:
+        if _path_str(path) == mode_key.lower():
+            return path, obj
+    return None, None
+
+
+def _mode_rank_key(item):
+    """Sort key for "which mode should the overlay lead with" (higher = better).
+
+    The headline number on the overlay is the ELO, so a mode whose ELO can
+    actually be resolved outranks one that only has a placement. Ordering by
+    raw dict order used to hand the default to Reload -- placement #562k, no
+    published ELO -- which is why the overlay opened with an empty ELO row.
+    """
+    path, obj = item
+    key = _path_str(path)
+    with _lock:
+        resolved = (_elo_lookup.get(key) or {}).get("elo")
+    elo = _num(obj.get("elo"))
+    if elo is None:
+        elo = resolved
+    placed = _unreal_placement(obj)
+    div    = _num(obj.get("division")) or 0
+    return (
+        1 if elo is not None else 0,
+        div,
+        -placed if placed is not None else 0,   # better (lower) placement wins
+        elo or 0,
+    )
+
+
+def pick_best_mode(modes):
+    if not modes:
+        return None, None
+    hint = RANKED_MODE_HINT.strip().lower()
+    if hint:
+        for path, obj in modes:
+            if hint in _path_str(path):
+                return path, obj
+    return max(modes, key=_mode_rank_key)
+
+
+def extract_elo(mode_obj):
+    """The mode's real ELO from the stats endpoint, or None.
+
+    OliTracker returns `elo: null` here for this account on every mode, so an
+    Unreal mode's ELO is filled in from the leaderboard instead (mode_view).
+    Below Unreal there is no ELO at all -- promotion_progression is a
+    percentage and is reported on its own, never dressed up as an ELO score.
+    """
+    return _num(mode_obj.get("elo"))
+
+
+def extract_label(mode_obj):
+    if _unreal_placement(mode_obj) is not None:
+        return "UNREAL"
+    return division_name(_num(mode_obj.get("division")))
+
+
+def extract_placement(mode_obj):
+    return _unreal_placement(mode_obj)
+
+
+def _progress_points(mode_obj):
+    """Rank progress on a continuous scale (division * 100 + progression).
+
+    promotion_progression restarts at ~0 on promotion, so comparing it against
+    a baseline taken in the previous division reads a rank-up as a big loss.
+    Folding the division in keeps the number monotonic across the boundary.
+    Returns None for Unreal, which is measured in ELO instead.
+    """
+    if _unreal_placement(mode_obj) is not None:
+        return None
+    prog = _num(mode_obj.get("promotion_progression"))
+    if prog is None:
+        return None
+    div = _num(mode_obj.get("division")) or 0
+    return div * 100 + prog
+
+
+def extract_progression(mode_obj):
+    if _unreal_placement(mode_obj) is not None:
+        return None
+    return _num(mode_obj.get("promotion_progression"))
+
+
+def _detect_ranking_id(data, preferred_mode_key=None):
+    if preferred_mode_key:
+        return preferred_mode_key
+    override = RANKED_MODE_KEY.strip()
+    if override:
+        return override
+    tally = {}
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd  = grp.get("ranked_data") or {}
+            rid = rd.get("ranking_id")
+            if rid:
+                tally[rid] = tally.get(rid, 0) + int(grp.get("matches", 0) or 0)
+    return max(tally, key=tally.get) if tally else None
+
+
+# Tokens that name a mode family rather than a stats bucket, so they must not
+# be matched against bucket names when guessing at an unfamiliar playlist.
+_BUCKET_STOPWORDS = {"ranked", "combined", "build", "br", "all", "competitive"}
+
+
+def _mode_stat_path(ranking_id, available=None):
+    """Which stats bucket belongs to a ranked mode.
+
+    `available` is the set of bucket names OliTracker actually returned. A new
+    season can introduce a playlist this build has never heard of, so rather
+    than giving up, an unknown key is matched against the buckets on offer. If
+    nothing matches, the mode is counted from its own match history instead,
+    which is always correct even if it reaches back fewer days.
+    """
+    if not ranking_id:
+        return ("ranked",)
+    key = _normalize_mode_key(ranking_id)
+    if key in MODE_STAT_PATH:
+        return MODE_STAT_PATH[key]
+    label = _mode_label(ranking_id)
+    if label == "Reload":
+        return ("reload",)
+    if label == "BR":
+        return ("ranked",)
+    for token in re.split(r"[-_]", key):
+        if len(token) >= 2 and token not in _BUCKET_STOPWORDS and token in (available or ()):
+            return (token,)
+    return None
+
+
+def _stat_block(data, timeframe, ranking_id):
+    """The stats bucket for exactly one ranked mode, or None.
+
+    This must never fall back to another mode's bucket. OliTracker only emits a
+    `reload` bucket once the account has played Reload inside that timeframe,
+    and quietly borrowing `ranked` when it was missing is what made BR and
+    Reload report identical KD/WR/kills/wins.
+    """
+    try:
+        available = set(data["stats"][timeframe].keys())
+    except (KeyError, TypeError, AttributeError):
+        available = set()
+    path_key = _mode_stat_path(ranking_id, available)
+    if path_key is None:
+        return None
+    try:
+        block = data["stats"][timeframe]
+        for k in path_key:
+            block = block[k]
+        return block["both"]["overall"]
+    except (KeyError, TypeError):
+        return None
+
+
+def _stats_from_history(data, ranking_id):
+    total_wins = total_matches = total_kills = 0
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if _normalize_mode_key(rd.get("ranking_id")) != _normalize_mode_key(ranking_id):
+                continue
+            total_wins    += int(grp.get("wins",    0) or 0)
+            total_matches += int(grp.get("matches", 0) or 0)
+            total_kills   += int(grp.get("kills",   0) or 0)
+    losses = total_matches - total_wins
+    kd = round(total_kills / losses, 2) if losses > 0 else None
+    wr = round(total_wins / total_matches * 100, 1) if total_matches > 0 else None
+    return {"wins": total_wins, "losses": losses, "kills": total_kills, "matches": total_matches, "kd": kd, "wr": wr}
+
+
+def _seasonal_ranked_stats(data, ranking_id=None):
+    try:
+        blk = _stat_block(data, "seasonal", ranking_id)
+        if blk is None:
+            # No seasonal bucket for this mode: either the mode has none at all
+            # (Boxfights) or the account has not played it this season. Count
+            # its own matches instead of borrowing another mode's totals.
+            return _stats_from_history(data, ranking_id) if ranking_id else dict(_EMPTY_STATS)
+        wins    = int(blk.get("wins",           0) or 0)
+        matches = int(blk.get("matches_played", 0) or 0)
+        kills   = int(blk.get("kills",          0) or 0)
+        losses  = matches - wins
+        kd = round(kills / losses, 2) if losses > 0 else None
+        wr = round(wins / matches * 100, 1) if matches > 0 else None
+        return {"wins": wins, "losses": losses, "kills": kills, "matches": matches, "kd": kd, "wr": wr}
+    except Exception:
+        return dict(_EMPTY_STATS)
+
+
+def _lifetime_ranked_stats(data, ranking_id=None):
+    try:
+        blk = _stat_block(data, "lifetime", ranking_id)
+        if blk is None:
+            return dict(_EMPTY_STATS)
+        wins    = int(blk.get("wins",           0) or 0)
+        matches = int(blk.get("matches_played", 0) or 0)
+        kills   = int(blk.get("kills",          0) or 0)
+        losses  = matches - wins
+        kd = round(kills / losses, 2) if losses > 0 else None
+        wr = round(wins / matches * 100, 1) if matches > 0 else None
+        return {"wins": wins, "losses": losses, "kills": kills, "matches": matches, "kd": kd, "wr": wr}
+    except Exception:
+        return dict(_EMPTY_STATS)
+
+
+def compute_windowed_stats(data, window_spec, ranking_id=None):
+    if data is None:
+        return dict(_EMPTY_STATS)
+    if window_spec == "season":
+        return _seasonal_ranked_stats(data, ranking_id)
+    if window_spec == "lifetime":
+        return _lifetime_ranked_stats(data, ranking_id)
+
+    now = int(time.time())
+    cutoff = SESSION_START if window_spec == "session" else now - _WINDOW_SECS.get(window_spec, 86400)
+
+    rid = _detect_ranking_id(data, ranking_id)
+    total_wins = total_matches = total_kills = 0
+
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            if (grp.get("last_modified") or 0) < cutoff:
+                continue
+            rd = grp.get("ranked_data") or {}
+            if rid and rd.get("ranking_id") != rid:
+                continue
+            total_wins    += int(grp.get("wins",    0) or 0)
+            total_matches += int(grp.get("matches", 0) or 0)
+            total_kills   += int(grp.get("kills",   0) or 0)
+
+    losses = total_matches - total_wins
+    kd = round(total_kills / losses, 2) if losses > 0 else None
+    wr = round(total_wins / total_matches * 100, 1) if total_matches > 0 else None
+    return {"wins": total_wins, "losses": losses, "kills": total_kills, "matches": total_matches, "kd": kd, "wr": wr}
+
+
+# One leaderboard row: rank cell, the player's /stats/<account id> link, and
+# the ELO cell. Anchoring on the cell classes matters -- the old parser took
+# "the largest number in the row", which happily read digits out of player
+# names ("Twitch 666k2b" scored 6662 ELO).
+_LB_ROW  = re.compile(r"<tr[^>]*leaderboard-player-row.*?</tr>", re.S)
+_LB_RANK = re.compile(r"leaderboard-rank-cell[^\"]*\"[^>]*>\s*#?([\d,]+)", re.S)
+_LB_ACCT = re.compile(r"/stats/([0-9a-fA-F]{16,})")
+_LB_ELO  = re.compile(r"leaderboard-wins-cell.*?<p[^>]*>\s*([\d,]+)\s*</p>", re.S)
+
+
+def _int(text):
+    try:
+        return int(str(text).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_leaderboard_rows(html):
+    rows = []
+    for chunk in _LB_ROW.findall(html):
+        rank = _LB_RANK.search(chunk)
+        elo  = _LB_ELO.search(chunk)
+        if not rank or not elo:
+            continue
+        placement = _int(rank.group(1))
+        elo_value = _int(elo.group(1))
+        if placement is None or elo_value is None:
+            continue
+        acct = _LB_ACCT.search(chunk)
+        rows.append({
+            "placement":  placement,
+            "elo":        elo_value,
+            "account_id": acct.group(1).lower() if acct else None,
+        })
+    rows.sort(key=lambda r: r["placement"])
+    return rows
+
+
+def _http_get_text(url, timeout=15):
+    headers = dict(BROWSER_HEADERS)
+    headers["Accept"] = "text/html,application/xhtml+xml,*/*"
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def _leaderboard_page(slug, page):
+    """Rows of one leaderboard page, cached for LEADERBOARD_TTL seconds.
+
+    The poll loop runs every POLL_SECONDS; without the cache that would mean
+    re-downloading a ~180KB page from OliTracker several times a minute.
+    """
+    if page < 1 or page > LEADERBOARD_PAGE_LIMIT:
+        return []
+    key = (slug, page)
+    now = time.time()
+    with _lb_lock:
+        hit = _lb_cache.get(key)
+        if hit and now - hit[0] < LEADERBOARD_TTL:
+            return hit[1]
+
+    url = f"https://olitracker.com/ranked/{slug}"
+    if page > 1:
+        url += f"?page={page}"
+    try:
+        rows = _parse_leaderboard_rows(_http_get_text(url))
+    except Exception as e:
+        print(f"[overlay] leaderboard {slug} page {page} failed: {e}")
+        # Serve the stale copy rather than blanking the ELO on one bad fetch.
+        return hit[1] if hit else []
+
+    with _lb_lock:
+        _lb_cache[key] = (now, rows)
+    return rows
+
+
+def _slug_for_mode(path):
+    """Which OliTracker leaderboard page carries this mode's ELO, if any.
+
+    Unknown modes return None on purpose. Guessing "battle-royale" for anything
+    unrecognised would read a completely unrelated player's ELO off the wrong
+    board, which is worse than showing no ELO at all.
+    """
+    ps = _path_str(path)
+    if "squareclub" in ps or "boxfight" in ps:
+        return None   # OliTracker publishes no Boxfights leaderboard
+    if "reload" in ps or "blastberry" in ps:
+        if "zero" in ps or "zb" in ps or "nobuild" in ps:
+            return "reload-zb"
+        return "reload"
+    if "rocket" in ps or "racing" in ps:
+        return "rocket-racing"
+    if "og" in ps.split("-") or "og" in ps.split("_"):
+        return "og"
+    if "zero" in ps or "zb" in ps or "nobuild" in ps:
+        return "zero-build"
+    if "br-combined" in ps or "br_combined" in ps or "battle" in ps:
+        return "battle-royale"
+    return None
+
+
+def _find_own_row(slug, placement, account_id):
+    """The leaderboard row to read this account's ELO from.
+
+    Thousands of players tie on the same score up here, and the board reshuffles
+    within a tie block between renders, so the account's own row is not
+    dependably on the page its placement points at. The row *at* the placement
+    OliTracker reports is the stable answer -- an account sitting at placement N
+    has, by definition, the ELO shown at placement N. Matching the account id is
+    kept as a refinement for when it does land on the page.
+    """
+    page = (placement - 1) // LEADERBOARD_PAGE_SIZE + 1
+    rows = _leaderboard_page(slug, page)
+    if not rows:
+        return page, rows, None
+
+    acct = (account_id or "").lower()
+    if acct:
+        for row in rows:
+            if row["account_id"] == acct:
+                return page, rows, row
+
+    for row in rows:
+        if row["placement"] == placement:
+            return page, rows, row
+
+    nearest = min(rows, key=lambda r: abs(r["placement"] - placement))
+    return page, rows, nearest
+
+
+def lookup_leaderboard_elo(mode_path, placement, account_id=EPIC_ACCOUNT_ID):
+    """(own ELO, target placement, ELO gap) for an Unreal mode.
+
+    The stats endpoint reports `elo: null` for this account on every mode, so
+    the leaderboard is the only place the number exists. The target is the
+    nearest placement above that actually sits on a *higher* ELO: hundreds of
+    players tie on the same score, and "0 ELO to #9413" tells a streamer
+    nothing.
+    """
+    if not ENABLE_NEXT_LOOKUP or not placement or placement < 1:
+        return None, None, None
+    slug = _slug_for_mode(mode_path)
+    if slug is None:
+        return None, None, None
+
+    page, rows, me = _find_own_row(slug, placement, account_id)
+    if me is None:
+        return None, None, None
+
+    my_elo, my_place = me["elo"], me["placement"]
+
+    target = None
+    for step in range(LEADERBOARD_PAGES_BACK):
+        above = [r for r in rows if r["placement"] < my_place and r["elo"] > my_elo]
+        if above:
+            target = max(above, key=lambda r: r["placement"])
+            break
+        if page - 1 < 1 or step == LEADERBOARD_PAGES_BACK - 1:
+            break
+        page -= 1
+        rows = _leaderboard_page(slug, page)
+        if not rows:
+            break
+
+    if target is None:
+        return my_elo, None, None
+    return my_elo, target["placement"], target["elo"] - my_elo
+
+
+def _season_fingerprint(data):
+    """A number that only ever grows inside one season: total matches played."""
+    try:
+        return int(data["stats"]["seasonal"]["all"]["both"]["overall"]["matches_played"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _roll_season_if_needed(data):
+    """Clear today's baselines when Fortnite starts a new ranked season.
+
+    Season rollover wipes the seasonal totals and resets rank, so a baseline
+    taken last season would read as an enormous overnight loss. The tell is
+    seasonal matches collapsing, which cannot happen inside a season.
+
+    It has to be a collapse rather than any decrease. OliTracker recounting, or
+    answering with a half-built profile, can shave a few matches off the total,
+    and that must not be mistaken for a new season and wipe someone's counter
+    mid-stream. A real rollover drops the count to near zero.
+    """
+    global _season_fp
+    fp = _season_fingerprint(data)
+    if fp is None:
+        return
+    with _lock:
+        previous = _season_fp
+        _season_fp = fp
+        if previous is not None and fp * 2 < previous:
+            _start_elos.clear()
+            _start_progressions.clear()
+        else:
+            previous = None
+    if previous is not None:
+        print(f"[overlay] new season detected ({previous} -> {fp} matches) - counters re-baselined")
+
+
+def _record_baseline(mode_key, elo, points):
+    with _lock:
+        if elo is not None and mode_key not in _start_elos:
+            _start_elos[mode_key] = elo
+        if points is not None and mode_key not in _start_progressions:
+            _start_progressions[mode_key] = points
+
+
+def _deltas(mode_key, elo, points):
+    """How much this mode has moved since the overlay was started.
+
+    Measured from the first reading taken after launch, not from midnight and
+    not from anything OliTracker publishes per calendar day. Close the overlay
+    and open it again and the count starts over, which is the point: it shows
+    what this session earned.
+    """
+    with _lock:
+        start_elo  = _start_elos.get(mode_key)
+        start_prog = _start_progressions.get(mode_key)
+    elo_delta  = (elo - start_elo)     if (elo    is not None and start_elo  is not None) else 0
+    prog_delta = (points - start_prog) if (points is not None and start_prog is not None) else 0
+    return elo_delta, prog_delta
+
+
+def _elo_series(data, ranking_id):
+    """Every (timestamp, ELO) point OliTracker records for one mode."""
+    points = []
+    want   = _normalize_mode_key(ranking_id) if ranking_id else None
+    for day in ((data or {}).get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if want and _normalize_mode_key(rd.get("ranking_id")) != want:
+                continue
+            elo = _num(rd.get("elo"))
+            ts  = grp.get("last_modified")
+            if elo is not None and ts:
+                points.append((int(ts), elo))
+    points.sort()
+    return points
+
+
+def _earliest_day_start_elo(data, ranking_id):
+    want = _normalize_mode_key(ranking_id) if ranking_id else None
+    for day in reversed((data or {}).get("match_history") or []):
+        for key, value in (day.get("elo") or {}).items():
+            if want and _normalize_mode_key(key) != want:
+                continue
+            start = _num((value or {}).get("start"))
+            if start is not None:
+                return start
+    return None
+
+
+def windowed_elo_delta(data, window, current_elo, ranking_id=None):
+    """ELO gained over the last 12h/24h, or None when history is too thin."""
+    if current_elo is None or data is None:
+        return None
+    secs = _WINDOW_SECS.get(window)
+    if secs is None:
+        return None
+    cutoff = int(time.time()) - secs
+    rid    = ranking_id or _detect_ranking_id(data)
+    points = _elo_series(data, rid)
+    if not points:
+        return None
+    baseline = None
+    for ts, elo in points:
+        if ts <= cutoff:
+            baseline = elo
+        else:
+            break
+    if baseline is None:
+        baseline = _earliest_day_start_elo(data, rid)
+        if baseline is None:
+            baseline = points[0][1]
+    return current_elo - baseline
+
+
+def mode_view(path, mode_obj):
+    """Everything the overlay shows for one ranked mode, resolved in one place.
+
+    refresh_once() and snapshot() used to each derive this themselves, which is
+    why the ELO gap only ever appeared for the mode refresh_once happened to
+    pick -- switching modes in the overlay dropped it.
+    """
+    key       = _path_str(path) if path else ""
+    label     = extract_label(mode_obj)
+    placement = extract_placement(mode_obj)
+    is_unreal = (label == "UNREAL")
+
+    with _lock:
+        cached = dict(_elo_lookup.get(key) or {})
+
+    elo = extract_elo(mode_obj)
+    if elo is None and is_unreal:
+        elo = cached.get("elo")
+
+    return {
+        "key":         key,
+        "label":       label,
+        "placement":   placement,
+        "progression": extract_progression(mode_obj),
+        "is_unreal":   is_unreal,
+        "elo":         elo,
+        "next_pos":    cached.get("next_pos"),
+        "next_gap":    cached.get("gap"),
+        "points":      _progress_points(mode_obj),
+    }
+
+
+def _set_error(msg):
+    with _lock:
+        STATE["error"] = msg
+        if STATE.get("elo") is None:
+            STATE["ok"] = False
+    print("[overlay] " + msg)
+
+
+def refresh_once():
+    global _last_raw, _last_modes
+    url = f"{API_BASE}/stats/{EPIC_ACCOUNT_ID}"
+    try:
+        data = _http_get_json(url)
+    except urllib.error.HTTPError as e:
+        _set_error(f"HTTP {e.code} from OliTracker")
+        return
+    except Exception as e:
+        _set_error(f"request failed: {e}")
+        return
+
+    _last_raw   = data
+    modes       = find_ranked_modes(data)
+    _last_modes = modes
+
+    if not modes:
+        _set_error("no ranked data found")
+        return
+
+    _roll_season_if_needed(data)
+
+    # Resolve ELO for every mode, not just the active one. The overlay's mode
+    # buttons can select a mode pick_best_mode() didn't choose, and snapshot()
+    # reads these results instead of scraping on the request path.
+    for mpath, mobj in modes:
+        mkey      = _path_str(mpath)
+        api_elo   = extract_elo(mobj)
+        placement = extract_placement(mobj)
+        lb_elo = next_pos = gap = None
+        if placement is not None:
+            lb_elo, next_pos, gap = lookup_leaderboard_elo(mpath, placement)
+        with _lock:
+            _elo_lookup[mkey] = {
+                "elo":      api_elo if api_elo is not None else lb_elo,
+                "next_pos": next_pos,
+                "gap":      gap,
+            }
+
+    # Best mode first, so the button order matches the mode the overlay opens on.
+    modes_available = []
+    for mpath, _mobj in sorted(modes, key=_mode_rank_key, reverse=True):
+        mkey = _path_str(mpath)
+        modes_available.append({"key": mkey, "label": _mode_label(mkey)})
+
+    # Baseline every mode so each one's "today" delta starts from a real
+    # number the first time the overlay switches to it.
+    for mpath, mobj in modes:
+        v = mode_view(mpath, mobj)
+        _record_baseline(v["key"], v["elo"], v["points"])
+
+    path, mode = pick_best_mode(modes)
+    v = mode_view(path, mode)
+    session_delta, prog_delta = _deltas(v["key"], v["elo"], v["points"])
+
+    with _lock:
+        STATE.update({
+            "ok":               True,
+            "rank_number":      v["placement"],
+            "rank_label":       v["label"],
+            "elo":              v["elo"],
+            "is_unreal":        v["is_unreal"],
+            "next_position":    v["next_pos"],
+            "elo_to_next":      v["next_gap"],
+            "session_delta":    session_delta,
+            "prog_delta":       prog_delta,
+            "updated_at":       int(time.time()),
+            "error":            None,
+            "active_mode_key":  v["key"],
+            "modes_available":  modes_available,
+        })
+
+    sess   = compute_windowed_stats(data, "session", v["key"])
+    kd_txt = f"{sess['kd']:.2f}"  if sess["kd"] is not None else "-"
+    wr_txt = f"{sess['wr']:.1f}%" if sess["wr"] is not None else "-"
+    ts = datetime.datetime.now().strftime("%H:%M:%S")
+    elo_str = f"{v['elo']} ELO" if v["elo"] is not None else (v["label"] or "-")
+    gap_str = f"   next #{v['next_pos']} in {v['next_gap']} ELO" if v["next_gap"] is not None else ""
+    print(f"[overlay] {ts}  {elo_str}  |  today {session_delta:+d}{gap_str}")
+    print(f"          session: {sess['wins']}W / {sess['losses']}L   KD {kd_txt}   WR {wr_txt}")
+
+
+# Keeping itself current
+#
+# Fortnite seasons come and go and OliTracker changes shape with them. Rather
+# than leaving everyone stranded on a build that slowly stops matching the API,
+# the overlay asks the repo what the current build is and offers to install it.
+#
+# What it will do:  read update.json and one server.py from UPDATE_REPO over
+#                   HTTPS, check it parses as a working overlay, back up the
+#                   file it replaces, and restart.
+# What it won't do: upload anything, touch config.json, run anything it
+#                   downloaded without parsing it first, or keep a version that
+#                   fails to come back up.
+#
+# The manifest lives at the repo root on UPDATE_BRANCH and looks like this:
+#
+#   {
+#     "latest":        "2.2.0",     newest build on offer
+#     "min_supported": "2.0.0",     anything older than this is refused a pass
+#     "ref":           "v2.2.0",    tag to download from
+#     "notes":         "one line shown in the prompt",
+#     "files":         ["server.py", "overlay.bat"]
+#   }
+#
+# min_supported is the "your version no longer works" lever. Leave it alone for
+# an ordinary release; raise it only when an old build genuinely cannot work any
+# more, because it locks people out until they update.
+
+MANIFEST_URL = ("https://raw.githubusercontent.com/{repo}/{branch}/update.json")
+UPDATE_TIMEOUT = 15
+UPDATABLE_FILES = ("server.py", "overlay.bat")
+
+# The designs the repo actually publishes. A build renamed or hand-made by
+# somebody else has nothing to download, so it is left alone.
+DESIGNS_WITH_TEMPLATES = ("Minimal", "Classic", "Sharp", "Wide",
+                          "Slash", "Rainbow", "Modern", "Pulse")
+
+
+def _parse_version(text):
+    parts = re.findall(r"\d+", str(text or ""))
+    return tuple(int(p) for p in parts[:3]) if parts else (0,)
+
+
+def _version_at_least(have, want):
+    return _parse_version(have) >= _parse_version(want)
+
+
+def _update_state_path(name):
+    return os.path.join(_state_dir(), name)
+
+
+def _read_json_file(path, default=None):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return default if default is not None else {}
+
+
+def _write_json_file(path, data):
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except OSError:
+        pass
+
+
+# Versions that were installed and did not come back up. Never offered again.
+def _bad_versions():
+    data = _read_json_file(_update_state_path("bad-versions.json"), [])
+    return set(data) if isinstance(data, list) else set()
+
+
+def _mark_bad_version(version):
+    bad = _bad_versions()
+    bad.add(str(version))
+    _write_json_file(_update_state_path("bad-versions.json"), sorted(bad))
+
+
+# A "not now" is remembered so the prompt does not reappear every restart for
+# the same version. A mandatory update ignores this entirely.
+def _skipped_versions():
+    data = _read_json_file(_update_state_path("skipped-versions.json"), [])
+    return set(data) if isinstance(data, list) else set()
+
+
+def _mark_skipped_version(version):
+    skipped = _skipped_versions()
+    skipped.add(str(version))
+    _write_json_file(_update_state_path("skipped-versions.json"), sorted(skipped))
+
+
+def fetch_manifest():
+    """The repo's update.json, or None if it cannot be read right now.
+
+    None means "no idea", never "you are up to date" and never "you are
+    blocked". A GitHub outage or a firewall must not be able to take everyone's
+    overlay down mid-stream, so every decision below treats None as "carry on".
+    """
+    url = MANIFEST_URL.format(repo=UPDATE_REPO, branch=UPDATE_BRANCH)
+    try:
+        text = _http_get_text(url, timeout=UPDATE_TIMEOUT)
+        data = json.loads(text)
+    except Exception:
+        return None
+    if not isinstance(data, dict) or not data.get("latest"):
+        return None
+    return data
+
+
+def _latest_version_tag():
+    """Fallback for when there is no manifest: the newest version tag.
+
+    This is what versions before 2.2 used. Kept so the overlay still has a way
+    to find an update if update.json is ever missing or malformed.
+    """
+    url = f"https://api.github.com/repos/{UPDATE_REPO}/tags?per_page=100"
+    headers = {"User-Agent": "fortnite-rank-overlay",
+               "Accept": "application/vnd.github+json"}
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=UPDATE_TIMEOUT) as r:
+        tags = json.loads(r.read().decode("utf-8", "replace"))
+    best = None
+    for tag in tags if isinstance(tags, list) else []:
+        name = (tag or {}).get("name") or ""
+        if not re.fullmatch(r"v?\d+(?:\.\d+)*", name):
+            continue
+        if best is None or _parse_version(name) > _parse_version(best):
+            best = name
+    return best
+
+
+def decide_update(manifest):
+    """What to do about the manifest we just read.
+
+    Returns (action, plan) where action is one of:
+        "none"       nothing to do
+        "optional"   a newer build exists; ask, and respect a no
+        "mandatory"  this build is below min_supported; ask, and a no means quit
+    """
+    none = ("none", {})
+    if AUTO_UPDATE == "off":
+        return none
+    if DESIGN not in DESIGNS_WITH_TEMPLATES:
+        return none                      # unknown design, nothing to fetch
+
+    if manifest is None:
+        # No manifest. Fall back to the old tag scan, and never block on it.
+        try:
+            tag = _latest_version_tag()
+        except Exception:
+            return none
+        if not tag or _version_at_least(VERSION, tag):
+            return none
+        manifest = {"latest": tag.lstrip("v"), "ref": tag}
+
+    latest = str(manifest.get("latest") or "").strip()
+    if not re.fullmatch(r"v?\d+(?:\.\d+){0,2}", latest):
+        # A manifest we cannot read is not grounds for doing anything, least of
+        # all for telling somebody their overlay no longer works.
+        return none
+    latest = latest.lstrip("v")
+
+    # ref becomes part of a URL, so it has to look like a tag and nothing else.
+    # The manifest comes from the repo over HTTPS, but a typo should fail here
+    # rather than turn into a request for some other path.
+    ref = str(manifest.get("ref") or ("v" + latest)).strip()
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", ref) or ref.startswith("."):
+        return none
+
+    plan = {
+        "version": latest,
+        "ref":     ref,
+        "notes":   str(manifest.get("notes") or "").strip(),
+        "files":   [f for f in (manifest.get("files") or ["server.py"])
+                    if f in UPDATABLE_FILES],
+    }
+
+    # min_supported is the lock-people-out lever, so it gets checked twice: it
+    # has to look like a version, and it cannot demand something newer than the
+    # build actually on offer -- that would block everyone with no way forward.
+    min_supported = str(manifest.get("min_supported") or "").strip().lstrip("v")
+    blocked = (
+        bool(re.fullmatch(r"\d+(?:\.\d+){0,2}", min_supported))
+        and _version_at_least(latest, min_supported)
+        and not _version_at_least(VERSION, min_supported)
+    )
+
+    if latest in _bad_versions():
+        # It was tried and it did not come back up. Do not offer it again, and
+        # do not lock anyone out over a version known to be broken.
+        return none
+    if _version_at_least(VERSION, latest) and not blocked:
+        return none
+    if blocked:
+        return ("mandatory", plan)
+    if latest in _skipped_versions():
+        return none
+    return ("optional", plan)
+
+
+# ---------------------------------------------------------------------------
+# Asking
+#
+# start.bat launches the overlay with pythonw, which has no console, so a
+# console prompt would be invisible. tkinter is part of the standard library
+# and works fine under pythonw, so the question is asked in a small dialog.
+# If tkinter is unavailable (a stripped Python, a non-Windows box), there is
+# nobody to ask: fall back to the sensible answer rather than hanging.
+# ---------------------------------------------------------------------------
+
+PROMPT_TIMEOUT_SECONDS = 120
+
+
+def _ask_dialog(title, message, yes_text, no_text, timeout=PROMPT_TIMEOUT_SECONDS):
+    """Show a two-button dialog. Returns True, False, or None on timeout."""
+    import tkinter as tk
+
+    answer = {"value": None}
+    root = tk.Tk()
+    root.title(title)
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+
+    frame = tk.Frame(root, padx=20, pady=16)
+    frame.pack()
+    tk.Label(frame, text=message, justify="left", wraplength=430).pack(anchor="w")
+
+    buttons = tk.Frame(frame, pady=12)
+    buttons.pack(anchor="e")
+
+    def close(value):
+        answer["value"] = value
+        root.destroy()
+
+    tk.Button(buttons, text=no_text, width=14,
+              command=lambda: close(False)).pack(side="right", padx=(8, 0))
+    tk.Button(buttons, text=yes_text, width=14, default="active",
+              command=lambda: close(True)).pack(side="right")
+
+    root.protocol("WM_DELETE_WINDOW", lambda: close(False))
+    root.bind("<Return>", lambda e: close(True))
+    root.bind("<Escape>", lambda e: close(False))
+    if timeout:
+        root.after(int(timeout * 1000), lambda: close(None))
+
+    root.update_idletasks()
+    x = (root.winfo_screenwidth() - root.winfo_width()) // 2
+    y = (root.winfo_screenheight() - root.winfo_height()) // 3
+    root.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+    root.mainloop()
+    return answer["value"]
+
+
+def ask_about_update(action, plan):
+    """Ask the person. Returns True to install, False to decline."""
+    if AUTO_UPDATE == "silent":
+        return True
+
+    notes = ("\n\n" + plan["notes"]) if plan["notes"] else ""
+
+    if action == "mandatory":
+        title = "Update required"
+        message = (
+            f"Fortnite Ranked Overlay {plan['version']} is out, and your version "
+            f"({VERSION}) no longer works.{notes}\n\n"
+            "Update now?"
+        )
+        yes, no = "Update now", "Close overlay"
+    else:
+        title = "Update available"
+        message = (
+            f"Fortnite Ranked Overlay {plan['version']} is available. "
+            f"You are on {VERSION}.{notes}\n\n"
+            "Your settings, colour and account ID all carry over.\n\n"
+            "Update now?"
+        )
+        yes, no = "Update now", "Not now"
+
+    try:
+        answer = _ask_dialog(title, message, yes, no)
+    except Exception:
+        # No GUI to ask with. A required update installs itself, since the
+        # alternative is an overlay that silently shows nothing; an optional
+        # one waits until there is someone to ask.
+        return action == "mandatory"
+
+    if answer is None:
+        # Nobody answered. Same reasoning as above.
+        return action == "mandatory"
+    return bool(answer)
+
+
+# ---------------------------------------------------------------------------
+# Installing
+# ---------------------------------------------------------------------------
+
+def _download_file(ref, name):
+    """One file of the new build, from the tagged copy of this design."""
+    folder = f"wizard/templates/{DESIGN}"
+    url = f"https://raw.githubusercontent.com/{UPDATE_REPO}/{ref}/{folder}/{name}"
+    return _http_get_text(url, timeout=30)
+
+
+def _validate_server(text):
+    if "OVERLAY_HTML" not in text or "def refresh_once" not in text:
+        raise ValueError("that download does not look like an overlay server")
+    ast.parse(text)               # refuse to install something that will not run
+
+
+def install_update(plan):
+    """Download the new build and put it in place. Returns the backup folder."""
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    downloaded = {}
+    for name in plan["files"]:
+        text = _download_file(plan["ref"], name)
+        if name == "server.py":
+            _validate_server(text)
+        downloaded[name] = text
+
+    if "server.py" not in downloaded:
+        raise ValueError("the update did not include a server.py")
+
+    backup_dir = _update_state_path(f"backup-{VERSION}")
+    os.makedirs(backup_dir, exist_ok=True)
+    for name in downloaded:
+        existing = os.path.join(here, name)
+        if os.path.exists(existing):
+            with open(existing, "rb") as f:
+                blob = f.read()
+            with open(os.path.join(backup_dir, name), "wb") as f:
+                f.write(blob)
+
+    for name, text in downloaded.items():
+        # CRLF, matching what the repo ships, so Notepad stays readable.
+        with open(os.path.join(here, name), "w", encoding="utf-8", newline="\r\n") as f:
+            f.write(text)
+
+    return backup_dir
+
+
+def _restore_backup(backup_dir):
+    here = os.path.dirname(os.path.abspath(__file__))
+    try:
+        for name in os.listdir(backup_dir):
+            with open(os.path.join(backup_dir, name), "rb") as f:
+                blob = f.read()
+            with open(os.path.join(here, name), "wb") as f:
+                f.write(blob)
+        return True
+    except OSError:
+        return False
+
+
+# How long a new build gets to come up before it is treated as broken. Startup
+# can legitimately take a while: the outgoing process may still be letting go of
+# the port, and _bind waits that out.
+HANDOVER_TIMEOUT = 90
+
+
+def _serving_version(port, timeout=3):
+    """The version answering on the port, or None if nothing is."""
+    try:
+        url = f"http://127.0.0.1:{port}/version"
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+    except Exception:
+        return None
+    return str(data.get("version") or "") or None
+
+
+def _hand_over(new_version, backup_dir, server=None):
+    """Start the freshly written file and make sure it actually comes up.
+
+    A download that parses can still fail at runtime. Rather than exiting and
+    hoping, this process releases the port, starts the new one, and waits to see
+    it answer. If it never does, the backup goes back and the version that broke
+    is remembered so it is never offered again.
+    """
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.py")
+    work_dir = os.path.dirname(script)
+
+    if server is not None:
+        # Free the port first, or the new process has nothing to bind to.
+        try:
+            server.shutdown()
+            server.server_close()
+        except Exception:
+            pass
+
+    def spawn():
+        # No creationflags: whatever console this process has (usually none,
+        # since start.bat launches with pythonw) is what the next one gets.
+        return subprocess.Popen([sys.executable, script], cwd=work_dir)
+
+    child = spawn()
+
+    deadline = time.time() + HANDOVER_TIMEOUT
+    while time.time() < deadline:
+        # Anything answering that is not still us means the handover worked.
+        # Not an exact match on new_version: a build that reports a slightly
+        # different number is still a working build, and rolling back over that
+        # would be worse than accepting it.
+        answering = _serving_version(PORT)
+        if answering is not None and answering != VERSION:
+            print(f"[overlay] {answering} is up.")
+            os._exit(0)
+        if child.poll() is not None and answering is None:
+            break                      # it died without ever serving
+        time.sleep(1)
+
+    print(f"[overlay] {new_version} did not come back up; rolling back to {VERSION}")
+    try:
+        child.terminate()
+    except Exception:
+        pass
+    _mark_bad_version(new_version)
+    if _restore_backup(backup_dir):
+        spawn()
+    else:
+        print(f"[overlay] could not restore automatically. The previous build is "
+              f"in {backup_dir} -- copy it back next to server.py.")
+    os._exit(1)
+
+
+# Set when a required update was offered and turned down. The overlay still
+# starts, so the browser source is not just blank, but it shows a notice
+# instead of rank data -- the numbers would be wrong or missing anyway.
+BLOCKED_BY_UPDATE = {}
+
+
+def check_for_update(server=None):
+    """One update check, start to finish. Returns True if it handed over."""
+    if AUTO_UPDATE == "off":
+        return False
+
+    action, plan = decide_update(fetch_manifest())
+    if action == "none":
+        return False
+
+    print(f"[overlay] version {plan['version']} is available (on {VERSION})")
+
+    if not ask_about_update(action, plan):
+        if action == "mandatory":
+            print(f"[overlay] {VERSION} is no longer supported. Get "
+                  f"{plan['version']} from https://github.com/{UPDATE_REPO}")
+            BLOCKED_BY_UPDATE.update(plan)
+            return False
+        _mark_skipped_version(plan["version"])
+        print("[overlay] left on the current version for now.")
+        return False
+
+    backup_dir = install_update(plan)
+    print(f"[overlay] installed {plan['version']}, previous build kept at {backup_dir}")
+    print("[overlay] restarting...")
+    _hand_over(plan["version"], backup_dir, server=server)
+    return True
+
+
+def update_loop(server=None):
+    """The daily re-check, after the one at startup."""
+    while AUTO_UPDATE != "off":
+        time.sleep(max(3600, UPDATE_CHECK_SECONDS))
+        try:
+            check_for_update(server=server)
+        except Exception as e:
+            # An update is a nice-to-have, never a reason to stop the overlay.
+            print(f"[overlay] update check skipped: {e}")
+
+
+def poll_loop():
+    refresh_once()
+    while True:
+        time.sleep(POLL_SECONDS)
+        refresh_once()
+
+
+def snapshot(window="session", mode_key=None):
+    with _lock:
+        s   = dict(STATE)
+        raw = _last_raw
+        mds = list(_last_modes)
+
+    if mode_key and mds:
+        path, mode = pick_mode_by_key(mds, mode_key)
+        if mode is None:
+            path, mode = pick_best_mode(mds)
+    else:
+        path, mode = pick_best_mode(mds) if mds else (None, None)
+
+    if mode is not None:
+        v = mode_view(path, mode)
+        delta, prog_delta = _deltas(v["key"], v["elo"], v["points"])
+    else:
+        v = {
+            "key":         "",
+            "label":       s.get("rank_label") or "",
+            "placement":   s.get("rank_number"),
+            "progression": None,
+            "is_unreal":   s.get("is_unreal", False),
+            "elo":         s.get("elo"),
+            "next_pos":    s.get("next_position"),
+            "next_gap":    s.get("elo_to_next"),
+            "points":      None,
+        }
+        delta      = s.get("session_delta", 0) or 0
+        prog_delta = s.get("prog_delta", 0) or 0
+
+    resolved_key = v["key"]
+    elo          = v["elo"]
+    label        = v["label"] or ""
+    placement    = v["placement"]
+    progression  = v["progression"]
+    is_unreal    = v["is_unreal"]
+    nxt          = v["next_pos"]
+    gap          = v["next_gap"]
+
+    season_stats = compute_windowed_stats(raw, "season", resolved_key or None)
+
+    # Answer for the mode that was actually asked about, not whichever one the
+    # poll loop last picked.
+    s["active_mode_key"] = resolved_key or s.get("active_mode_key", "")
+    s["rank_number"]     = placement
+    s["rank_label"]      = label
+    s["elo"]             = elo
+    s["session_delta"]   = delta
+
+    s["is_unreal"]       = is_unreal
+    s["elo_unavailable"] = bool(is_unreal and elo is None)
+    s["progression_pct"] = progression if not is_unreal else None
+    s["prog_delta"]      = prog_delta if not is_unreal else None
+    s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
+    s["elo_text"]        = f"{elo} ELO" if (is_unreal and elo is not None) else None
+
+    s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
+    s["season_wr"]    = f"{season_stats['wr']:.1f}%" if season_stats["wr"] is not None else "-%"
+    s["season_wins"]  = season_stats["wins"]
+    s["season_kills"] = season_stats["kills"]
+
+    next_div_name = None
+    if not is_unreal:
+        div = _num(mode.get("division")) if mode is not None else None
+        if div is not None and (div + 1) in DIVISION_NAMES:
+            next_div_name = division_name(div + 1)
+    s["next_rank_name"] = next_div_name
+
+    if is_unreal and nxt and gap is not None:
+        s["next_gap"] = str(gap)
+        s["next_pos"] = str(nxt)
+    elif is_unreal and nxt:
+        s["next_gap"] = None
+        s["next_pos"] = str(nxt)
+    elif not is_unreal and progression is not None:
+        # Designs that reuse the same "next" row below Unreal want the climb
+        # expressed as a percentage toward the next division.
+        s["next_gap"] = f"{100 - progression}%"
+        s["next_pos"] = next_div_name or "NEXT RANK"
+    else:
+        s["next_gap"] = None
+        s["next_pos"] = None
+
+    if is_unreal:
+        if window == "season":
+            s["session_text"] = f"+{elo} ALL SEASON" if elo is not None else "- ALL SEASON"
+            s["session_sign"] = "pos" if elo is not None else "zero"
+        elif window in ("12h", "24h"):
+            wd    = windowed_elo_delta(raw, window, elo, resolved_key or None)
+            label_str = "PAST 12H" if window == "12h" else "PAST 24H"
+            if wd is None:
+                s["session_text"] = f"+0 ELO {label_str}"
+                s["session_sign"] = "zero"
+            else:
+                sign = "+" if wd >= 0 else ""
+                s["session_text"] = f"{sign}{wd} ELO {label_str}"
+                s["session_sign"] = "pos" if wd > 0 else ("neg" if wd < 0 else "zero")
+        else:
+            sign = "+" if delta >= 0 else ""
+            s["session_text"] = f"{sign}{delta} ELO TODAY"
+            s["session_sign"] = "pos" if delta > 0 else ("neg" if delta < 0 else "zero")
+    else:
+        s["pct_to_next"] = (100 - progression) if progression is not None else None
+        sign = "+" if prog_delta >= 0 else ""
+        s["session_text"] = f"{sign}{prog_delta}% TODAY"
+        s["session_sign"] = "pos" if prog_delta > 0 else ("neg" if prog_delta < 0 else "zero")
+
+    s["gap_unavailable"] = bool(is_unreal and (s.get("next_gap") is None or s.get("next_pos") is None))
+    s["session_start"] = SESSION_START
+    s["window"]        = window
+    return s
+
+
+def debug_report():
+    out = []
+    out.append("Fortnite Ranked Overlay - debug")
+    out.append(f"username     : {EPIC_USERNAME}")
+    out.append(f"account      : {EPIC_ACCOUNT_ID}")
+    out.append(f"api          : {API_BASE}/stats/{EPIC_ACCOUNT_ID}")
+    out.append(f"session start: {datetime.datetime.fromtimestamp(SESSION_START):%Y-%m-%d %H:%M:%S} ({SESSION_START})")
+    out.append("")
+    out.append("CURRENT STATE")
+    s = snapshot()
+    for k in ("ok", "rank_number", "rank_label", "elo", "session_delta", "next_position", "elo_to_next", "updated_at", "error"):
+        out.append(f"  {k}: {s.get(k)}")
+    out.append("")
+    out.append("STATS ranking_id")
+    out.append(f"  {_detect_ranking_id(_last_raw) if _last_raw else None}")
+    out.append("")
+    out.append("SESSION STATS")
+    sess = compute_windowed_stats(_last_raw, "session")
+    for k, v in sess.items():
+        out.append(f"  {k}: {v}")
+    out.append("")
+    out.append("SEASON STATS")
+    seas = compute_windowed_stats(_last_raw, "season")
+    for k, v in seas.items():
+        out.append(f"  {k}: {v}")
+    out.append("")
+    out.append(f"ranked-mode candidates: {len(_last_modes)}")
+    for path, obj in _last_modes:
+        key  = _path_str(path)
+        v    = mode_view(path, obj)
+        seas = compute_windowed_stats(_last_raw, "season", key)
+        out.append(
+            "  - " + key
+            + f"  div={obj.get('division')} ({division_name(_num(obj.get('division')))})"
+            + f"  unreal={_unreal_placement(obj)}  api_elo={obj.get('elo')}"
+        )
+        out.append(
+            f"      resolved elo={v['elo']}  next=#{v['next_pos']}"
+            + f"  gap={v['next_gap']}  stat_path={_mode_stat_path(key)}"
+        )
+        out.append(
+            f"      season: {seas['wins']}W/{seas['losses']}L  kills={seas['kills']}"
+            + f"  kd={seas['kd']}  wr={seas['wr']}"
+        )
+    if _last_modes:
+        cp, _ = pick_best_mode(_last_modes)
+        out.append("  chosen: " + ("/".join(map(str, cp)) if cp else "None"))
+    out.append("")
+    out.append("Raw JSON: /raw")
+    return "\n".join(out)
+

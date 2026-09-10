@@ -34,6 +34,7 @@ A start-to-finish video showing how to download, set up, and use the overlay:
 - [Changing the accent color](#-changing-the-accent-color)
 - [FAQ](#-faq)
 - [How it works](#-how-it-works)
+- [Working on the overlay](#-working-on-the-overlay)
 - [License](#-license)
 
 ---
@@ -42,10 +43,9 @@ A start-to-finish video showing how to download, set up, and use the overlay:
 
 > 🧙 **The fastest way is the [setup wizard](#-setup-wizard-the-easy-way)** it does every step below for you (design, color, Account ID lookup, and launch). Prefer to set it up by hand? Here's the manual way:
 
-1. Click **Code > Download ZIP** above, unzip it, and open the folder for the design you want (see the gallery below). Or just run `setup.bat` and it'll ask which design you want and copy it straight to your Desktop.
-2. Run `account-id.bat` to look up your Epic Account ID.
-3. Open `server.py`, paste your username and account ID into the two lines near the top, save.
-4. Run `start.bat`. Add a Browser Source in OBS pointed at `http://localhost:8888/overlay`.
+1. Click **Code > Download ZIP** above, unzip it, and open the folder for the design you want (see the gallery below). Or run `setup.bat` and it'll ask which design you want and copy it to your Desktop.
+2. Double-click `overlay.bat`. Pick **3** to look up your Epic Account ID, then **4** to paste it into your settings and save.
+3. Pick **1** to start it. Add a Browser Source in OBS pointed at `http://localhost:8888/overlay`.
 
 That's it, you're live. Full details for each step are below if you get stuck anywhere. 👇
 
@@ -55,9 +55,9 @@ That's it, you're live. Full details for each step are below if you get stuck an
 
 Don't want to edit any files by hand? Download **`FortniteOverlaySetup.zip`** from the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest), unzip it, and run `FortniteOverlaySetup.exe` inside the extracted folder instead of the manual steps above.
 
-It walks you through everything in a console window: picks a design from a small preview window, lets you set an accent color (by name or hex code), asks whether you want stats or a creator code shown, looks up your Epic Account ID for you automatically, then builds a ready-to-run overlay folder right next to the `.exe` and offers to start it and open it in your browser, all in one go. If an overlay is already running on port 8888, it stops that one first so the new one can take over. No editing `server.py`, no separate Account ID lookup step.
+It walks you through everything in a console window: pick a design from a preview window, set an accent color (by name or hex code), choose whether to show stats or a creator code, and it looks up your Epic Account ID for you. Then it builds a ready-to-run folder next to the `.exe` and offers to start it and open it in your browser. If an overlay is already running on port 8888 it stops that one first. Nothing to edit, nothing to look up separately.
 
-> 💡 The wizard is just a convenience layer over the same 8 designs in this repo, it builds the exact same `server.py`/`start.bat`/`stop.bat` files described below. Use whichever way you prefer.
+> 💡 The wizard is just a shortcut. It builds the exact same three files described below. Use whichever way you prefer.
 
 > ⚠️ It ships as a zip (rather than a single `.exe`) because standalone PyInstaller executables are commonly flagged as false positives by antivirus heuristics, distributing it as an extracted folder instead of a self-extracting single file avoids that. Windows SmartScreen may still warn the first time you run it since it's an unsigned indie tool, click **More info > Run anyway**, same as the `.bat` files.
 
@@ -73,7 +73,7 @@ It walks you through everything in a console window: picks a design from a small
 - **Mode switcher** for BR, Reload, and Boxfights, each with its own independent stats, and your last selected mode is remembered the next time the overlay loads
 - **Live stats / creator code toggle**, right in the browser, no restart needed, see [below](#-switching-between-stats-and-creator-code)
 - **Season stats** (K/D, Win%, Kills, Wins), accurate per game mode
-- **Keeps itself current**: checks this repo for a newer tagged version on startup and once a day after, then installs it on its own. Your account ID, creator code, accent color and port carry across. One line turns it off, see [below](#-auto-updates)
+- **Keeps itself current**: checks this repo for a newer version on startup and once a day after, and asks before installing it. Your account ID, creator code, accent color and port all carry across untouched. If an update ever fails to start, it puts the old one back on its own, see [below](#-auto-updates)
 - **Survives new seasons**: season stats reset with the season, a ranked playlist added in a future season turns up as its own button with its own stats and ELO, and the ELO counter re-baselines on rollover instead of reading as a huge loss
 - **8 overlay designs**, any accent color you want
 - **Built-in error messages**: if something goes wrong (bad account ID, OliTracker is down, etc.) a small message shows under the card instead of the overlay just sitting there blank
@@ -137,15 +137,23 @@ Click a design's name to open its folder. Every design can show either **season 
 ## ✅ Requirements
 
 - **Python 3 or later.** Download it from [python.org/downloads](https://www.python.org/downloads/) if you don't have it. During setup, tick **Add python.exe to PATH**, the overlay won't start without it.
-- **Windows.** The `.bat` files are Windows only. Mac/Linux users can run `python server.py` directly from a terminal, and look up their Account ID manually at [olitracker.com](https://olitracker.com) instead of using `account-id.bat`.
+- **Windows.** `overlay.bat` is Windows only. On Mac/Linux run `python server.py` from a terminal and look your Account ID up at [olitracker.com](https://olitracker.com).
 - **OBS Studio** with a Browser Source.
-- **Your Epic Account ID** (the bundled `account-id.bat` looks this up for you, see Setup below).
+- **Your Epic Account ID** (`overlay.bat` looks this up for you, see Setup below).
 
 ---
 
 ## 🛠️ Setup
 
-> 💡 Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`, `Pulse/`) is **self-contained**: it has its own `server.py`, `account-id.bat`, `start.bat`, and `stop.bat`. You only ever need the one folder for the design you picked.
+> 💡 Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`, `Pulse/`) holds three files and nothing else:
+>
+> | | |
+> |---|---|
+> | `overlay.bat` | start, stop, look up your Account ID, edit your settings |
+> | `config.json` | your settings, the only file you ever edit |
+> | `server.py` | the overlay itself, replaced whole by updates |
+>
+> You only need the one folder for the design you picked. Don't edit `server.py` by hand, the next update overwrites it. `config.json` is never touched.
 
 ### 1️⃣ Download the files
 
@@ -157,28 +165,36 @@ If you'd rather not dig through folders, run `setup.bat` in the unzipped repo. I
 
 ### 2️⃣ Find your Epic Account ID
 
-Double-click `account-id.bat`. Enter your Epic display name and it will print your account ID in the console window and copy it to your clipboard.
+Double-click `overlay.bat` and pick **3**. Type your Epic display name and it prints your account ID and copies it to your clipboard.
 
-If it can't find your account, search your username at [olitracker.com](https://olitracker.com) instead, open your profile, and copy the account ID out of the page URL.
+If it can't find you, search your name at [olitracker.com](https://olitracker.com), open your profile, and grab the account ID out of the page URL.
 
-### 3️⃣ Add your account ID to the server file
+### 3️⃣ Add your account ID
 
-Open `server.py` in Notepad (right-click > Open with > Notepad) and find these two lines near the top:
+Back in `overlay.bat`, pick **4**. That opens `config.json` in Notepad:
 
-```python
-EPIC_USERNAME    = "YourUsername"
-EPIC_ACCOUNT_ID  = "your-account-id-here"
+```json
+{
+  "epic_username": "YourUsername",
+  "epic_account_id": "your-account-id-here",
+  "creator_code": "",
+  "auto_update": "prompt",
+  "port": 8888
+}
 ```
 
-Replace both values with your username and account ID, then save the file.
+Fill in the first two, save, close Notepad. Done.
+
+> ℹ️ `config.json` is the only file you edit. Updates replace `server.py` completely and never open `config.json`, so an update can't wipe your account ID or your colour. Upgrading from an older version that kept settings inside `server.py`? Those get copied across for you the first time the new version runs.
 
 ### 4️⃣ Start the overlay
 
-Double-click `start.bat`. A window will briefly appear confirming it started, then close itself, and the overlay opens in your browser so you can see it's working. The overlay keeps running in the background after you close that tab.
+In `overlay.bat`, pick **1**. It starts in the background and opens a preview in your browser so you can see it's working. Close that tab whenever, the overlay keeps running.
 
-- On some setups (depends on how Python was installed) a second window titled **"Fortnite Overlay Server"** stays open instead of closing. That's normal, just leave it open and minimize it, closing it stops the overlay.
-- To stop the overlay, double-click `stop.bat`.
-- Want to run **more than one design at once** to compare them side by side? Each one defaults to port `8888`, so only one can run at a time on that port. Open `server.py` in the second design's folder and change `PORT = 8888` to something else like `8889`, then use that port in its OBS Browser Source URL.
+- The menu shows whether it's running or stopped, so you can always check.
+- To stop it, pick **2**.
+- On some setups (depends how Python was installed) a window titled **"Fortnite Overlay Server"** stays open. That's normal, minimise it. Closing it stops the overlay.
+- Want **two designs running at once** to compare them? They both default to port `8888`, so set `"port": 8889` in the second one's `config.json` and point its OBS source at that.
 
 ### 5️⃣ Add it to OBS
 
@@ -204,44 +220,71 @@ The overlay shows mode buttons (**BR**, **Reload**, **Boxfights**) below the wid
 
 Below the mode buttons there are two more buttons, **Stats** and **Creator Code**. Click between them to switch what shows on the card, live, with no server restart needed. Pick **Creator Code** and a text box appears where you can type your own code directly in the browser, it updates the overlay instantly as you type. Switching between the two never changes the size of the overlay, so nothing else in your OBS scene shifts around.
 
-Your choice and the code you typed are remembered per design the next time the overlay loads, the same way the BR/Reload/Boxfights choice is remembered. The `CREATOR_CODE` value in `server.py` (or whatever you picked in the wizard) sets the starting default: that's what shows the first time, and if you later change it there and restart, the new setting takes over again.
+Your choice and the code you typed are remembered per design the next time the overlay loads, the same way the BR/Reload/Boxfights choice is remembered. The `creator_code` value in `config.json` (or whatever you picked in the wizard) sets the starting default: that's what shows the first time, and if you later change it there and restart, the new setting takes over again.
 
 ---
 
 ## 🔄 Auto updates
 
-Fortnite seasons come and go and OliTracker changes shape with them, so the overlay keeps itself current instead of slowly drifting out of date. On startup, and once a day after that, it looks at this repo's version tags. If there is a newer one it downloads that version of your design, moves your settings across, and restarts itself. Your Epic account ID, creator code, accent color, port and mode preference all carry over untouched, and the version it replaced is kept in `%LOCALAPPDATA%\FortniteRankOverlay` in case you want it back.
+Fortnite seasons come and go and OliTracker changes shape with them, so the overlay keeps itself current instead of slowly drifting out of date.
 
-It only ever reads from this repo over HTTPS, and nothing about you is uploaded anywhere. If the download is unreachable, incomplete, or does not parse as a working overlay, it gets thrown away and your existing version carries on running.
+On startup, and once a day after that, it reads [`update.json`](update.json) in this repo. If there's a newer build, you get a pop-up:
 
-To turn it off, open `server.py` and change this line to `False`:
+> **Update available**
+> Fortnite Ranked Overlay 2.3.0 is available. You are on 2.2.0.
+> Your settings, colour and account ID all carry over.
+> **[ Update now ]  [ Not now ]**
 
-```python
-AUTO_UPDATE          = True
+Say yes and it downloads that version of your design, restarts itself, and carries on. Say no and it won't ask again for that particular version.
+
+Occasionally a release will be one that older versions genuinely can't work without, usually because OliTracker changed something. Those are marked in `update.json`, and instead you'll get:
+
+> **Update required**
+> Fortnite Ranked Overlay 3.0.0 is out, and your version (2.2.0) no longer works.
+> **[ Update now ]  [ Close overlay ]**
+
+If you close it there, the overlay still starts, but the OBS source shows an "update required" notice instead of your rank, so you find out on the desktop rather than mid-stream.
+
+**What carries over:** everything. Your account ID, creator code, accent colour, port and mode preference all live in `config.json`, which updates never open. The version it replaced is kept in `%LOCALAPPDATA%\FortniteRankOverlay` in case you want it back.
+
+**If an update goes wrong:** the overlay waits to see the new version actually start serving. If it doesn't, the old one is put back automatically and that version is never offered again. You don't have to do anything.
+
+**What it does and doesn't do:** it only ever reads from this repo over HTTPS, and nothing about you is uploaded anywhere. A download that is unreachable, incomplete, or doesn't parse as a working overlay is thrown away. If GitHub is unreachable it just carries on quietly, it will never block you from streaming because it couldn't check.
+
+To change how it behaves, set `auto_update` in `config.json`:
+
+```json
+{ "auto_update": "prompt" }
 ```
 
-You can check what you are running at any time at `http://localhost:8888/version`.
+| Setting | What happens |
+|---|---|
+| `"prompt"` | Asks first, installs if you say yes. **Default.** |
+| `"silent"` | Installs newer versions without asking. |
+| `"off"` | Never checks, never updates. |
 
-> ℹ️ Coming from a version before 2.0? You will need to download once by hand. Older builds have no updater in them to do it for you.
+You can check what you're running at any time at `http://localhost:8888/version`.
+
+> ℹ️ Coming from a version before 2.0? You'll need to download once by hand. Those builds have no updater in them to do it for you.
 
 ---
 
 ## 🩹 Troubleshooting
 
 **Overlay shows "starting up" for a long time**
-OliTracker may be slow to respond. Wait 30 seconds, and if it still doesn't load, check that your Account ID in `server.py` is correct.
+OliTracker may be slow to respond. Wait 30 seconds, and if it still doesn't load, check that your `epic_account_id` in `config.json` is correct.
 
 **A small orange message shows up under the overlay**
 That's the actual error from the server. For example, `HTTP 404 from OliTracker` usually means the account ID is wrong, and `no ranked data found` usually means the account has no ranked games played yet. Fix what it says and it clears on the next poll.
 
 **Port already in use error**
-Something else is using port 8888. Run `stop.bat` first, then start it again. If the issue persists, change `PORT = 8888` to another number like `8889` in `server.py` and update the OBS URL to match.
+Something else is using port 8888. Pick **2** in `overlay.bat` to stop it, then **1** to start again. If it keeps happening, set `"port": 8889` in `config.json` and use that port in OBS. `overlay.bat` reads the port from `config.json`, so it follows along on its own.
 
 **Stats look wrong after switching modes**
 Give it one poll cycle (about 30 seconds) after clicking a mode button. The server fetches fresh data on each cycle.
 
 **OBS shows a black box instead of the overlay**
-Make sure `start.bat` has been run first, the browser source needs the local server running. Also double check the URL in OBS is exactly `http://localhost:8888/overlay`.
+Make sure the overlay is actually running, the browser source needs it. Open `overlay.bat` and check the status line at the top. Also double check the URL in OBS is exactly `http://localhost:8888/overlay`.
 
 **Windows says the file is unsafe / SmartScreen popup**
 That's expected for any `.bat` file downloaded from the internet. Click **More info > Run anyway**.
@@ -259,14 +302,20 @@ Two ways to do this:
 Add `?color=` followed by a hex code to the overlay URL, both in your regular browser and in the OBS Browser Source. For example: `http://localhost:8888/overlay?color=ff7a00`. This overrides the accent color at runtime, useful for trying out a color before committing to it. *(On the Rainbow design, the rank text always stays an animated rainbow, the override only changes the highlight colors around it.)*
 
 **💾 Permanent change**
-Open `server.py` and find the CSS inside `OVERLAY_HTML`. Near the top of the `<style>` block, inside `:root`, there's an `--accent` hex value (the design's main color) and a matching `--accent-rgb` (the same color as `r, g, b`). Change both to your color and the whole design updates. Use [coolors.co](https://coolors.co) to pick one. *(Tip: the `?color=` trick above is easier and updates both for you, no editing needed.)*
+Add an `accent` to `config.json` and restart the overlay:
+
+```json
+{ "accent": "ff7a00" }
+```
+
+Six hex digits, no `#`. That's applied on top of whatever the design ships with, so it survives updates. Use [coolors.co](https://coolors.co) to pick one. *(Tip: the `?color=` trick above is easier still and needs no editing at all.)*
 
 ---
 
 ## ❓ FAQ
 
 **Does this work on Mac or Linux?**
-Yes! Run `python server.py` from a terminal instead of `start.bat`, and look up your Account ID manually at [olitracker.com](https://olitracker.com) instead of running `account-id.bat`. Everything else is the same.
+Yes. Run `python server.py` from a terminal and look your Account ID up at [olitracker.com](https://olitracker.com). Everything else is the same.
 
 **Can I run two designs at the same time to compare them?**
 Yes, see the port note under Setup above. Change the port in one of them so they don't collide.
@@ -288,6 +337,65 @@ No. The server only talks to the OliTracker API to pull your stats, and serves t
 ## ⚙️ How it works
 
 This Fortnite rank tracker is a small Python web server that runs locally on your PC. It polls the OliTracker API every 30 seconds, parses your ranked stats, and serves a single HTML page at `localhost:8888/overlay`. OBS loads that page as a browser source and auto-refreshes the displayed data, turning it into a live Fortnite stream overlay with zero manual updates. No data ever leaves your machine other than the API request to OliTracker.
+
+---
+
+## 🔧 Working on the overlay
+
+Only needed if you're changing the code. If you just want to use the overlay, you can stop reading here.
+
+### The repo layout
+
+All 8 designs share the same server. `src/` is the only place anything is written by hand:
+
+```
+src/core_head.py      the server, everything above the overlay markup
+src/designs/*.html    one file per design, just the markup
+src/core_tail.py      the server, everything below it
+src/launcher/*.bat    start / stop / account-id, one copy each
+```
+
+Everything in `Minimal/`, `Classic/`, ... and `wizard/templates/` is **generated** from those. After changing anything in `src/`:
+
+```bash
+python tools/build.py
+```
+
+CI runs `python tools/build.py --check` on every push, so a generated file edited by hand fails the build rather than silently getting overwritten at the next release.
+
+### Cutting a release
+
+```bash
+python tools/release.py 2.3.0 --notes "Fixes ELO after the season reset"
+```
+
+That stamps the version into `src/`, rebuilds all 16 design folders, and rewrites [`update.json`](update.json). Then commit and push **the tag along with the commit**:
+
+```bash
+git add -A && git commit -m "v2.3.0: fixes ELO after the season reset"
+git tag v2.3.0
+git push origin main --tags
+```
+
+Installed overlays download from the tag named in `update.json`, not from `main`, so `update.json` must never land on `main` before the tag it points at exists. Everyone gets the update prompt within a day, or immediately if they restart.
+
+### Making an old version stop working
+
+`min_supported` in `update.json` is the lever. Anything below it gets a prompt that can't be postponed.
+
+```bash
+python tools/release.py 3.0.0 --min-supported 3.0.0 --notes "OliTracker changed its API"
+```
+
+Use it sparingly. It locks people out mid-stream, so it's only for when an old build genuinely can't show correct data any more. An ordinary release should leave it alone.
+
+### Safety rails already in place
+
+- A manifest that can't be read, or that's malformed, is ignored entirely. A GitHub outage or a typo in `update.json` can never take everyone's overlay down.
+- A `min_supported` newer than `latest` is ignored, since it would block everyone with nothing to update to.
+- Downloads are parsed and sanity-checked before anything is written.
+- After installing, the old process waits to see the new one actually serve. If it doesn't, the backup is restored and that version is added to a local blocklist so it's never offered again.
+- `config.json` is never read or written by the update path.
 
 ---
 

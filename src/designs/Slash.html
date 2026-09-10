@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortnite Rank Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --accent: #a855f7;
+            --accent-rgb: 168, 85, 247;
+            --accent-light: color-mix(in srgb, var(--accent) 65%, white);
+        }
+
+        body {
+            background: transparent;
+            font-family: 'Space Grotesk', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 20px;
+        }
+
+        .wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+        }
+
+        .card {
+            background: rgba(13, 11, 18, 0.92);
+            border: 1px solid rgba(var(--accent-rgb), 0.20);
+            min-width: 480px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .slash-header {
+            position: relative;
+            display: flex;
+            align-items: stretch;
+            height: 84px;
+            overflow: hidden;
+        }
+
+        .slash-left {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 0 52px 0 22px;
+            background: rgba(var(--accent-rgb), 0.15);
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .slash-blade {
+            position: absolute;
+            right: 180px;
+            top: 0;
+            bottom: 0;
+            width: 44px;
+            background: rgba(13, 11, 18, 0.92);
+            transform: skewX(-12deg);
+            z-index: 2;
+            border-left: 2px solid var(--accent);
+        }
+
+        .slash-right {
+            width: 200px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-end;
+            padding: 0 22px 0 36px;
+            background: rgba(13, 11, 18, 0.92);
+            position: relative;
+            z-index: 1;
+        }
+
+        .rank-label-small {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            font-weight: 400;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .rank-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: -0.01em;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .rank-value .accent { color: var(--accent); }
+
+        .elo-label-small {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            font-weight: 400;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            line-height: 1;
+            margin-bottom: 4px;
+            text-align: right;
+        }
+
+        .elo-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.01em;
+            line-height: 1;
+            text-align: right;
+            text-shadow: 0 0 28px rgba(var(--accent-rgb), 0.50);
+        }
+
+        .prog-row {
+            display: none;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .prog-row.visible { display: flex; }
+
+        .prog-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: -0.01em;
+            line-height: 1;
+            text-shadow: 0 0 28px rgba(var(--accent-rgb), 0.50);
+        }
+
+        .prog-track {
+            width: 80px;
+            height: 4px;
+            background: rgba(var(--accent-rgb), 0.18);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .prog-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+
+        .mid-band {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 9px 22px;
+            background: rgba(var(--accent-rgb), 0.08);
+            border-top: 1px solid rgba(var(--accent-rgb), 0.18);
+            border-bottom: 1px solid rgba(var(--accent-rgb), 0.12);
+            visibility: visible;
+            min-height: 42px;
+        }
+
+        .mid-band.hidden { visibility: hidden; }
+
+        .next-text {
+            font-family: 'Space Mono', monospace;
+            font-size: 15px;
+            font-weight: 400;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+        }
+
+        .next-text .hl     { color: #ffffff; font-weight: 700; }
+        .next-text .accent { color: var(--accent); font-weight: 700; }
+
+        .session-badge {
+            font-family: 'Space Mono', monospace;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 4px 12px;
+            border-radius: 2px;
+        }
+
+        .session-pos  { color: #34d399; background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.25); }
+        .session-neg  { color: #f87171; background: rgba(248,113,113,0.10); border: 1px solid rgba(248,113,113,0.25); }
+        .session-zero { color: #ffffff; background: rgba(var(--accent-rgb),0.08); border: 1px solid rgba(var(--accent-rgb),0.25); }
+
+        .stats-band {
+            display: flex;
+            padding: 0 22px;
+            gap: 0;
+            min-height: 58px;
+            align-items: center;
+        }
+
+        .creator-row {
+            padding: 0 22px;
+            min-height: 58px;
+            display: flex;
+            align-items: center;
+            font-family: 'Space Mono', monospace;
+            font-size: 23px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .stat-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex: 1;
+            position: relative;
+        }
+
+        .stat-block + .stat-block::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 4px; bottom: 4px;
+            width: 1px;
+            background: rgba(var(--accent-rgb), 0.20);
+        }
+
+        .stat-block + .stat-block { padding-left: 16px; }
+
+        .s-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 11px;
+            font-weight: 400;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            line-height: 1;
+        }
+
+        .s-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f5f0ff;
+            line-height: 1;
+            letter-spacing: -0.01em;
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
+        }
+
+        .mode-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 50px;
+            width: 100%;
+        }
+
+        .mode-btn {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            color: rgba(220, 220, 220, 0.55);
+            background: rgba(20, 20, 20, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+            text-align: center;
+            transition: color 0.12s, background 0.12s, border-color 0.12s;
+        }
+
+        .mode-btn:hover {
+            color: rgba(255, 255, 255, 0.90);
+            background: rgba(40, 40, 40, 0.95);
+            border-color: rgba(255, 255, 255, 0.20);
+        }
+
+        .mode-btn.active {
+            color: #ffffff;
+            background: rgba(55, 55, 55, 0.98);
+            border-color: rgba(255, 255, 255, 0.30);
+        }
+    
+        #codeInput.mode-btn {
+            text-align: left;
+            cursor: text;
+        }
+
+        #codeInput.mode-btn::placeholder {
+            color: rgba(220, 220, 220, 0.35);
+        }
+        /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
+        .elo-na { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+
+            <div class="slash-header">
+                <div class="slash-left">
+                    <div class="rank-label-small">RANK</div>
+                    <div class="rank-value" id="rankValue">#- UNREAL</div>
+                </div>
+                <div class="slash-blade"></div>
+                <div class="slash-right">
+                    <div class="elo-label-small" id="rightLabel">ELO</div>
+                    <div class="elo-value" id="eloValue" style="display:block">--</div>
+                    <div class="prog-row" id="progRow">
+                        <div class="prog-value" id="progPct">0%</div>
+                        <div class="prog-track">
+                            <div class="prog-fill" id="progFill" style="width:0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mid-band" id="midBand">
+                <span class="next-text" id="nextText">NEXT - ELO → <span class="accent">#-</span></span>
+                <span class="session-badge session-zero" id="sessionText">+0 TODAY</span>
+            </div>
+
+            <div class="stats-band" id="statsRow">
+                <div class="stat-block">
+                    <div class="s-label">K/D</div>
+                    <div class="s-value" id="seasonKd">-</div>
+                </div>
+                <div class="stat-block">
+                    <div class="s-label">WIN%</div>
+                    <div class="s-value" id="seasonWr">-</div>
+                </div>
+                <div class="stat-block">
+                    <div class="s-label">KILLS</div>
+                    <div class="s-value" id="seasonKills">-</div>
+                </div>
+                <div class="stat-block">
+                    <div class="s-label">WINS</div>
+                    <div class="s-value" id="seasonWins">-</div>
+                </div>
+            </div>
+            <div class="creator-row" id="creatorRow"></div>
+
+        </div>
+
+        <div class="error-text" id="errorText" style="display:none"></div>
+        <div class="mode-bar" id="modeBar"></div>
+        <div class="mode-bar" id="displayToggleBar">
+            <button class="mode-btn" id="statsToggleBtn">Stats</button>
+            <button class="mode-btn" id="codeToggleBtn">Creator Code</button>
+            <input class="mode-btn" id="codeInput" type="text" placeholder="Enter creator code" style="display:none;">
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
+        var POLL_MS      = __POLL_MS__;
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
+        var modeBarBuilt = false;
+
+        function $(s) { return document.querySelector(s); }
+
+        var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
+        // localStorage is shared by every overlay on localhost, so namespace the
+        // keys per design and gate them on a signature of the server's config.
+        // That way the wizard's choice (stats vs. code) and the configured code
+        // always win on first load, and only an in-browser toggle for THIS
+        // overlay persists, instead of one typed code bleeding across overlays.
+        var FN_NS  = "Slash";
+        var K_MODE = 'fn_display_mode_' + FN_NS;
+        var K_CODE = 'fn_creator_code_' + FN_NS;
+        var K_SIG  = 'fn_config_sig_' + FN_NS;
+
+        var displayMode, creatorCode;
+        if (localStorage.getItem(K_SIG) === INITIAL_CREATOR_CODE) {
+            displayMode = localStorage.getItem(K_MODE) || (INITIAL_CREATOR_CODE ? 'code' : 'stats');
+            var _savedCode = localStorage.getItem(K_CODE);
+            creatorCode = (_savedCode === null) ? INITIAL_CREATOR_CODE : _savedCode;
+        } else {
+            displayMode = INITIAL_CREATOR_CODE ? 'code' : 'stats';
+            creatorCode = INITIAL_CREATOR_CODE;
+            localStorage.setItem(K_SIG, INITIAL_CREATOR_CODE);
+            localStorage.setItem(K_MODE, displayMode);
+            localStorage.setItem(K_CODE, creatorCode);
+        }
+
+        function renderCreatorText() {
+            var el = $('#creatorRowText') || $('#creatorRow');
+            el.textContent = creatorCode ? ('Use Code ' + creatorCode + ' #ad') : '';
+        }
+
+        function applyDisplayMode() {
+            var statsEl = $('#statsRow');
+            var codeEl  = $('#creatorRow');
+            var input   = $('#codeInput');
+            if (displayMode === 'code') {
+                statsEl.style.display = 'none';
+                codeEl.style.display  = '';
+                input.style.display   = '';
+            } else {
+                statsEl.style.display = '';
+                codeEl.style.display  = 'none';
+                input.style.display   = 'none';
+            }
+            $('#statsToggleBtn').classList.toggle('active', displayMode === 'stats');
+            $('#codeToggleBtn').classList.toggle('active', displayMode === 'code');
+        }
+
+        $('#statsToggleBtn').addEventListener('click', function() {
+            displayMode = 'stats';
+            localStorage.setItem(K_MODE, displayMode);
+            applyDisplayMode();
+        });
+        $('#codeToggleBtn').addEventListener('click', function() {
+            displayMode = 'code';
+            localStorage.setItem(K_MODE, displayMode);
+            applyDisplayMode();
+        });
+        $('#codeInput').addEventListener('input', function(e) {
+            creatorCode = e.target.value;
+            localStorage.setItem(K_CODE, creatorCode);
+            renderCreatorText();
+        });
+        $('#codeInput').value = creatorCode || '';
+        renderCreatorText();
+        applyDisplayMode();
+
+        var ROMAN = {'I':true,'II':true,'III':true,'IV':true,'V':true,'VI':true};
+
+        function purpleNumeral(text) {
+            if (!text) return '';
+            var parts = text.split(' ');
+            var last  = parts[parts.length - 1];
+            if (ROMAN[last]) {
+                return parts.slice(0, -1).join(' ') + ' <span class="accent">' + last + '</span>';
+            }
+            return text;
+        }
+
+        function buildModeBar(modes) {
+            if (modeBarBuilt) return;
+            modeBarBuilt = true;
+            var bar = $('#modeBar');
+            bar.innerHTML = '';
+            modes.forEach(function(m) {
+                var btn = document.createElement('button');
+                btn.className   = 'mode-btn';
+                btn.textContent = m.label;
+                btn.dataset.key = m.key;
+                btn.addEventListener('click', function() {
+                    if (activeMode === m.key) return;
+                    activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
+                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                        b.classList.toggle('active', b.dataset.key === activeMode);
+                    });
+                    tick();
+                });
+                bar.appendChild(btn);
+            });
+        }
+
+        function applyData(d) {
+            if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
+
+            var rankEl   = $('#rankValue');
+            var eloEl    = $('#eloValue');
+            var progRow  = $('#progRow');
+            var midBand  = $('#midBand');
+            var nextText = $('#nextText');
+            var sessEl   = $('#sessionText');
+            var rightLbl = $('#rightLabel');
+
+            if (d.is_unreal) {
+                var m = d.rank_display.match(/^(#\d+)\s+(.+)$/);
+                if (m) {
+                    rankEl.innerHTML = '<span class="accent">' + m[1] + '</span> ' + m[2];
+                } else {
+                    rankEl.textContent = d.rank_display;
+                }
+
+                rightLbl.textContent   = 'ELO';
+                eloEl.textContent      = d.elo_text ? d.elo_text.replace(' ELO','') : '--';
+                eloEl.style.display    = 'block';
+                progRow.classList.remove('visible');
+
+                if (d.next_gap && d.next_pos) {
+                    nextText.innerHTML =
+                        'NEXT <span class="hl">' + d.next_gap + ' ELO</span>' +
+                        ' \u2192 <span class="accent">#</span><span class="hl">' + d.next_pos + '</span>';
+                } else {
+                    nextText.innerHTML = 'NEXT <span class="hl">- ELO</span> \u2192 <span class="accent">#</span><span class="hl">-</span>';
+                }
+
+                sessEl.textContent = d.session_text || '+0 TODAY';
+                sessEl.className   = 'session-badge session-' + (d.session_sign || 'zero');
+                midBand.classList.remove('hidden');
+
+            } else {
+                rankEl.innerHTML = purpleNumeral(d.rank_display);
+
+                rightLbl.textContent = 'PROGRESS';
+                eloEl.style.display  = 'none';
+                if (d.progression_pct !== null && d.progression_pct !== undefined) {
+                    $('#progPct').textContent  = d.progression_pct + '%';
+                    $('#progFill').style.width = d.progression_pct + '%';
+                }
+                progRow.classList.add('visible');
+
+                if (d.pct_to_next !== null && d.pct_to_next !== undefined && d.next_rank_name) {
+                    nextText.innerHTML =
+                        '<span class="hl">' + d.pct_to_next + '%</span> TO ' +
+                        purpleNumeral(d.next_rank_name);
+                } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
+                    nextText.innerHTML = '<span class="hl">' + d.pct_to_next + '%</span> TO NEXT';
+                } else {
+                    nextText.textContent = '-';
+                }
+
+                sessEl.textContent = d.session_text || '+0% TODAY';
+                sessEl.className   = 'session-badge session-' + (d.session_sign || 'zero');
+                midBand.classList.remove('hidden');
+            }
+
+            $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
+            $('#seasonWr').textContent    = d.season_wr    != null ? d.season_wr    : '-';
+            $('#seasonKills').textContent = d.season_kills != null ? d.season_kills : '-';
+            $('#seasonWins').textContent  = d.season_wins  != null ? d.season_wins  : '-';
+
+            // OliTracker only publishes ELO for the ranks it tracks. Below that
+            // there is no ELO and no leaderboard row to measure a gap against,
+            // so hide those widgets rather than render empty placeholders.
+            var _eloNA = !!d.elo_unavailable;
+            ['.slash-right', '.slash-blade', '#midBand'].forEach(function(sel) {
+                var el = document.querySelector(sel);
+                if (el) el.classList.toggle('elo-na', _eloNA);
+            });
+            // No ELO means no gap either, so the gap row goes with it.
+            var _gapNA = _eloNA || !!d.gap_unavailable;
+            ['#nextText'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) {
+                    el.classList.toggle('elo-na', _gapNA);
+                });
+            });
+
+            var modes = d.modes_available;
+            if (modes && modes.length > 0) {
+                if (!activeMode) activeMode = d.active_mode_key || modes[0].key;
+                buildModeBar(modes);
+                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    b.classList.toggle('active', b.dataset.key === activeMode);
+                });
+            }
+        }
+
+        function tick() {
+            var url = '/data?window=session' + (activeMode ? '&mode=' + encodeURIComponent(activeMode) : '');
+            fetch(url, { cache: 'no-store' })
+                .then(function(r) { return r.json(); })
+                .then(applyData)
+                .catch(function() {});
+        }
+
+        tick();
+        setInterval(tick, POLL_MS);
+    </script>
+</body>
+</html>

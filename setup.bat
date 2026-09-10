@@ -71,10 +71,10 @@ echo.
 echo [SUCCESS] Done. Open this folder on your Desktop:
 echo   %DEST%
 echo.
-echo Inside it:
-echo   1. Run account-id.bat to find your Epic Account ID
-echo   2. Add it to server.py
-echo   3. Run start.bat
+echo Inside it, run overlay.bat and:
+echo   3. Look up your Epic Account ID
+echo   4. Paste it into your settings and save
+echo   1. Start the overlay
 echo.
 start "" explorer "%DEST%"
 pause

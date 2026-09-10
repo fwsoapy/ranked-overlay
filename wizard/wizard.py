@@ -32,6 +32,46 @@ def resource_path(relative):
     return os.path.join(base, relative)
 
 
+UPDATE_REPO = "fwsoapy/ranked-overlay"
+MANIFEST_URL = f"https://raw.githubusercontent.com/{UPDATE_REPO}/main/update.json"
+
+
+def bundled_version():
+    """The version of the overlay this wizard ships templates for."""
+    try:
+        text = open(resource_path(os.path.join("templates", DESIGNS[0], "server.py")),
+                    encoding="utf-8").read()
+        found = re.search(r'^VERSION\s*=\s*"([^"]*)"', text, re.M)
+        return found.group(1) if found else None
+    except OSError:
+        return None
+
+
+def check_wizard_version():
+    """Say so if this wizard is behind, without getting in the way.
+
+    The overlay it builds updates itself on first run, so an old wizard still
+    produces a current overlay. This is only so nobody is surprised by the
+    update prompt they are about to see.
+    """
+    have = bundled_version()
+    if not have:
+        return
+    try:
+        with urllib.request.urlopen(MANIFEST_URL, timeout=8) as r:
+            manifest = json.loads(r.read().decode("utf-8", "replace"))
+        latest = str(manifest.get("latest") or "")
+    except Exception:
+        return                      # offline is not a problem worth mentioning
+
+    def parts(v):
+        return tuple(int(n) for n in re.findall(r"\d+", v)[:3])
+
+    if latest and parts(latest) > parts(have):
+        print(f"  Note: this setup tool bundles overlay {have}, and {latest} is out.")
+        print("  That is fine -- the overlay updates itself the first time it runs.")
+
+
 def run_dir():
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
@@ -288,34 +328,26 @@ def build_overlay(design, accent, display_choice, username, account_id, dest_roo
         shutil.rmtree(dest_dir)
 
     os.makedirs(dest_dir, exist_ok=True)
-    for fname in ("account-id.bat", "start.bat", "stop.bat"):
+    for fname in ("overlay.bat", "server.py"):
         shutil.copy(os.path.join(src_dir, fname), os.path.join(dest_dir, fname))
 
-    server_text = open(os.path.join(src_dir, "server.py"), encoding="utf-8").read()
-
-    server_text = re.sub(r'EPIC_USERNAME\s*=\s*".*?"',
-                          f'EPIC_USERNAME    = "{username}"', server_text, count=1)
-    server_text = re.sub(r'EPIC_ACCOUNT_ID\s*=\s*".*?"',
-                          f'EPIC_ACCOUNT_ID  = "{account_id or "your-account-id-here"}"',
-                          server_text, count=1)
-    server_text = re.sub(r'CREATOR_CODE\s*=\s*".*?"',
-                          f'CREATOR_CODE     = "{display_choice}"', server_text, count=1)
-
+    # Everything the wizard was asked goes into config.json, not into server.py.
+    # server.py is shipped untouched, which is what lets it replace itself later
+    # without any of this having to be rescued out of it first.
+    config = {
+        "epic_username":   username,
+        "epic_account_id": account_id or "your-account-id-here",
+        "creator_code":    display_choice,
+    }
     if accent is not None:
-        r = int(accent[0:2], 16)
-        g = int(accent[2:4], 16)
-        b = int(accent[4:6], 16)
-        server_text = re.sub(r'--accent:\s*#[0-9a-fA-F]{6};',
-                              f'--accent: #{accent};', server_text, count=1)
-        server_text = re.sub(r'--accent-rgb:\s*[0-9]+,\s*[0-9]+,\s*[0-9]+;',
-                              f'--accent-rgb: {r}, {g}, {b};', server_text, count=1)
-        # Rainbow's stat labels default to white; if a custom color is chosen,
-        # tint them to match (no-op for the other 7 designs, which lack this var).
-        server_text = re.sub(r'--stat-label-color:\s*#[0-9a-fA-F]{6};',
-                              f'--stat-label-color: #{accent};', server_text, count=1)
+        config["accent"] = accent
+        # Rainbow's stat labels default to white; tint them to match a custom
+        # colour (the other 7 designs have no such variable and ignore it).
+        config["stat_label_color"] = accent
 
-    with open(os.path.join(dest_dir, "server.py"), "w", encoding="utf-8") as f:
-        f.write(server_text)
+    with open(os.path.join(dest_dir, "config.json"), "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, sort_keys=True)
+        f.write("\n")
 
     return dest_dir
 
@@ -323,6 +355,7 @@ def build_overlay(design, accent, display_choice, username, account_id, dest_roo
 def main():
     banner()
     check_python()
+    check_wizard_version()
     show_previews()
 
     while True:
@@ -358,13 +391,13 @@ def main():
     if launch == "y":
         py = find_python()
         if py is None:
-            print("  Could not find Python to launch with, run start.bat in the folder yourself.")
+            print("  Could not find Python to launch with, run overlay.bat in the folder yourself.")
         else:
             if _port_in_use(8888):
                 print("  Port 8888 is busy (an overlay is already running). Stopping it first...")
                 if not _free_port(8888):
                     print("  Couldn't free port 8888 automatically. Close the other overlay,")
-                    print("  then run start.bat in this new folder yourself.")
+                    print("  then run overlay.bat in this new folder yourself.")
                     py = None
             if py is not None:
                 server_py = os.path.join(dest_dir, "server.py")

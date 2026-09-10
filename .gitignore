@@ -6,3 +6,8 @@ __pycache__/
 wizard/build/
 wizard/dist/
 *.spec
+
+# Each design folder ships a config.json with placeholders in it, so those are
+# tracked. These two are only ever written while the overlay is running.
+config.json.tmp
+config.json.broken
