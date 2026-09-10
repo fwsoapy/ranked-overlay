@@ -50,19 +50,21 @@ jobs:
           --add-data "assets;assets"
           wizard.py
 
-      # Shipped as a folder in a zip rather than a single .exe: one-file
-      # PyInstaller builds get flagged by antivirus heuristics far more often.
+      # Zipped as the exe plus its _internal folder, not as a single-file exe.
+      # One-file builds get flagged by antivirus heuristics far more often.
       - name: Zip it
         shell: pwsh
-        run: |
-          Compress-Archive -Path wizard/dist/FortniteOverlaySetup/* `
-                           -DestinationPath FortniteOverlaySetup.zip
+        run: Compress-Archive -Path wizard/dist/FortniteOverlaySetup/* -DestinationPath FortniteOverlaySetup.zip
 
-      - name: Check it actually runs
+      - name: Check the build came out right
         shell: pwsh
         run: |
-          $exe = "wizard/dist/FortniteOverlaySetup/FortniteOverlaySetup.exe"
-          if (-not (Test-Path $exe)) { throw "the exe was not built" }
+          $dir = "wizard/dist/FortniteOverlaySetup"
+          if (-not (Test-Path "$dir/FortniteOverlaySetup.exe")) { throw "no exe was built" }
+          if (-not (Test-Path "$dir/_internal")) { throw "the _internal folder is missing" }
+          # The designs have to be inside, or the wizard builds nothing.
+          $designs = Get-ChildItem "$dir/_internal/templates" -Directory -ErrorAction SilentlyContinue
+          if ($designs.Count -ne 8) { throw "expected 8 designs bundled, found $($designs.Count)" }
           $size = (Get-Item "FortniteOverlaySetup.zip").Length
           Write-Host "FortniteOverlaySetup.zip is $([math]::Round($size/1MB,1)) MB"
           if ($size -lt 1MB) { throw "that zip is too small to be right" }
