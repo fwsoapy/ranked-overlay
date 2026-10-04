@@ -613,7 +613,7 @@
               <div class="step-action"><button id="copy-2" class="primary small" type="button">Copy OBS link</button></div>
             </li>
             <li>In OBS, add a <b>Browser</b> source.</li>
-            <li>Paste it into <b>URL</b>, set <b>Width</b> to <span class="kbd" id="obs-w">520</span>, keep <b>Height</b> at <span class="kbd">600</span> and click <b>OK</b>.</li>
+            <li>Paste it into <b>URL</b>, keep <b>Width</b> at <span class="kbd">800</span> and <b>Height</b> at <span class="kbd">600</span> and click <b>OK</b>.</li>
             <li>Hold <span class="kbd">Alt</span> and drag the bottom edge up to just under the card to crop out the buttons.</li>
           </ol>
           <p class="tip">
@@ -1341,7 +1341,6 @@
             var p = el.getAttribute('data-show-val').split('=');
             el.hidden = String(state[p[0]]) !== p[1];
           });
-          $('obs-w').textContent = d.w;
           $('obs-link').value = hasAccount() ? overlayUrl(false) : 'Add your account to get your link';
           $('copy').disabled = false;
           renderDataNote();
