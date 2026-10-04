@@ -55,22 +55,28 @@
         }
 
         /* Slow rainbow for rank label: red, orange, yellow, green, blue,
-           indigo, violet and back to red, swiping across the text. Every
-           stop is bright, so the blend between two neighbours never turns
-           brown or grey. (A browser's own "dark mode for websites" can still
-           darken it; the website opts out of that, and OBS never does it.) */
-        .unreal-rainbow {
-            background: linear-gradient(120deg,
-                #ff3b3b,#ff8a1f,#ffe31a,#36e05a,#2f7bff,#6a4bff,#b14dff,#ff3b3b);
-            background-size: 800% 100%;
-            background-repeat: repeat;
-            -webkit-background-clip: text; background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: slowRainbow 45s linear infinite;
-        }
-        @keyframes slowRainbow {
-            0%   { background-position: 800% 0%; }
-            100% { background-position: 0% 0%; }
+           indigo, violet and back to red, sweeping across the text. Each
+           character runs the same colour loop a little further along than
+           the one before it (see setRainbowText), so the colours slide
+           across the word. It is done with text colour rather than a
+           gradient clipped to the text because browsers' "dark mode for
+           websites" darkens bright backgrounds, which turned the yellows
+           brown. It leaves text alone when the colour is bright enough
+           (0.299R + 0.587G + 0.114B of about 150 or more), so every stop
+           here, and every blend between two of them, is at least that. */
+        .unreal-rainbow { color: #ff6e5a; }
+        .unreal-rainbow .rb { animation: rainbowSweep 45s linear infinite; }
+        @keyframes rainbowSweep {
+            0%      { color: #ff6e5a; }
+            11.11%  { color: #ff8a1f; }
+            22.22%  { color: #ffe31a; }
+            33.33%  { color: #3ee06a; }
+            44.44%  { color: #22d6f2; }
+            55.56%  { color: #5aa5ff; }
+            66.67%  { color: #9188ff; }
+            77.78%  { color: #c070ff; }
+            88.89%  { color: #ff70b0; }
+            100%    { color: #ff6e5a; }
         }
 
         /* Shimmer for ELO number - thin purple line sweeps across white */
@@ -317,6 +323,26 @@
 
         function $(s) { return document.querySelector(s); }
 
+        // The rank text, one span per character, each starting the colour
+        // loop RAINBOW_STEP seconds further along than the last, so the
+        // rainbow sweeps across it. Rebuilt only when the text changes, and
+        // offset by the clock so a new rank carries on the same sweep.
+        var RAINBOW_CYCLE = 45, RAINBOW_STEP = 0.5;
+        function setRainbowText(el, text) {
+            if (el.getAttribute('data-text') === text) return;
+            el.setAttribute('data-text', text);
+            var phase = (performance.now() / 1000) % RAINBOW_CYCLE;
+            el.textContent = '';
+            for (var i = 0; i < text.length; i++) {
+                var ch = document.createElement('span');
+                ch.className = 'rb';
+                ch.textContent = text.charAt(i);
+                ch.style.animationDelay = -(phase + i * RAINBOW_STEP) + 's';
+                el.appendChild(ch);
+            }
+        }
+        setRainbowText($('#rankText'), $('#rankText').textContent);
+
         var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
         // localStorage is shared by every overlay on localhost, so namespace the
         // keys per design and gate them on a signature of the server's config.
@@ -425,7 +451,7 @@
 
                     if (d.ok === false && !d.elo_text) return;
 
-                    $('#rankText').textContent = d.rank_display || '#- UNREAL';
+                    setRainbowText($('#rankText'), d.rank_display || '#- UNREAL');
 
                     var eloEl  = $('#eloText');
                     // Below Unreal there is no ELO, so this slot carries the
