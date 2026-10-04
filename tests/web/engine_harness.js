@@ -210,6 +210,81 @@ async function websiteChecks() {
     await engine.refresh(true);
     check('new season starts it over', await shown(engine), '+0 ELO TODAY');
   }
+  // "Session" starts over by itself after 6 hours without an ELO change.
+  {
+    const H = 60 * 60 * 1000;
+    const setup = () => {
+      const storage = memoryStorage();
+      const st = { clock: now, data: JSON.parse(JSON.stringify(raw)) };
+      st.open = async () => {
+        const e = E.createEngine({ cfg: E.parseConfig(`?${id}&elo=session`), store: E.makeStore(storage),
+          fetchText: async () => JSON.stringify(st.data), now: () => st.clock });
+        await e.init();
+        return e;
+      };
+      st.step = async (engine, ms, elo, matchAt) => {
+        st.clock += ms;
+        if (elo !== undefined) st.data.ranked_stats['ranked-br-combined'].elo = elo;
+        if (matchAt !== undefined) st.data.match_history.unshift({ date: 'z', elo: {}, matches: [grp(Math.floor(matchAt / 1000), elo)] });
+        st.data.last_updated = new Date(st.clock).toISOString();
+        await engine.refresh(true);
+        return (await (await engine.fetchData('/data?window=session')).json()).session_text;
+      };
+      st.shown = async (engine) => (await (await engine.fetchData('/data?window=session')).json()).session_text;
+      return st;
+    };
+
+    // Streams, then sits idle: still counted at 5h, gone after 6h.
+    let st = setup();
+    let engine = await st.open();
+    await st.step(engine, 10 * 60 * 1000, 3110);
+    check('idle 5h keeps the session', await st.step(engine, 5 * H), '+30 ELO TODAY');
+    check('idle 6h starts it over', await st.step(engine, 1 * H + 60 * 1000), '+0 ELO TODAY');
+    check('still +0 after a restart', await st.shown(await st.open()), '+0 ELO TODAY');
+    check('counts the next stream', await st.step(engine, 10 * 60 * 1000, 3130), '+20 ELO TODAY');
+    check('a 5h break mid-session keeps counting', await st.step(engine, 5 * H, 3125), '+15 ELO TODAY');
+
+    // Closed for 10h, games played while closed (dated by the history):
+    // those count, the last stream's +30 doesn't.
+    st = setup();
+    engine = await st.open();
+    await st.step(engine, 10 * 60 * 1000, 3110);
+    let last = st.clock;
+    st.clock += 10 * H;
+    st.data.ranked_stats['ranked-br-combined'].elo = 3150;
+    st.data.match_history.unshift({ date: 'z', elo: {}, matches: [grp(Math.floor((last + 8 * H) / 1000), 3150)] });
+    st.data.last_updated = new Date(st.clock).toISOString();
+    check('games while closed count, old stream does not', await st.shown(await st.open()), '+40 ELO TODAY');
+
+    // Same, but the history has no newer match: dated when it's noticed.
+    st = setup();
+    engine = await st.open();
+    await st.step(engine, 10 * 60 * 1000, 3110);
+    st.clock += 10 * H;
+    st.data.ranked_stats['ranked-br-combined'].elo = 3150;
+    st.data.last_updated = new Date(st.clock).toISOString();
+    check('gap without history still starts over', await st.shown(await st.open()), '+40 ELO TODAY');
+
+    // A game 2h after closing, then 8h of nothing: that's idle, so +0.
+    st = setup();
+    engine = await st.open();
+    await st.step(engine, 10 * 60 * 1000, 3110);
+    last = st.clock;
+    st.clock += 10 * H;
+    st.data.ranked_stats['ranked-br-combined'].elo = 3150;
+    st.data.match_history.unshift({ date: 'z', elo: {}, matches: [grp(Math.floor((last + 2 * H) / 1000), 3150)] });
+    st.data.last_updated = new Date(st.clock).toISOString();
+    check('old games then 6h quiet starts over', await st.shown(await st.open()), '+0 ELO TODAY');
+
+    // Pressing Reset after an idle stretch isn't undone by the timer.
+    st = setup();
+    engine = await st.open();
+    await st.step(engine, 10 * 60 * 1000, 3110);
+    await st.step(engine, 7 * H);
+    engine.resetSession();
+    check('manual reset after idle', await st.step(engine, 10 * 60 * 1000, 3100), '-10 ELO TODAY');
+    check('manual reset holds', await st.step(engine, 1 * H), '-10 ELO TODAY');
+  }
   {
     // below Unreal it counts progress, and the label says SESSION
     const storage = memoryStorage();

@@ -24,7 +24,7 @@ A start-to-finish video showing how to download, set up, and use the overlay:
 
 Type your Epic name, pick a design and a color, copy the link, and paste it into an OBS Browser Source. That's the whole setup. Nothing runs on your PC, so there's no Python, no `.bat` files, no antivirus or SmartScreen warnings, and nothing to update. It's always the newest version.
 
-It's the same 8 designs and the same numbers as the download version below, with every option the download has (accent color, stats or creator code, starting mode, update speed, leaderboard lookups) plus a choice of what the ELO change counts: Session (the default), which counts from whenever you press **Reset ELO gain** (right-click the source in OBS > **Interact**, the button sits under the card) so you can start it fresh each stream and shows as "+23 ELO TODAY", or the last 12 or 24 hours. The download version still works exactly as before if you prefer it.
+It's the same 8 designs and the same numbers as the download version below, with every option the download has (accent color, stats or creator code, starting mode, update speed, leaderboard lookups) plus a choice of what the ELO change counts: Session (the default), which shows as "+23 ELO TODAY" and starts over by itself once your ELO hasn't moved for 6 hours, so each stream opens on +0 (to start over sooner, right-click the source in OBS > **Interact** and press **Reset ELO gain** under the card), or the last 12 or 24 hours. The download version still works exactly as before if you prefer it.
 
 ---
 

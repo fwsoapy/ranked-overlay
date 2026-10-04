@@ -621,9 +621,9 @@
             The buttons sit just under the card, out of your viewers' sight.
           </p>
           <p class="tip session-tip" data-show-val="elo=session">
-            <b>Using Session:</b> at the start of each stream, right-click the source, pick <b>Interact</b>
-            and click <b>Reset ELO gain</b> (under the card with the other buttons). It counts from there,
-            even if you restart OBS.
+            <b>Using Session:</b> it starts over by itself once your ELO hasn't moved for 6 hours, so each
+            stream opens on +0. To start over sooner, right-click the source, pick <b>Interact</b> and click
+            <b>Reset ELO gain</b> (under the card with the other buttons). It keeps counting even if you restart OBS.
           </p>
           <p class="tip">Changed something? Copy the link again and paste it over the old one.</p>
         </section>
@@ -658,7 +658,7 @@
             <div class="bar-group">
               <span class="bar-label">ELO change</span>
               <div class="seg" data-seg="elo" role="group" aria-label="ELO change">
-                <button type="button" data-val="session" title="Counts from when you press Reset ELO gain in OBS. Shows as +23 ELO TODAY">Session</button>
+                <button type="button" data-val="session" title="Starts over after 6 hours with no ELO change, or when you press Reset ELO gain in OBS. Shows as +23 ELO TODAY">Session</button>
                 <button type="button" data-val="12h" title="The last 12 hours">Last 12h</button>
                 <button type="button" data-val="24h" title="The last 24 hours">Last 24h</button>
               </div>
@@ -753,7 +753,7 @@
       Also check out <a href="https://fwsoapy.github.io/code-overlay/" target="_blank" rel="noreferrer noopener">Code Overlay</a>.
     </footer>
 
-    <script src="./engine.js?v=a5e858fb63"></script>
+    <script src="./engine.js?v=481c442e99"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>
       (function () {

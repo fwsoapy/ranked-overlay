@@ -47,6 +47,7 @@
   var STALE_RETRY_MS = 30 * 1000;        // came back unchanged: try again soon
   var SKEW_STEP_MS = 10 * 1000;          // ...and wait this much longer next time
   var SKEW_MAX_MS = 10 * 60 * 1000;
+  var SESSION_IDLE_MS = 6 * 60 * 60 * 1000;  // Session starts over after this long without an ELO change
   var BACKOFF_MAX_MS = 10 * 60 * 1000;
   var LOOKUP_TTL_MS = 10 * 60 * 1000;    // leaderboard re-read when nothing changed
   var LOOKUP_HOT_MS = 60 * 1000;         // ...and right after a match
@@ -933,14 +934,94 @@
       return isDict(r) && isDict(r.elos) && isDict(r.progs) ? r : null;
     }
 
-    function recordResetBaseline(key, elo, points) {
-      if (cfg.changeWindow !== 'reset') return;
+    // When this account last finished a ranked match in a mode, from
+    // OliTracker's match history (ms), or 0 if it doesn't say.
+    function latestMatchMs(key) {
+      var want = normalizeModeKey(key);
+      var latest = 0;
+      try {
+        iter(raw && raw.match_history).forEach(function (day) {
+          iter(dget(day, 'matches')).forEach(function (grp) {
+            var rd = dget(grp, 'ranked_data');
+            rd = truthy(rd) ? rd : {};
+            if (want && normalizeModeKey(dget(rd, 'ranking_id')) !== want) return;
+            latest = Math.max(latest, (Number(dget(grp, 'last_modified')) || 0) * 1000);
+          });
+        });
+      } catch (e) { /* odd history: no timestamp */ }
+      return latest;
+    }
+
+    /*
+     * Brings the Session record up to date with what every mode reads now.
+     * Besides the baselines it keeps the last numbers seen and when one of
+     * them last moved ("activity"), so a session nobody reset still starts
+     * over on its own:
+     *   - after SESSION_IDLE_MS with no change at all, from the current
+     *     numbers (the next stream opens on +0);
+     *   - when the first change comes after a gap that long (games played
+     *     while the overlay was closed), from the numbers just before it,
+     *     so those games count and the last stream's don't.
+     * A change is dated by the match history when it has a newer match,
+     * otherwise by when the overlay noticed it.
+     */
+    function observeSession() {
+      if (cfg.changeWindow !== 'reset' || !modes.length) return;
+      var t = clock();
+      var views = modes.map(function (m) { return modeView(m[0], m[1]); });
       var r = loadReset();
-      var changed = !r;
-      if (!r) r = { at: clock(), elos: {}, progs: {} };
-      if (elo !== null && !hasOwn.call(r.elos, key)) { r.elos[key] = elo; changed = true; }
-      if (points !== null && !hasOwn.call(r.progs, key)) { r.progs[key] = points; changed = true; }
-      if (changed) store.set(K.reset, r);
+      if (!r) {
+        var seen = 0;
+        views.forEach(function (v) { seen = Math.max(seen, latestMatchMs(v.key)); });
+        r = { at: t, elos: {}, progs: {}, last: {}, activity: seen && seen <= t ? seen : t };
+      }
+      if (!isDict(r.last)) r.last = {};
+      if (typeof r.activity !== 'number') r.activity = r.at;
+
+      var changeAt = null;
+      views.forEach(function (v) {
+        var prev = r.last[v.key];
+        if (!Array.isArray(prev)) return;
+        var moved = (v.elo !== null && prev[0] !== null && v.elo !== prev[0])
+          || (v.points !== null && prev[1] !== null && v.points !== prev[1]);
+        if (!moved) return;
+        var hist = latestMatchMs(v.key);
+        var at = hist > r.activity && hist <= t ? hist : t;
+        changeAt = changeAt === null ? at : Math.min(changeAt, at);
+      });
+
+      var startFrom = function (pick) {
+        r.elos = {};
+        r.progs = {};
+        views.forEach(function (v) {
+          var vals = pick(v);
+          if (vals[0] !== null) r.elos[v.key] = vals[0];
+          if (vals[1] !== null) r.progs[v.key] = vals[1];
+        });
+      };
+      if (changeAt !== null) {
+        if (changeAt - r.activity >= SESSION_IDLE_MS) {
+          startFrom(function (v) {
+            var prev = Array.isArray(r.last[v.key]) ? r.last[v.key] : [null, null];
+            return [prev[0] !== null ? prev[0] : v.elo, prev[1] !== null ? prev[1] : v.points];
+          });
+          r.at = changeAt;
+        }
+        r.activity = Math.max(r.activity, changeAt);
+      }
+      if (t - r.activity >= SESSION_IDLE_MS && r.at < r.activity + SESSION_IDLE_MS) {
+        startFrom(function (v) { return [v.elo, v.points]; });
+        r.at = t;
+      }
+
+      // Modes seen for the first time since the session started count from now.
+      views.forEach(function (v) {
+        if (v.elo !== null && !hasOwn.call(r.elos, v.key)) r.elos[v.key] = v.elo;
+        if (v.points !== null && !hasOwn.call(r.progs, v.key)) r.progs[v.key] = v.points;
+        var prev = Array.isArray(r.last[v.key]) ? r.last[v.key] : [null, null];
+        r.last[v.key] = [v.elo !== null ? v.elo : prev[0], v.points !== null ? v.points : prev[1]];
+      });
+      store.set(K.reset, r);
     }
 
     function resetDeltas(key, elo, points) {
@@ -954,12 +1035,17 @@
       ];
     }
 
+    // The "Reset ELO gain" button. Keeps when the numbers last moved, so
+    // the 6-hour start-over still works from real activity.
     function resetSession() {
-      var r = { at: clock(), elos: {}, progs: {} };
+      var old = loadReset();
+      var r = { at: clock(), elos: {}, progs: {}, last: {},
+        activity: old && typeof old.activity === 'number' ? old.activity : clock() };
       modes.forEach(function (m) {
         var v = modeView(m[0], m[1]);
         if (v.elo !== null) r.elos[v.key] = v.elo;
         if (v.points !== null) r.progs[v.key] = v.points;
+        r.last[v.key] = [v.elo, v.points];
       });
       store.set(K.reset, r);
     }
@@ -1258,8 +1344,8 @@
       modes.forEach(function (m) {
         var v = modeView(m[0], m[1]);
         recordBaseline(v.key, v.elo, v.points);
-        recordResetBaseline(v.key, v.elo, v.points);
       });
+      observeSession();
       var available = modes.slice().sort(function (a, b) {
         return compareTuples(modeRankKey(b), modeRankKey(a));
       }).map(function (m) {
@@ -1600,7 +1686,7 @@
           return withTimeout(resolveMode(pm[0], pm[1]).then(function () {
             var v = modeView(pm[0], pm[1]);
             recordBaseline(v.key, v.elo, v.points);
-            recordResetBaseline(v.key, v.elo, v.points);
+            observeSession();
             saveSession();
           }), LOOKUP_WAIT_MS);
         }
