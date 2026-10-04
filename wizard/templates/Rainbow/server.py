@@ -1753,21 +1753,24 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             text-transform: uppercase; white-space: nowrap;
         }
 
-        /* Slow rainbow for rank label: red, orange, yellow, green, blue,
-           indigo, violet and back to red. Every stop is bright, so the blend
-           between two neighbours never turns brown or grey. */
+        /* Rainbow rank label: the text colour itself loops red, orange,
+           yellow, green, blue, indigo, violet and back. It animates the
+           colour rather than a gradient clipped to the text because browser
+           "dark mode for websites" features darken bright backgrounds, which
+           turned the yellows brown; they leave bright text alone. */
         .unreal-rainbow {
-            background: linear-gradient(120deg,
-                #ff3b3b,#ff8a1f,#ffe31a,#36e05a,#2f7bff,#6a4bff,#b14dff,#ff3b3b);
-            background-size: 800% 100%;
-            background-repeat: repeat;
-            -webkit-background-clip: text; background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: slowRainbow 45s linear infinite;
+            color: #ff4040;
+            animation: rainbowColor 42s linear infinite;
         }
-        @keyframes slowRainbow {
-            0%   { background-position: 800% 0%; }
-            100% { background-position: 0% 0%; }
+        @keyframes rainbowColor {
+            0%      { color: #ff4040; }
+            14.28%  { color: #ff8c1a; }
+            28.57%  { color: #ffe01a; }
+            42.86%  { color: #36e05a; }
+            57.14%  { color: #3d8bff; }
+            71.43%  { color: #6f5cff; }
+            85.71%  { color: #b75cff; }
+            100%    { color: #ff4040; }
         }
 
         /* Shimmer for ELO number - thin purple line sweeps across white */
