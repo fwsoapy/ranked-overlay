@@ -22,7 +22,8 @@ Python server swapped for src/web/engine.js:
 
     src/web/index.html   the setup page people use to make their OBS link
     src/web/engine.js    the browser port of core_head.py
-    src/web/logo.svg     the site icon
+    src/web/logo.svg     the site icon (favicon-32.png and apple-touch-icon.png
+                         are renders of it)
 
 Run it after touching anything in src/. CI runs it with --check to make sure the
 generated folders in the repo actually match src/.
@@ -163,6 +164,9 @@ def web_outputs():
     files[os.path.join(DOCS, "logo.svg")] = read(os.path.join(WEB, "logo.svg"))
     # Serve the files as they are, without Jekyll looking at them first.
     files[os.path.join(DOCS, ".nojekyll")] = ""
+    # The favicon and home-screen icon, rendered from logo.svg.
+    for name in ("favicon-32.png", "apple-touch-icon.png"):
+        binaries[os.path.join(DOCS, name)] = os.path.join(WEB, name)
 
     for design in DESIGNS:
         slug = design.lower()

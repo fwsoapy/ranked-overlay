@@ -4,7 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ranked Overlay - by fwsoapy</title>
+    <link rel="icon" href="./favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="./logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <meta
       name="description"
       content="Free live Fortnite ranked overlay for OBS. Shows your rank, ELO and season stats from OliTracker. Pick a design, copy one link, paste it into OBS. Nothing to install."
@@ -162,13 +164,31 @@
       .icon-btn:hover { color: var(--text); border-color: var(--accent-dark); }
       .icon-btn span:first-child { font-size: 14px; }
 
+      /* Account and the OBS steps on the left, everything you tweak on the
+         right, so the whole thing fits on one screen on a desktop. */
       main {
-        max-width: 1080px;
+        max-width: 1400px;
         margin: 0 auto;
-        padding: 24px 20px 60px;
-        display: flex;
-        flex-direction: column;
+        padding: 22px 20px 36px;
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
         gap: 18px;
+        align-items: start;
+      }
+      .side, .content { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+      @media (min-height: 760px) {
+        .side { position: sticky; top: 18px; }
+      }
+
+      /* One column: account, preview, design, settings, then the OBS steps. */
+      @media (max-width: 1040px) {
+        main { grid-template-columns: minmax(0, 1fr); }
+        .side, .content { display: contents; }
+        .order-account { order: 1; }
+        .order-preview { order: 2; }
+        .order-design { order: 3; }
+        .order-settings { order: 4; }
+        .order-obs { order: 5; }
       }
 
       .panel {
@@ -288,47 +308,66 @@
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
       }
 
-      /* --- design tiles (same tiles as the Code Overlay presets) ------- */
+      /* --- design tiles ------------------------------------------------ */
 
-      .preset-grid {
+      .design-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-        gap: 9px;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 10px;
       }
 
-      .preset {
+      .design-tile {
         display: flex;
         flex-direction: column;
-        gap: 7px;
+        gap: 8px;
+        padding: 9px 9px 11px;
         text-align: left;
-        padding: 11px 13px;
         border: 1px solid var(--line);
-        border-radius: 9px;
+        border-radius: 10px;
         background: var(--bg-input);
         color: var(--text);
         font: inherit;
       }
-      .preset:hover { border-color: var(--accent-dark); }
-      .preset.on { border-color: var(--accent-dark); background: var(--selected-bg); }
-      .preset-name { font-size: 13.5px; font-weight: 600; }
-      .preset-blurb { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+      .design-tile:hover { border-color: var(--accent-dark); }
+      .design-tile.on { border-color: var(--accent); background: var(--selected-bg); box-shadow: inset 0 0 0 1px var(--accent); }
       .design-thumb {
         position: relative;
         display: block;
-        height: 96px;
-        border-radius: 6px;
+        aspect-ratio: 2.35 / 1;
+        border-radius: 7px;
         border: 1px solid var(--line);
         background: var(--thumb-bg);
         overflow: hidden;
       }
       .design-thumb img {
         position: absolute;
-        inset: 6px;
-        width: calc(100% - 12px);
-        height: calc(100% - 12px);
+        inset: 7px;
+        width: calc(100% - 14px);
+        height: calc(100% - 14px);
         object-fit: contain;
         display: block;
       }
+      .design-name {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 3px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .design-name .tick { color: var(--accent); font-size: 13px; visibility: hidden; }
+      .design-tile.on .design-name .tick { visibility: visible; }
+
+      /* --- settings ---------------------------------------------------- */
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px 22px;
+        align-items: start;
+      }
+      .settings-grid .span-2 { grid-column: span 2; }
+      .head-action { margin-left: auto; padding: 4px 8px; font-size: 12.5px; }
 
       /* Segmented choices, styled like SeedForge's preset options. */
       .seg { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -453,15 +492,10 @@
         color: var(--text);
       }
       .tip { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
-
-      .faq { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
-      .faq details { border-bottom: 1px solid var(--line); padding: 10px 0; }
-      .faq details:last-child { border-bottom: none; }
-      .faq summary { cursor: pointer; font-size: 14px; }
-      .faq p { margin: 8px 0 2px; color: var(--muted); font-size: 13.5px; }
+      .step-action { margin-top: 8px; }
 
       .site-footer {
-        max-width: 1080px;
+        max-width: 1400px;
         margin: 0 auto;
         padding: 0 20px 50px;
         color: var(--muted);
@@ -479,7 +513,12 @@
         .topbar-actions { width: 100%; }
         .topbar-actions .ghost-link { margin-left: auto; }
 
-        main { padding: 16px 14px 44px; gap: 14px; }
+        main { padding: 16px 14px 36px; gap: 14px; }
+        .settings-grid .span-2 { grid-column: auto; }
+        .design-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+        .design-tile { padding: 6px 6px 8px; gap: 6px; }
+        .design-name { font-size: 13px; }
+        .design-name .tick { display: none; }
         .panel { padding: 15px; }
         .site-footer { padding: 0 14px 40px; }
 
@@ -515,85 +554,105 @@
     </header>
 
     <main>
-      <section class="panel">
-        <div class="section-head">
-          <h2>Preview</h2>
-        </div>
-        <div id="stage" class="stage">
-          <div id="frame-box" class="frame-box" aria-label="Overlay preview"></div>
-        </div>
-        <div class="preview-bar">
-          <div class="seg" id="stage-bg" role="group" aria-label="Preview background">
-            <button type="button" data-val="checker" class="on">Transparent</button>
-            <button type="button" data-val="game">Gameplay</button>
-            <button type="button" data-val="green">Green screen</button>
+      <aside class="side">
+        <section class="panel order-account">
+          <div class="section-head">
+            <h2>Your account</h2>
           </div>
-          <div class="seg" id="preview-data" role="group" aria-label="Preview data" hidden>
-            <button type="button" data-val="live" class="on">My stats</button>
-            <button type="button" data-val="demo">Demo numbers</button>
-          </div>
-          <span id="size-note" class="size-note"></span>
-        </div>
-        <p id="data-note" class="data-note"></p>
-
-        <div class="link-box">
-          <input id="obs-link" type="text" readonly aria-label="Your OBS link" value="" />
-          <button id="copy" class="primary" type="button">Copy OBS link</button>
-          <button id="open" class="secondary" type="button">Open</button>
-          <span id="status" class="status" role="status"></span>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="section-head">
-          <h2>Your account</h2>
-          <p class="hint">Type your Epic name and we'll find your account ID.</p>
-        </div>
-        <div class="row">
-          <div class="field wide">
-            <span>Epic display name, account ID, or OliTracker link</span>
+          <div class="field">
+            <span>Epic name, account ID, or OliTracker link</span>
             <div class="input-row">
               <input id="account-input" type="text" maxlength="200" spellcheck="false" autocomplete="off" placeholder="Your Epic name" />
               <button id="account-go" class="secondary" type="button">Find my ID</button>
             </div>
             <div id="account-status" class="account-status" role="status"></div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel">
-        <div class="section-head">
-          <h2>Design</h2>
-        </div>
-        <div id="designs" class="preset-grid"></div>
-      </section>
+        <section class="panel order-obs">
+          <div class="section-head">
+            <h2>Add it to OBS</h2>
+          </div>
+          <ol class="steps">
+            <li>
+              Copy your link.
+              <div class="step-action"><button id="copy-2" class="primary small" type="button">Copy OBS link</button></div>
+            </li>
+            <li>In OBS, click <span class="kbd">+</span> under <b>Sources</b> and pick <b>Browser</b>.</li>
+            <li>Paste it into <b>URL</b>, set <b>Width</b> to <span class="kbd" id="obs-w">520</span> and <b>Height</b> to <span class="kbd" id="obs-h">240</span>, then click <b>OK</b>.</li>
+            <li>Drag it where you want it. It updates on its own.</li>
+          </ol>
+          <p class="tip">
+            To switch modes or flip to your creator code live, right-click the source and pick <b>Interact</b>.
+            The buttons sit just under the card, out of your viewers' sight.
+          </p>
+          <p class="tip">Changed something? Copy the link again and paste it over the old one.</p>
+        </section>
+      </aside>
 
-      <section class="panel">
-        <div class="section">
-          <div class="section-head"><h2>Colour</h2></div>
-          <div class="row">
-            <div class="field wide">
-              <span>Accent</span>
+      <div class="content">
+        <section class="panel order-preview">
+          <div class="section-head">
+            <h2>Preview</h2>
+          </div>
+          <div id="stage" class="stage">
+            <div id="frame-box" class="frame-box" aria-label="Overlay preview"></div>
+          </div>
+          <div class="preview-bar">
+            <div class="seg" id="stage-bg" role="group" aria-label="Preview background">
+              <button type="button" data-val="checker" class="on">Transparent</button>
+              <button type="button" data-val="game">Gameplay</button>
+              <button type="button" data-val="green">Green screen</button>
+            </div>
+            <div class="seg" id="preview-data" role="group" aria-label="Preview data" hidden>
+              <button type="button" data-val="live" class="on">My stats</button>
+              <button type="button" data-val="demo">Demo numbers</button>
+            </div>
+            <span id="size-note" class="size-note"></span>
+          </div>
+          <p id="data-note" class="data-note"></p>
+
+          <div class="link-box">
+            <input id="obs-link" type="text" readonly aria-label="Your OBS link" value="" />
+            <button id="copy" class="primary" type="button">Copy OBS link</button>
+            <button id="open" class="secondary" type="button">Open</button>
+            <span id="status" class="status" role="status"></span>
+          </div>
+        </section>
+
+        <section class="panel order-design">
+          <div class="section-head">
+            <h2>Design</h2>
+          </div>
+          <div id="designs" class="design-grid"></div>
+        </section>
+
+        <section class="panel order-settings">
+          <div class="section-head">
+            <h2>Settings</h2>
+            <button id="reset" class="ghost small head-action" type="button">Reset everything</button>
+          </div>
+          <div class="settings-grid">
+            <div class="field span-2">
+              <span>Accent colour</span>
               <div id="swatches" class="swatches" role="group" aria-label="Accent colour"></div>
             </div>
             <div class="field">
               <span>Custom accent</span>
               <div class="color-input" data-color="color"></div>
             </div>
-            <div class="field" data-show-design="rainbow">
-              <span>Stat label colour</span>
-              <label class="check-line"><input id="label-custom" type="checkbox" /> Use my own</label>
-              <div class="color-input" data-color="labelColor" id="label-color-wrap"></div>
-              <span class="field-hint">Rainbow only. Off means it follows the accent.</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="section">
-          <div class="section-head"><h2>Below your rank</h2></div>
-          <div class="row">
             <div class="field">
-              <span>Show</span>
+              <span>Mode</span>
+              <div class="seg" data-seg="mode">
+                <button type="button" data-val="">Auto</button>
+                <button type="button" data-val="br-combined">BR</button>
+                <button type="button" data-val="blastberry">Reload</button>
+                <button type="button" data-val="squareclub">Boxfights</button>
+              </div>
+              <span class="field-hint">Where it starts. Auto picks your best rank. The buttons under the card still switch it.</span>
+            </div>
+            <div class="field">
+              <span>Below your rank</span>
               <div class="seg" data-seg="show">
                 <button type="button" data-val="stats">Season stats</button>
                 <button type="button" data-val="code">Creator code</button>
@@ -604,120 +663,43 @@
               <input id="code" type="text" maxlength="32" spellcheck="false" autocomplete="off" placeholder="yourcode" />
               <span class="field-hint">Shows as "Use Code YOURCODE #ad".</span>
             </label>
-          </div>
-        </div>
-
-        <details class="advanced" id="advanced">
-          <summary>More options</summary>
-          <div class="row">
-            <div class="field">
-              <span>Starting mode</span>
-              <div class="seg" data-seg="mode">
-                <button type="button" data-val="">Best rank</button>
-                <button type="button" data-val="br-combined">BR</button>
-                <button type="button" data-val="blastberry">Reload</button>
-                <button type="button" data-val="squareclub">Boxfights</button>
-              </div>
-              <span class="field-hint">Where it starts. The mode buttons under the card still switch it, and remember your pick.</span>
-            </div>
-            <div class="field">
-              <span>Update speed</span>
-              <div class="seg" data-seg="refresh">
-                <button type="button" data-val="60">Auto</button>
-                <button type="button" data-val="300">5 min</button>
-                <button type="button" data-val="600">10 min</button>
-              </div>
-              <span class="field-hint">Auto checks right when OliTracker refreshes your profile, about every 3 minutes. Checking more often wouldn't show anything new.</span>
-            </div>
-            <div class="field">
-              <span>Leaderboard</span>
-              <label class="check-line"><input id="next-lookup" type="checkbox" /> Show ELO and "next" gap</label>
-              <span class="field-hint">Unreal only. Turning it off hides ELO when OliTracker doesn't include it.</span>
-            </div>
-            <div class="field wide">
-              <span>Edit a link you made before</span>
-              <div class="input-row">
-                <input id="import-link" type="text" spellcheck="false" autocomplete="off" placeholder="Paste your old OBS link here" />
-                <button id="import-go" class="secondary small" type="button">Load it</button>
-              </div>
+            <div class="field" data-show-design="rainbow">
+              <span>Stat label colour</span>
+              <label class="check-line"><input id="label-custom" type="checkbox" /> Use my own</label>
+              <div class="color-input" data-color="labelColor" id="label-color-wrap"></div>
+              <span class="field-hint">Rainbow only. Off means it follows the accent.</span>
             </div>
           </div>
-        </details>
 
-        <div class="link-box" style="border-top: 1px solid var(--line)">
-          <button id="reset" class="ghost small" type="button">Reset everything</button>
-        </div>
-      </section>
+          <details class="advanced" id="advanced">
+            <summary>More options</summary>
+            <div class="settings-grid">
+              <div class="field">
+                <span>Update speed</span>
+                <div class="seg" data-seg="refresh">
+                  <button type="button" data-val="60">Auto</button>
+                  <button type="button" data-val="300">5 min</button>
+                  <button type="button" data-val="600">10 min</button>
+                </div>
+                <span class="field-hint">Auto checks right when OliTracker refreshes your profile, about every 3 minutes.</span>
+              </div>
+              <div class="field">
+                <span>Leaderboard</span>
+                <label class="check-line"><input id="next-lookup" type="checkbox" /> Show ELO and "next" gap</label>
+                <span class="field-hint">Unreal only. Off hides ELO when OliTracker doesn't include it.</span>
+              </div>
+              <div class="field span-2">
+                <span>Edit a link you made before</span>
+                <div class="input-row">
+                  <input id="import-link" type="text" spellcheck="false" autocomplete="off" placeholder="Paste your old OBS link here" />
+                  <button id="import-go" class="secondary small" type="button">Load it</button>
+                </div>
+              </div>
+            </div>
+          </details>
 
-      <section class="panel">
-        <div class="section-head">
-          <h2>Add it to OBS</h2>
-        </div>
-        <ol class="steps">
-          <li>Hit <b>Copy OBS link</b> up top.</li>
-          <li>In OBS, click <span class="kbd">+</span> under <b>Sources</b> and pick <b>Browser</b>. Name it whatever you like.</li>
-          <li>Paste the link into <b>URL</b>. Set <b>Width</b> to <span class="kbd" id="obs-w">520</span> and <b>Height</b> to <span class="kbd" id="obs-h">240</span>, then click <b>OK</b>.</li>
-          <li>Drag it where you want it. That's it, it updates on its own.</li>
-        </ol>
-        <p class="tip">
-          To switch modes or flip between stats and your creator code, right-click the source in OBS and pick
-          <b>Interact</b>. The buttons are just under the card, outside the area your viewers see.
-        </p>
-        <p class="tip">
-          Changed something here? Copy the link again and paste it over the old one
-          (double-click the source in OBS to edit it).
-        </p>
-      </section>
-
-      <section class="panel">
-        <div class="section-head">
-          <h2>Questions</h2>
-        </div>
-        <div class="faq">
-          <details>
-            <summary>Is it free?</summary>
-            <p>Yes. No account, no download, no catch.</p>
-          </details>
-          <details>
-            <summary>Do I need to run anything or turn off my antivirus?</summary>
-            <p>No. It's a web page that OBS shows like any other browser source. Nothing runs on your PC.</p>
-          </details>
-          <details>
-            <summary>Where do the numbers come from?</summary>
-            <p>
-              <a href="https://olitracker.com" target="_blank" rel="noreferrer noopener">OliTracker</a>. If something looks off,
-              check your profile there first. OliTracker only publishes ELO for the top 10,000 of each mode, so the ELO row
-              shows up once you're inside that and hides again if you drop out.
-            </p>
-          </details>
-          <details>
-            <summary>How often does it update?</summary>
-            <p>
-              About every 3 minutes while you're streaming or recording, right when OliTracker refreshes your profile, so you
-              see new numbers as soon as they exist. When OBS is open but you're not live it checks every 10 minutes, and it
-              stops completely while the overlay isn't on screen. It picks right back up when it is.
-            </p>
-          </details>
-          <details>
-            <summary>What does "+23 ELO TODAY" count from?</summary>
-            <p>
-              From when the overlay first loaded. Switching scenes doesn't reset it. Close OBS for more than an hour and it
-              starts fresh next time.
-            </p>
-          </details>
-          <details>
-            <summary>It says "no ranked data found".</summary>
-            <p>OliTracker has no ranked games for that account yet. Play a ranked match, or check you picked the right account.</p>
-          </details>
-          <details>
-            <summary>I want the old download version.</summary>
-            <p>
-              It's still on <a href="https://github.com/fwsoapy/ranked-overlay#readme" target="_blank" rel="noreferrer noopener">GitHub</a>
-              and works the same as before.
-            </p>
-          </details>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
 
     <footer class="site-footer">
@@ -900,7 +882,7 @@
           var note = $('data-note');
           $('preview-data').hidden = !hasAccount();
           if (!hasAccount()) {
-            note.textContent = 'Showing demo numbers. Add your account below to see your own.';
+            note.textContent = 'Showing demo numbers. Add your account to see your own.';
           } else if (state.previewData === 'demo') {
             note.textContent = 'Showing demo numbers. Your link still uses your live stats.';
           } else {
@@ -1005,14 +987,13 @@
         DESIGNS.forEach(function (d) {
           var b = document.createElement('button');
           b.type = 'button';
-          b.className = 'preset';
+          b.className = 'design-tile';
+          b.title = d.blurb;
           b.setAttribute('data-design', d.id);
           b.innerHTML =
-            '<span class="preset-name"></span>' +
-            '<span class="design-thumb"><img alt="" loading="lazy"></span>' +
-            '<span class="preset-blurb"></span>';
-          b.querySelector('.preset-name').textContent = d.name;
-          b.querySelector('.preset-blurb').textContent = d.blurb;
+            '<span class="design-thumb"><img alt=""></span>' +
+            '<span class="design-name"><span></span><span class="tick" aria-hidden="true">✓ Selected</span></span>';
+          b.querySelector('.design-name span').textContent = d.name;
           var img = b.querySelector('img');
           img.src = 'previews/' + d.id + '.png';
           img.alt = d.name + ' design';
@@ -1182,7 +1163,7 @@
           });
         }
 
-        $('copy').addEventListener('click', function () {
+        function copyLink() {
           if (!hasAccount()) {
             flash('Add your account first', true);
             accountInput.focus();
@@ -1194,6 +1175,14 @@
             $('obs-link').select();
             flash('Press Ctrl+C to copy it', true);
           });
+        }
+        $('copy').addEventListener('click', copyLink);
+        $('copy-2').addEventListener('click', function () {
+          copyLink();
+          var b = $('copy-2');
+          if (!hasAccount()) return;
+          b.textContent = 'Copied!';
+          setTimeout(function () { b.textContent = 'Copy OBS link'; }, 1800);
         });
 
         $('open').addEventListener('click', function () {
@@ -1264,7 +1253,7 @@
           });
           $('obs-w').textContent = d.w;
           $('obs-h').textContent = d.h;
-          $('obs-link').value = hasAccount() ? overlayUrl(false) : 'Add your account below to get your link';
+          $('obs-link').value = hasAccount() ? overlayUrl(false) : 'Add your account to get your link';
           $('copy').disabled = false;
           renderDataNote();
         }
