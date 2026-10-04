@@ -1,0 +1,1337 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ranked Overlay - by fwsoapy</title>
+    <link rel="icon" href="./logo.svg" type="image/svg+xml" />
+    <meta
+      name="description"
+      content="Free live Fortnite ranked overlay for OBS. Shows your rank, ELO and season stats from OliTracker. Pick a design, copy one link, paste it into OBS. Nothing to install."
+    />
+    <meta name="author" content="fwsoapy" />
+    <meta name="theme-color" content="#f4f6f9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#10141a" media="(prefers-color-scheme: dark)" />
+
+    <script>
+      /* Applies a stored theme before first paint so the other palette never
+         flashes. The key matches THEME_KEY further down. */
+      try {
+        var t = localStorage.getItem('ranked-overlay:theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) { /* storage blocked: fall back to following the OS */ }
+    </script>
+
+    <style>
+      /*
+       * Theming, the same tokens as Code Overlay and SeedForge so the sites
+       * look like siblings. Light applies when the OS asks for it and no
+       * explicit choice overrides it, or when the toggle picks it outright.
+       */
+      :root {
+        color-scheme: dark;
+
+        --bg: #10141a;
+        --bg-raised: #171d26;
+        --bg-input: #0d1116;
+        --line: #26303d;
+        --line-hover: #3a4757;
+        --text: #e6edf3;
+        --muted: #93a1b1;
+        --faint: #6f7c8b;
+        --accent: #4b9eff;
+        --accent-hover: #67afff;
+        --accent-dark: #2f6fc0;
+        --on-accent: #08121f;
+        --selected-bg: #122038;
+        --danger: #ef6461;
+        --ok: #3ccf7e;
+        --checker-a: #1b222c;
+        --checker-b: #141a22;
+        --thumb-bg: #0b0f14;
+        --shadow: rgba(0, 0, 0, 0.5);
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) {
+          color-scheme: light;
+
+          --bg: #f4f6f9;
+          --bg-raised: #ffffff;
+          --bg-input: #f8fafc;
+          --line: #d6dde5;
+          --line-hover: #b3bfcc;
+          --text: #1b2430;
+          --muted: #5b6876;
+          --faint: #76828f;
+          --accent: #1f6fd1;
+          --accent-hover: #1a60b8;
+          --accent-dark: #5a9ae6;
+          --on-accent: #ffffff;
+          --selected-bg: #e8f1fc;
+          --danger: #c8332f;
+          --ok: #1c8a4e;
+          --checker-a: #e7ebf0;
+          --checker-b: #f8fafc;
+          --thumb-bg: #1b222c;
+          --shadow: rgba(27, 36, 48, 0.18);
+        }
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+
+        --bg: #f4f6f9;
+        --bg-raised: #ffffff;
+        --bg-input: #f8fafc;
+        --line: #d6dde5;
+        --line-hover: #b3bfcc;
+        --text: #1b2430;
+        --muted: #5b6876;
+        --faint: #76828f;
+        --accent: #1f6fd1;
+        --accent-hover: #1a60b8;
+        --accent-dark: #5a9ae6;
+        --on-accent: #ffffff;
+        --selected-bg: #e8f1fc;
+        --danger: #c8332f;
+        --ok: #1c8a4e;
+        --checker-a: #e7ebf0;
+        --checker-b: #f8fafc;
+        --thumb-bg: #1b222c;
+        --shadow: rgba(27, 36, 48, 0.18);
+      }
+
+      :root[data-theme="dark"] { color-scheme: dark; }
+
+      :root {
+        --radius: 10px;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+
+      a { color: var(--accent); }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--line);
+        background: var(--bg-raised);
+      }
+
+      .brand { display: flex; align-items: center; gap: 14px; }
+      .brand-mark { width: 56px; height: 56px; flex: none; display: block; }
+      .topbar h1 { font-size: 20px; margin: 0; letter-spacing: 0.2px; }
+      .tagline { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+      .ghost-link {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 12px;
+        text-decoration: none;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .ghost-link:hover { color: var(--text); border-color: var(--accent-dark); }
+
+      .topbar-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 6px 11px;
+        font-size: 13px;
+        line-height: 1.2;
+      }
+      .icon-btn:hover { color: var(--text); border-color: var(--accent-dark); }
+      .icon-btn span:first-child { font-size: 14px; }
+
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 24px 20px 60px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .panel {
+        background: var(--bg-raised);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 20px;
+      }
+      .panel h2 { margin: 0 0 4px; font-size: 16px; }
+
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 260px));
+        justify-content: start;
+        align-items: start;
+        gap: 16px 22px;
+      }
+
+      .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+      .field[hidden], [hidden] { display: none !important; }
+      .field.wide { grid-column: 1 / -1; max-width: 560px; }
+
+      input, select {
+        background: var(--bg-input);
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 9px 10px;
+        font: inherit;
+        font-size: 14px;
+        width: 100%;
+      }
+      input:focus, select:focus { outline: 2px solid var(--accent-dark); outline-offset: 1px; }
+      input.mono { font-family: var(--mono); font-size: 13px; }
+
+      .field-hint { font-size: 11px; color: var(--faint); line-height: 1.4; }
+
+      .section { margin-top: 26px; }
+      .section:first-of-type { margin-top: 0; }
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .section-head h2 { margin: 0; }
+      .hint { color: var(--muted); font-size: 13px; margin: 0; }
+
+      .group-heading {
+        margin: 0 0 7px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.7px;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+
+      /* --- account ------------------------------------------------------ */
+
+      .input-row { display: flex; gap: 8px; }
+      .input-row input { flex: 1 1 auto; min-width: 0; }
+      .input-row button { flex: none; }
+
+      .account-status { font-size: 13px; min-height: 20px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .account-status.ok { color: var(--ok); }
+      .account-status.bad { color: var(--danger); }
+      .account-status.busy { color: var(--muted); }
+      .account-status code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+      .linkish {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--muted);
+        font-size: 12.5px;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .linkish:hover { color: var(--text); }
+
+      /* --- colour inputs ----------------------------------------------- */
+
+      .color-input { display: flex; gap: 8px; }
+      .color-input input[type="color"] {
+        flex: none;
+        width: 42px;
+        height: 40px;
+        padding: 3px;
+        cursor: pointer;
+      }
+      .color-input input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+      .color-input input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
+      .color-input input[type="color"]::-moz-color-swatch { border: none; border-radius: 5px; }
+      .color-input input[type="text"] { font-family: var(--mono); font-size: 13px; text-transform: lowercase; }
+
+      .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+      .swatch {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        cursor: pointer;
+        position: relative;
+      }
+      .swatch:hover { border-color: var(--line-hover); transform: translateY(-1px); }
+      .swatch.on { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .swatch.default::after {
+        content: "D";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+      }
+
+      /* --- design tiles (same tiles as the Code Overlay presets) ------- */
+
+      .preset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 9px;
+      }
+
+      .preset {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        text-align: left;
+        padding: 11px 13px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--bg-input);
+        color: var(--text);
+        font: inherit;
+      }
+      .preset:hover { border-color: var(--accent-dark); }
+      .preset.on { border-color: var(--accent-dark); background: var(--selected-bg); }
+      .preset-name { font-size: 13.5px; font-weight: 600; }
+      .preset-blurb { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+      .design-thumb {
+        position: relative;
+        display: block;
+        height: 96px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--thumb-bg);
+        overflow: hidden;
+      }
+      .design-thumb img {
+        position: absolute;
+        inset: 6px;
+        width: calc(100% - 12px);
+        height: calc(100% - 12px);
+        object-fit: contain;
+        display: block;
+      }
+
+      /* Segmented choices, styled like SeedForge's preset options. */
+      .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+      .seg button {
+        border: 1px solid var(--line);
+        background: var(--bg-input);
+        color: var(--text);
+        border-radius: 7px;
+        padding: 7px 12px;
+        font-size: 13px;
+      }
+      .seg button:hover { border-color: var(--accent-dark); }
+      .seg button.on { border-color: var(--accent-dark); background: var(--selected-bg); }
+
+      /* --- checkboxes -------------------------------------------------- */
+
+      .check-line {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--text);
+        font-size: 13.5px;
+        cursor: pointer;
+        padding: 3px 0;
+      }
+      .check-line input {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin: 0;
+        accent-color: var(--accent);
+        cursor: pointer;
+      }
+
+      /* --- preview ----------------------------------------------------- */
+
+      .stage {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 200px;
+        padding: 24px 16px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+        background-color: var(--checker-b);
+        background-image:
+          linear-gradient(45deg, var(--checker-a) 25%, transparent 25%),
+          linear-gradient(-45deg, var(--checker-a) 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, var(--checker-a) 75%),
+          linear-gradient(-45deg, transparent 75%, var(--checker-a) 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+      }
+      .stage.bg-game {
+        background: linear-gradient(160deg, #6fb6e8 0%, #9fd3f2 45%, #6cae4f 46%, #3f7d33 100%);
+      }
+      .stage.bg-green { background: #00b140; }
+
+      .frame-box { position: relative; flex: none; }
+      .frame-box iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        border: 0;
+        background: transparent;
+        transform-origin: 0 0;
+        color-scheme: normal;
+      }
+      .frame-box iframe.pending { opacity: 0; pointer-events: none; }
+
+      .preview-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .preview-bar .seg { margin-right: auto; }
+      .size-note { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .data-note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+
+      .link-box { display: flex; gap: 8px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
+      .link-box input { flex: 1 1 320px; min-width: 0; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+      .status { font-size: 13px; color: var(--accent); }
+
+      button {
+        font: inherit;
+        font-size: 14px;
+        border-radius: 8px;
+        padding: 10px 18px;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      button.small { padding: 7px 13px; font-size: 13px; }
+      .primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+      .primary:hover:not(:disabled) { background: var(--accent-hover); }
+      .secondary { background: transparent; border-color: var(--line); color: var(--text); }
+      .secondary:hover:not(:disabled) { border-color: var(--accent-dark); }
+      .ghost { background: transparent; border-color: transparent; color: var(--muted); }
+      .ghost:hover { color: var(--text); }
+
+      .advanced { margin-top: 22px; }
+      .advanced summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+      .advanced .row { margin-top: 12px; }
+
+      /* --- OBS steps + FAQ -------------------------------------------- */
+
+      .steps { margin: 6px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; }
+      .steps li { padding-left: 4px; }
+      .steps li::marker { color: var(--faint); font-weight: 600; }
+      .kbd {
+        display: inline-block;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        padding: 1px 6px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: var(--bg-input);
+        color: var(--text);
+      }
+      .tip { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
+
+      .faq { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+      .faq details { border-bottom: 1px solid var(--line); padding: 10px 0; }
+      .faq details:last-child { border-bottom: none; }
+      .faq summary { cursor: pointer; font-size: 14px; }
+      .faq p { margin: 8px 0 2px; color: var(--muted); font-size: 13.5px; }
+
+      .site-footer {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 20px 50px;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+
+      /* --- narrow screens ---------------------------------------------- */
+
+      @media (max-width: 620px) {
+        .topbar { flex-wrap: wrap; gap: 12px; padding: 14px 16px; }
+        .brand { gap: 11px; }
+        .brand-mark { width: 40px; height: 40px; }
+        .topbar h1 { font-size: 18px; }
+        .tagline { font-size: 12px; }
+        .topbar-actions { width: 100%; }
+        .topbar-actions .ghost-link { margin-left: auto; }
+
+        main { padding: 16px 14px 44px; gap: 14px; }
+        .panel { padding: 15px; }
+        .site-footer { padding: 0 14px 40px; }
+
+        .row { grid-template-columns: 1fr; gap: 13px; }
+        .link-box button { flex: 1 1 auto; }
+        .stage { min-height: 150px; padding: 16px 8px; }
+        .input-row { flex-wrap: wrap; }
+        .input-row button { flex: 1 1 auto; }
+      }
+
+      /* iOS Safari zooms in on focused fields under 16px and never zooms back. */
+      @media (pointer: coarse) {
+        input, select, .color-input input[type="text"] { font-size: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-mark" src="./logo.svg" alt="" aria-hidden="true" width="56" height="56" />
+        <div>
+          <h1>Ranked Overlay</h1>
+          <p class="tagline">Live Fortnite rank and ELO for OBS. Nothing to install.</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button id="theme" class="icon-btn" type="button" aria-label="Switch theme">
+          <span id="theme-icon" aria-hidden="true">◐</span>
+          <span id="theme-label">System</span>
+        </button>
+        <a class="ghost-link" href="https://github.com/fwsoapy/ranked-overlay" target="_blank" rel="noreferrer noopener">GitHub</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="section-head">
+          <h2>Preview</h2>
+        </div>
+        <div id="stage" class="stage">
+          <div id="frame-box" class="frame-box" aria-label="Overlay preview"></div>
+        </div>
+        <div class="preview-bar">
+          <div class="seg" id="stage-bg" role="group" aria-label="Preview background">
+            <button type="button" data-val="checker" class="on">Transparent</button>
+            <button type="button" data-val="game">Gameplay</button>
+            <button type="button" data-val="green">Green screen</button>
+          </div>
+          <div class="seg" id="preview-data" role="group" aria-label="Preview data" hidden>
+            <button type="button" data-val="live" class="on">My stats</button>
+            <button type="button" data-val="demo">Demo numbers</button>
+          </div>
+          <span id="size-note" class="size-note"></span>
+        </div>
+        <p id="data-note" class="data-note"></p>
+
+        <div class="link-box">
+          <input id="obs-link" type="text" readonly aria-label="Your OBS link" value="" />
+          <button id="copy" class="primary" type="button">Copy OBS link</button>
+          <button id="open" class="secondary" type="button">Open</button>
+          <span id="status" class="status" role="status"></span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Your account</h2>
+          <p class="hint">Type your Epic name and we'll find your account ID.</p>
+        </div>
+        <div class="row">
+          <div class="field wide">
+            <span>Epic display name, account ID, or OliTracker link</span>
+            <div class="input-row">
+              <input id="account-input" type="text" maxlength="200" spellcheck="false" autocomplete="off" placeholder="Your Epic name" />
+              <button id="account-go" class="secondary" type="button">Find my ID</button>
+            </div>
+            <div id="account-status" class="account-status" role="status"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Design</h2>
+        </div>
+        <div id="designs" class="preset-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section">
+          <div class="section-head"><h2>Colour</h2></div>
+          <div class="row">
+            <div class="field wide">
+              <span>Accent</span>
+              <div id="swatches" class="swatches" role="group" aria-label="Accent colour"></div>
+            </div>
+            <div class="field">
+              <span>Custom accent</span>
+              <div class="color-input" data-color="color"></div>
+            </div>
+            <div class="field" data-show-design="rainbow">
+              <span>Stat label colour</span>
+              <label class="check-line"><input id="label-custom" type="checkbox" /> Use my own</label>
+              <div class="color-input" data-color="labelColor" id="label-color-wrap"></div>
+              <span class="field-hint">Rainbow only. Off means it follows the accent.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head"><h2>Below your rank</h2></div>
+          <div class="row">
+            <div class="field">
+              <span>Show</span>
+              <div class="seg" data-seg="show">
+                <button type="button" data-val="stats">Season stats</button>
+                <button type="button" data-val="code">Creator code</button>
+              </div>
+            </div>
+            <label class="field" data-show-val="show=code">
+              <span>Creator code</span>
+              <input id="code" type="text" maxlength="32" spellcheck="false" autocomplete="off" placeholder="yourcode" />
+              <span class="field-hint">Shows as "Use Code YOURCODE #ad".</span>
+            </label>
+          </div>
+        </div>
+
+        <details class="advanced" id="advanced">
+          <summary>More options</summary>
+          <div class="row">
+            <div class="field">
+              <span>Starting mode</span>
+              <div class="seg" data-seg="mode">
+                <button type="button" data-val="">Best rank</button>
+                <button type="button" data-val="br-combined">BR</button>
+                <button type="button" data-val="blastberry">Reload</button>
+                <button type="button" data-val="squareclub">Boxfights</button>
+              </div>
+              <span class="field-hint">Where it starts. The mode buttons under the card still switch it, and remember your pick.</span>
+            </div>
+            <div class="field">
+              <span>Update speed</span>
+              <div class="seg" data-seg="refresh">
+                <button type="button" data-val="60">Auto</button>
+                <button type="button" data-val="300">5 min</button>
+                <button type="button" data-val="600">10 min</button>
+              </div>
+              <span class="field-hint">Auto checks right when OliTracker refreshes your profile, about every 3 minutes. Checking more often wouldn't show anything new.</span>
+            </div>
+            <div class="field">
+              <span>Leaderboard</span>
+              <label class="check-line"><input id="next-lookup" type="checkbox" /> Show ELO and "next" gap</label>
+              <span class="field-hint">Unreal only. Turning it off hides ELO when OliTracker doesn't include it.</span>
+            </div>
+            <div class="field wide">
+              <span>Edit a link you made before</span>
+              <div class="input-row">
+                <input id="import-link" type="text" spellcheck="false" autocomplete="off" placeholder="Paste your old OBS link here" />
+                <button id="import-go" class="secondary small" type="button">Load it</button>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <div class="link-box" style="border-top: 1px solid var(--line)">
+          <button id="reset" class="ghost small" type="button">Reset everything</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Add it to OBS</h2>
+        </div>
+        <ol class="steps">
+          <li>Hit <b>Copy OBS link</b> up top.</li>
+          <li>In OBS, click <span class="kbd">+</span> under <b>Sources</b> and pick <b>Browser</b>. Name it whatever you like.</li>
+          <li>Paste the link into <b>URL</b>. Set <b>Width</b> to <span class="kbd" id="obs-w">520</span> and <b>Height</b> to <span class="kbd" id="obs-h">240</span>, then click <b>OK</b>.</li>
+          <li>Drag it where you want it. That's it, it updates on its own.</li>
+        </ol>
+        <p class="tip">
+          To switch modes or flip between stats and your creator code, right-click the source in OBS and pick
+          <b>Interact</b>. The buttons are just under the card, outside the area your viewers see.
+        </p>
+        <p class="tip">
+          Changed something here? Copy the link again and paste it over the old one
+          (double-click the source in OBS to edit it).
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Questions</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Is it free?</summary>
+            <p>Yes. No account, no download, no catch.</p>
+          </details>
+          <details>
+            <summary>Do I need to run anything or turn off my antivirus?</summary>
+            <p>No. It's a web page that OBS shows like any other browser source. Nothing runs on your PC.</p>
+          </details>
+          <details>
+            <summary>Where do the numbers come from?</summary>
+            <p>
+              <a href="https://olitracker.com" target="_blank" rel="noreferrer noopener">OliTracker</a>. If something looks off,
+              check your profile there first. OliTracker only publishes ELO for the top 10,000 of each mode, so the ELO row
+              shows up once you're inside that and hides again if you drop out.
+            </p>
+          </details>
+          <details>
+            <summary>How often does it update?</summary>
+            <p>
+              About every 3 minutes while you're streaming or recording, right when OliTracker refreshes your profile, so you
+              see new numbers as soon as they exist. When OBS is open but you're not live it checks every 10 minutes, and it
+              stops completely while the overlay isn't on screen. It picks right back up when it is.
+            </p>
+          </details>
+          <details>
+            <summary>What does "+23 ELO TODAY" count from?</summary>
+            <p>
+              From when the overlay first loaded. Switching scenes doesn't reset it. Close OBS for more than an hour and it
+              starts fresh next time.
+            </p>
+          </details>
+          <details>
+            <summary>It says "no ranked data found".</summary>
+            <p>OliTracker has no ranked games for that account yet. Play a ranked match, or check you picked the right account.</p>
+          </details>
+          <details>
+            <summary>I want the old download version.</summary>
+            <p>
+              It's still on <a href="https://github.com/fwsoapy/ranked-overlay#readme" target="_blank" rel="noreferrer noopener">GitHub</a>
+              and works the same as before.
+            </p>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      By <a href="https://github.com/fwsoapy" target="_blank" rel="noreferrer noopener">fwsoapy</a>.
+      Data from <a href="https://olitracker.com" target="_blank" rel="noreferrer noopener">OliTracker</a>.
+      Also check out <a href="https://fwsoapy.github.io/code-overlay/" target="_blank" rel="noreferrer noopener">Code Overlay</a>.
+    </footer>
+
+    <script src="./engine.js?v=de6a1e9d5c"></script>
+    <script>
+      (function () {
+        'use strict';
+
+        /* Each design's default accent comes from its own stylesheet, and the
+           OBS size is the card plus a little room, cut off just above the mode
+           buttons so viewers never see them. */
+        var DESIGNS = [
+          { id: 'minimal', name: 'Minimal', accent: '#ac46ff', w: 680, h: 235,
+            blurb: 'Clean single row with rank and ELO side by side and a bold left border.' },
+          { id: 'classic', name: 'Classic', accent: '#3b82f6', w: 560, h: 245,
+            blurb: 'Dark card with a thin top accent line and subtle dividers.' },
+          { id: 'sharp', name: 'Sharp', accent: '#cc1111', w: 600, h: 265,
+            blurb: 'Big stacked text with clipped corners. Structured and aggressive.' },
+          { id: 'wide', name: 'Wide', accent: '#38bdf8', w: 640, h: 160,
+            blurb: 'Spread out sideways with a glowing bar on the left. For wide layouts.' },
+          { id: 'slash', name: 'Slash', accent: '#a855f7', w: 600, h: 245,
+            blurb: 'A diagonal cut splits rank and ELO into two panels.' },
+          { id: 'rainbow', name: 'Rainbow', accent: '#c080ff', w: 800, h: 220,
+            blurb: 'Animated rainbow rank text and a shimmering ELO value.' },
+          { id: 'modern', name: 'Modern', accent: '#dc2626', w: 540, h: 194,
+            blurb: 'Sleek card with a soft radial glow and a bold left border.' },
+          { id: 'pulse', name: 'Pulse', accent: '#2dff91', w: 660, h: 230,
+            blurb: 'Green terminal HUD with a radial gauge and a monospace readout.' },
+        ];
+        var BY_ID = {};
+        DESIGNS.forEach(function (d) { BY_ID[d.id] = d; });
+
+        // Same names the setup tool accepts.
+        var SWATCHES = [
+          ['Red', '#ff3b30'], ['Orange', '#ff7a00'], ['Yellow', '#ffd400'], ['Green', '#2ed573'],
+          ['Cyan', '#00e5ff'], ['Blue', '#2979ff'], ['Purple', '#7c3aed'], ['Magenta', '#ff00ff'],
+          ['Pink', '#ff4fa3'], ['White', '#ffffff'],
+        ];
+
+        var DEFAULTS = {
+          input: '', accountId: '', accountName: '',
+          design: 'classic',
+          color: '',            // '' = the design's own accent
+          customColor: '#ff7a00',
+          labelCustom: false, labelColor: '#ffffff',
+          show: 'stats', code: '',
+          mode: '', refresh: '60', next: true,
+          previewBg: 'checker', previewData: 'live',
+        };
+
+        var STATE_KEY = 'ranked-overlay:setup-v1';
+        var LOOKUP_KEY = 'ranked-overlay:lookups-v1';
+        var THEME_KEY = 'ranked-overlay:theme';
+
+        function readJSON(key, fallback) {
+          try {
+            var raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : fallback;
+          } catch (e) {
+            return fallback;
+          }
+        }
+        function writeJSON(key, value) {
+          try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* blocked */ }
+        }
+
+        var state = Object.assign({}, DEFAULTS, readJSON(STATE_KEY, {}));
+        if (!BY_ID[state.design]) state.design = DEFAULTS.design;
+        if (['60', '300', '600'].indexOf(String(state.refresh)) < 0) state.refresh = '60';
+
+        function $(id) { return document.getElementById(id); }
+
+        /* ---------------------------------------------------------------
+         * The OBS link
+         * ------------------------------------------------------------- */
+
+        function hasAccount() { return RankedEngine.validAccountId(state.accountId); }
+
+        function cleanCode(v) {
+          // The designs add their own decoration, same as the setup tool strips.
+          return String(v || '').replace(/:-?\)/g, '').trim();
+        }
+
+        function overlayParams(forPreview) {
+          var p = new URLSearchParams();
+          var demo = forPreview && (!hasAccount() || state.previewData === 'demo');
+          if (demo) p.set('demo', '1');
+          else if (hasAccount()) p.set('id', state.accountId);
+          if (state.color) p.set('color', state.color.replace('#', ''));
+          if (state.design === 'rainbow' && state.labelCustom) p.set('label', state.labelColor.replace('#', ''));
+          var code = cleanCode(state.code);
+          if (state.show === 'code' && code) p.set('code', code);
+          if (state.mode) p.set('mode', state.mode);
+          if (String(state.refresh) !== '60') p.set('refresh', String(state.refresh));
+          if (!state.next) p.set('next', '0');
+          return p;
+        }
+
+        function overlayUrl(forPreview) {
+          var base = new URL('overlay/' + state.design + '.html', location.href);
+          base.search = overlayParams(forPreview).toString();
+          base.hash = '';
+          return base.href;
+        }
+
+        /* ---------------------------------------------------------------
+         * Preview: the real overlay page in an iframe, swapped only once the
+         * new one has its numbers so it never flashes "LOADING".
+         * ------------------------------------------------------------- */
+
+        var frameBox = $('frame-box');
+        var stage = $('stage');
+        var current = null;
+        var currentSrc = '';
+        var previewTimer = 0;
+
+        function fitPreview() {
+          var d = BY_ID[state.design];
+          var avail = stage.clientWidth - 32;
+          var k = Math.min(1, avail / d.w);
+          frameBox.style.width = Math.round(d.w * k) + 'px';
+          frameBox.style.height = Math.round(d.h * k) + 'px';
+          frameBox.querySelectorAll('iframe').forEach(function (f) {
+            f.style.width = d.w + 'px';
+            f.style.height = d.h + 'px';
+            f.style.transform = 'scale(' + k + ')';
+          });
+          $('size-note').textContent = d.w + ' x ' + d.h + ' px';
+        }
+
+        function loadPreview() {
+          var src = overlayUrl(true);
+          if (src === currentSrc) return;
+          currentSrc = src;
+          var next = document.createElement('iframe');
+          next.className = current ? 'pending' : '';
+          next.title = 'Overlay preview';
+          next.setAttribute('scrolling', 'no');
+          next.setAttribute('tabindex', '-1');
+          next.src = src;
+          frameBox.appendChild(next);
+          fitPreview();
+          var swapped = false;
+          function swap() {
+            if (swapped || next.parentNode !== frameBox) return;
+            swapped = true;
+            if (current && current !== next) current.remove();
+            next.classList.remove('pending');
+            current = next;
+          }
+          // Swap as soon as the new overlay has its numbers. Waiting for the
+          // iframe's load event would also wait on its web fonts.
+          var tries = 0;
+          var poll = setInterval(function () {
+            if (next.parentNode !== frameBox) { clearInterval(poll); return; }
+            var ro = null;
+            try { ro = next.contentWindow && next.contentWindow.RankedOverlay; } catch (e) { ro = null; }
+            if (!ro && ++tries < 80) return;
+            clearInterval(poll);
+            if (!ro) { swap(); return; }
+            ro.fetchData('/data').then(function () { setTimeout(swap, 120); }, swap);
+          }, 100);
+          setTimeout(swap, 8000);
+          // Drop any older frame that was still loading.
+          frameBox.querySelectorAll('iframe.pending').forEach(function (f) { if (f !== next) f.remove(); });
+        }
+
+        function schedulePreview() {
+          clearTimeout(previewTimer);
+          previewTimer = setTimeout(loadPreview, 250);
+        }
+
+        function renderDataNote() {
+          var note = $('data-note');
+          $('preview-data').hidden = !hasAccount();
+          if (!hasAccount()) {
+            note.textContent = 'Showing demo numbers. Add your account below to see your own.';
+          } else if (state.previewData === 'demo') {
+            note.textContent = 'Showing demo numbers. Your link still uses your live stats.';
+          } else {
+            note.textContent = 'Showing your live stats' + (state.accountName ? ' for ' + state.accountName : '') + '.';
+          }
+        }
+
+        /* ---------------------------------------------------------------
+         * Account
+         * ------------------------------------------------------------- */
+
+        var accountInput = $('account-input');
+        var accountStatus = $('account-status');
+        var lookupCache = readJSON(LOOKUP_KEY, {});
+        if (typeof lookupCache !== 'object' || !lookupCache) lookupCache = {};
+        var lastLookedUp = null;
+
+        function showAccount(kind, html) {
+          accountStatus.className = 'account-status' + (kind ? ' ' + kind : '');
+          accountStatus.innerHTML = html;
+        }
+
+        function esc(s) {
+          return String(s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+          });
+        }
+
+        function renderAccount() {
+          if (hasAccount()) {
+            showAccount('ok',
+              '<span>✓ ' + (state.accountName ? esc(state.accountName) + ': ' : 'Account ID: ') +
+              '<code>' + esc(state.accountId) + '</code></span>' +
+              '<a class="linkish" href="https://olitracker.com/stats/' + esc(state.accountId) +
+              '" target="_blank" rel="noreferrer noopener">Check on OliTracker</a>');
+          } else {
+            showAccount('', '');
+          }
+        }
+
+        function setAccount(id, name) {
+          state.accountId = id;
+          state.accountName = name || '';
+          lastLookedUp = accountInput.value.trim();
+          renderAccount();
+          changed();
+        }
+
+        // Accepts a name, a 32-character ID, or any link with /stats/<id> in it.
+        function idFromText(text) {
+          var m = String(text).match(/(?:^|[^0-9a-f])([0-9a-f]{32})(?:$|[^0-9a-f])/i);
+          return m ? m[1].toLowerCase() : null;
+        }
+
+        function findAccount() {
+          var text = accountInput.value.trim();
+          if (!text) return;
+          if (text === lastLookedUp && hasAccount()) return;
+          var direct = idFromText(text);
+          if (direct) {
+            setAccount(direct, '');
+            return;
+          }
+          var key = text.toLowerCase();
+          if (lookupCache[key]) {
+            setAccount(lookupCache[key], text);
+            return;
+          }
+          lastLookedUp = text;
+          $('account-go').disabled = true;
+          showAccount('busy', 'Looking up ' + esc(text) + '…');
+          RankedEngine.lookupAccount(text).then(function (id) {
+            lookupCache[key] = id;
+            writeJSON(LOOKUP_KEY, lookupCache);
+            setAccount(id, text);
+          }, function (e) {
+            lastLookedUp = null;
+            var msg = e && e.status === 404
+              ? "Couldn't find <b>" + esc(text) + '</b>. Check the spelling (it\'s your Epic name, not your Twitch name), or paste your account ID from '
+                + '<a href="https://olitracker.com" target="_blank" rel="noreferrer noopener">OliTracker</a> instead.'
+              : "Couldn't reach the lookup right now. Try again in a minute, or paste your account ID from "
+                + '<a href="https://olitracker.com" target="_blank" rel="noreferrer noopener">OliTracker</a>.';
+            showAccount('bad', msg);
+          }).then(function () { $('account-go').disabled = false; });
+        }
+
+        $('account-go').addEventListener('click', findAccount);
+        accountInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') findAccount(); });
+        accountInput.addEventListener('blur', function () {
+          if (accountInput.value.trim() && accountInput.value.trim() !== lastLookedUp) findAccount();
+        });
+        accountInput.addEventListener('input', function () {
+          state.input = accountInput.value;
+          writeJSON(STATE_KEY, state);
+        });
+
+        /* ---------------------------------------------------------------
+         * Designs
+         * ------------------------------------------------------------- */
+
+        var designBox = $('designs');
+        DESIGNS.forEach(function (d) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'preset';
+          b.setAttribute('data-design', d.id);
+          b.innerHTML =
+            '<span class="preset-name"></span>' +
+            '<span class="design-thumb"><img alt="" loading="lazy"></span>' +
+            '<span class="preset-blurb"></span>';
+          b.querySelector('.preset-name').textContent = d.name;
+          b.querySelector('.preset-blurb').textContent = d.blurb;
+          var img = b.querySelector('img');
+          img.src = 'previews/' + d.id + '.png';
+          img.alt = d.name + ' design';
+          b.addEventListener('click', function () {
+            state.design = d.id;
+            changed();
+          });
+          designBox.appendChild(b);
+        });
+
+        /* ---------------------------------------------------------------
+         * Colours
+         * ------------------------------------------------------------- */
+
+        var swatchBox = $('swatches');
+        function swatchButton(label, value, isDefault) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'swatch' + (isDefault ? ' default' : '');
+          b.title = label;
+          b.setAttribute('aria-label', label);
+          b.setAttribute('data-val', value);
+          b.addEventListener('click', function () {
+            state.color = value;
+            if (value) state.customColor = value;
+            changed();
+          });
+          swatchBox.appendChild(b);
+          return b;
+        }
+        var defaultSwatch = swatchButton('Design default', '', true);
+        SWATCHES.forEach(function (s) { swatchButton(s[0], s[1]).style.background = s[1]; });
+
+        // Swatch + hex box kept in step, same as Code Overlay.
+        document.querySelectorAll('[data-color]').forEach(function (wrap) {
+          var key = wrap.getAttribute('data-color');
+          var stateKey = key === 'color' ? 'customColor' : key;
+          var picker = document.createElement('input');
+          picker.type = 'color';
+          picker.setAttribute('aria-label', key === 'color' ? 'Custom accent colour' : 'Stat label colour');
+          var hex = document.createElement('input');
+          hex.type = 'text';
+          hex.maxLength = 7;
+          hex.spellcheck = false;
+          wrap.appendChild(picker);
+          wrap.appendChild(hex);
+          function take(v) {
+            state[stateKey] = v;
+            if (key === 'color') state.color = v;
+            if (key === 'labelColor') state.labelCustom = true;
+            changed();
+          }
+          picker.addEventListener('input', function () { hex.value = picker.value; take(picker.value); });
+          hex.addEventListener('input', function () {
+            var v = hex.value.trim();
+            if (v[0] !== '#') v = '#' + v;
+            if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) {
+              if (v.length === 4) v = '#' + v.slice(1).replace(/./g, '$&$&');
+              picker.value = v.toLowerCase();
+              take(v.toLowerCase());
+            }
+          });
+          hex.addEventListener('blur', function () { hex.value = state[stateKey]; });
+          wrap._sync = function () {
+            if (document.activeElement !== hex) hex.value = state[stateKey];
+            picker.value = state[stateKey];
+          };
+        });
+
+        $('label-custom').addEventListener('change', function (e) {
+          state.labelCustom = e.target.checked;
+          changed();
+        });
+
+        /* ---------------------------------------------------------------
+         * Other controls
+         * ------------------------------------------------------------- */
+
+        document.querySelectorAll('[data-seg]').forEach(function (group) {
+          var key = group.getAttribute('data-seg');
+          group.addEventListener('click', function (e) {
+            var btn = e.target.closest('button');
+            if (!btn) return;
+            state[key] = btn.getAttribute('data-val');
+            changed();
+            if (key === 'show' && state.show === 'code') $('code').focus();
+          });
+        });
+
+        $('code').addEventListener('input', function (e) {
+          state.code = e.target.value;
+          changed();
+        });
+        $('next-lookup').addEventListener('change', function (e) {
+          state.next = e.target.checked;
+          changed();
+        });
+
+        function importLink(text) {
+          var url;
+          try { url = new URL(String(text).trim(), location.href); } catch (e) { return false; }
+          var m = url.pathname.match(/overlay\/([a-z]+)\.html$/);
+          var q = url.searchParams;
+          if (!m && !q.get('id')) return false;
+          if (m && BY_ID[m[1]]) state.design = m[1];
+          var id = String(q.get('id') || '').toLowerCase();
+          if (RankedEngine.validAccountId(id)) {
+            state.accountId = id;
+            state.accountName = '';
+            accountInput.value = id;
+            state.input = id;
+            lastLookedUp = id;
+          }
+          var hex = function (v) { v = String(v || '').replace('#', ''); return /^[0-9a-f]{6}$/i.test(v) ? '#' + v.toLowerCase() : ''; };
+          state.color = hex(q.get('color'));
+          if (state.color) state.customColor = state.color;
+          state.labelCustom = !!hex(q.get('label'));
+          if (state.labelCustom) state.labelColor = hex(q.get('label'));
+          state.code = q.get('code') || '';
+          state.show = state.code ? 'code' : 'stats';
+          state.mode = q.get('mode') || '';
+          var r = parseInt(q.get('refresh') || '60', 10);
+          state.refresh = String([300, 600].indexOf(r) >= 0 ? r : 60);
+          state.next = q.get('next') !== '0';
+          return true;
+        }
+
+        $('import-go').addEventListener('click', function () {
+          var ok = importLink($('import-link').value);
+          if (ok) {
+            $('import-link').value = '';
+            renderAccount();
+            changed();
+            flash('Loaded your old link');
+          } else {
+            flash("That doesn't look like an overlay link", true);
+          }
+        });
+
+        $('reset').addEventListener('click', function () {
+          var keep = { input: state.input, accountId: state.accountId, accountName: state.accountName };
+          state = Object.assign({}, DEFAULTS, keep);
+          changed();
+          flash('Back to defaults (kept your account)');
+        });
+
+        /* ---------------------------------------------------------------
+         * Copy / open
+         * ------------------------------------------------------------- */
+
+        var statusEl = $('status');
+        var flashTimer = 0;
+        function flash(msg, bad) {
+          statusEl.textContent = msg;
+          statusEl.style.color = bad ? 'var(--danger)' : '';
+          clearTimeout(flashTimer);
+          flashTimer = setTimeout(function () { statusEl.textContent = ''; }, 2600);
+        }
+
+        function copyText(text) {
+          if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+          return new Promise(function (resolve, reject) {
+            var box = $('obs-link');
+            box.focus();
+            box.select();
+            try { document.execCommand('copy') ? resolve() : reject(); } catch (e) { reject(e); }
+          });
+        }
+
+        $('copy').addEventListener('click', function () {
+          if (!hasAccount()) {
+            flash('Add your account first', true);
+            accountInput.focus();
+            return;
+          }
+          copyText(overlayUrl(false)).then(function () {
+            flash('Copied. Paste it into an OBS Browser source.');
+          }, function () {
+            $('obs-link').select();
+            flash('Press Ctrl+C to copy it', true);
+          });
+        });
+
+        $('open').addEventListener('click', function () {
+          window.open(hasAccount() ? overlayUrl(false) : overlayUrl(true), '_blank', 'noopener');
+        });
+
+        $('obs-link').addEventListener('focus', function (e) { e.target.select(); });
+
+        /* ---------------------------------------------------------------
+         * Preview backdrop + data source
+         * ------------------------------------------------------------- */
+
+        function applyStageBg() {
+          stage.className = 'stage' + (state.previewBg === 'checker' ? '' : ' bg-' + state.previewBg);
+          $('stage-bg').querySelectorAll('button').forEach(function (b) {
+            b.classList.toggle('on', b.getAttribute('data-val') === state.previewBg);
+          });
+        }
+        $('stage-bg').addEventListener('click', function (e) {
+          var btn = e.target.closest('button');
+          if (!btn) return;
+          state.previewBg = btn.getAttribute('data-val');
+          applyStageBg();
+          writeJSON(STATE_KEY, state);
+        });
+        $('preview-data').addEventListener('click', function (e) {
+          var btn = e.target.closest('button');
+          if (!btn) return;
+          state.previewData = btn.getAttribute('data-val');
+          changed();
+        });
+
+        /* ---------------------------------------------------------------
+         * Keeping everything in step
+         * ------------------------------------------------------------- */
+
+        function syncControls() {
+          var d = BY_ID[state.design];
+          document.querySelectorAll('[data-design]').forEach(function (b) {
+            b.classList.toggle('on', b.getAttribute('data-design') === state.design);
+          });
+          defaultSwatch.style.background = d.accent;
+          defaultSwatch.title = 'Design default (' + d.accent + ')';
+          swatchBox.querySelectorAll('.swatch').forEach(function (b) {
+            b.classList.toggle('on', b.getAttribute('data-val') === state.color);
+          });
+          document.querySelectorAll('[data-color]').forEach(function (w) { w._sync(); });
+          document.querySelector('[data-color="color"]').style.opacity = state.color ? '1' : '0.5';
+          $('label-custom').checked = !!state.labelCustom;
+          $('label-color-wrap').style.opacity = state.labelCustom ? '1' : '0.5';
+          document.querySelectorAll('[data-seg]').forEach(function (group) {
+            var key = group.getAttribute('data-seg');
+            group.querySelectorAll('button').forEach(function (b) {
+              b.classList.toggle('on', b.getAttribute('data-val') === String(state[key]));
+            });
+          });
+          $('preview-data').querySelectorAll('button').forEach(function (b) {
+            b.classList.toggle('on', b.getAttribute('data-val') === state.previewData);
+          });
+          if (document.activeElement !== $('code')) $('code').value = state.code;
+          $('next-lookup').checked = !!state.next;
+          document.querySelectorAll('[data-show-design]').forEach(function (el) {
+            el.hidden = el.getAttribute('data-show-design') !== state.design;
+          });
+          document.querySelectorAll('[data-show-val]').forEach(function (el) {
+            var p = el.getAttribute('data-show-val').split('=');
+            el.hidden = String(state[p[0]]) !== p[1];
+          });
+          $('obs-w').textContent = d.w;
+          $('obs-h').textContent = d.h;
+          $('obs-link').value = hasAccount() ? overlayUrl(false) : 'Add your account below to get your link';
+          $('copy').disabled = false;
+          renderDataNote();
+        }
+
+        var saveTimer = 0;
+        function changed() {
+          syncControls();
+          schedulePreview();
+          clearTimeout(saveTimer);
+          saveTimer = setTimeout(function () { writeJSON(STATE_KEY, state); }, 200);
+        }
+
+        /* ---------------------------------------------------------------
+         * Theme toggle, same behaviour as Code Overlay: system -> light -> dark
+         * ------------------------------------------------------------- */
+        (function initTheme() {
+          var ORDER = ['system', 'light', 'dark'];
+          var FACE = {
+            system: { icon: '◐', label: 'System' },
+            light: { icon: '☀', label: 'Light' },
+            dark: { icon: '☾', label: 'Dark' },
+          };
+          var button = $('theme');
+          var icon = $('theme-icon');
+          var label = $('theme-label');
+          var current = 'system';
+          try {
+            var raw = localStorage.getItem(THEME_KEY);
+            if (raw === 'light' || raw === 'dark') current = raw;
+          } catch (e) { /* blocked */ }
+
+          function apply() {
+            var root = document.documentElement;
+            if (current === 'system') root.removeAttribute('data-theme');
+            else root.setAttribute('data-theme', current);
+            var face = FACE[current];
+            var next = ORDER[(ORDER.indexOf(current) + 1) % ORDER.length];
+            icon.textContent = face.icon;
+            label.textContent = face.label;
+            button.title = 'Theme: ' + face.label + '. Click for ' + FACE[next].label.toLowerCase() + '.';
+            button.setAttribute('aria-label', button.title);
+          }
+
+          apply();
+          button.addEventListener('click', function () {
+            current = ORDER[(ORDER.indexOf(current) + 1) % ORDER.length];
+            try {
+              if (current === 'system') localStorage.removeItem(THEME_KEY);
+              else localStorage.setItem(THEME_KEY, current);
+            } catch (e) { /* still works for this page view */ }
+            apply();
+          });
+        })();
+
+        /* --- boot --- */
+        // An overlay link opened here (e.g. /?id=...) loads straight into the editor.
+        if (location.search && importLink(location.href)) {
+          history.replaceState(null, '', location.pathname);
+        }
+        accountInput.value = state.input || (hasAccount() ? state.accountId : '');
+        if (hasAccount()) lastLookedUp = accountInput.value.trim();
+        if (!state.input && !hasAccount()) state.input = '';
+        renderAccount();
+        applyStageBg();
+        changed();
+        loadPreview();
+        window.addEventListener('resize', fitPreview);
+      })();
+    </script>
+  </body>
+</html>

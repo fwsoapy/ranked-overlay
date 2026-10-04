@@ -33,3 +33,12 @@ jobs:
 
       - name: update.json is valid and consistent
         run: python tools/check_manifest.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The website (docs/) runs src/web/engine.js instead of the Python
+      # server. Same data in, same numbers out, and inside its request budget.
+      - name: Website engine matches the Python server
+        run: python tests/web/test_engine.py

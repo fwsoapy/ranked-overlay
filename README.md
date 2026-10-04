@@ -18,8 +18,19 @@ A start-to-finish video showing how to download, set up, and use the overlay:
 
 ---
 
+## 🌐 No download: use the website
+
+**👉 [Open Ranked Overlay](https://fwsoapy.github.io/ranked-overlay/)**
+
+Type your Epic name, pick a design and a color, copy the link, and paste it into an OBS Browser Source. That's the whole setup. Nothing runs on your PC, so there's no Python, no `.bat` files, no antivirus or SmartScreen warnings, and nothing to update. It's always the newest version.
+
+It's the same 8 designs and the same numbers as the download version below, with every option the download has: accent color, stats or creator code, starting mode, update speed and leaderboard lookups. The download version still works exactly as before if you prefer it.
+
+---
+
 ## 📋 Table of contents
 
+- [No download: use the website](#-no-download-use-the-website)
 - [Watch: full setup walkthrough](#-watch-full-setup-walkthrough)
 - [Quick start](#-quick-start)
 - [Setup wizard (the easy way)](#-setup-wizard-the-easy-way)
@@ -41,6 +52,8 @@ A start-to-finish video showing how to download, set up, and use the overlay:
 
 ## 🚀 Quick start
 
+> 🌐 **Don't want to download anything? [Use the website](https://fwsoapy.github.io/ranked-overlay/)**, it's one link to paste into OBS.
+>
 > 🧙 **The fastest way is the [setup wizard](#-setup-wizard-the-easy-way)** it does every step below for you (design, color, Account ID lookup, and launch). Prefer to set it up by hand? Here's the manual way:
 
 1. Click **Code > Download ZIP** above, unzip it, and open the folder for the design you want (see the gallery below). Or run `setup.bat` and it'll ask which design you want and copy it to your Desktop.
@@ -338,6 +351,8 @@ No. The server only talks to the OliTracker API to pull your stats, and serves t
 
 This Fortnite rank tracker is a small Python web server that runs locally on your PC. It polls the OliTracker API every 30 seconds, parses your ranked stats, and serves a single HTML page at `localhost:8888/overlay`. OBS loads that page as a browser source and auto-refreshes the displayed data, turning it into a live Fortnite stream overlay with zero manual updates. No data ever leaves your machine other than the API request to OliTracker.
 
+The [website version](https://fwsoapy.github.io/ranked-overlay/) does the same thing inside the page itself: the overlay's JavaScript reads OliTracker through a small Cloudflare Worker (OliTracker doesn't allow web pages to read it directly) and works out exactly what the Python server would. OliTracker refreshes a profile about every 3 minutes, so the website asks right after each refresh and never more often than that. It also stops asking while the overlay isn't on screen and slows down when OBS is open but you're not live.
+
 ---
 
 ## 🔧 Working on the overlay
@@ -353,15 +368,29 @@ src/core_head.py      the server, everything above the overlay markup
 src/designs/*.html    one file per design, just the markup
 src/core_tail.py      the server, everything below it
 src/launcher/*.bat    start / stop / account-id, one copy each
+src/web/engine.js     the website's version of the server, in JavaScript
+src/web/index.html    the website's setup page
 ```
 
-Everything in `Minimal/`, `Classic/`, ... and `wizard/templates/` is **generated** from those. After changing anything in `src/`:
+Everything in `Minimal/`, `Classic/`, ... and `wizard/templates/` is **generated** from those, and so is the website in `docs/` (GitHub Pages serves that folder). The website uses the very same `src/designs/*.html`, so a design change shows up in both. After changing anything in `src/`:
 
 ```bash
 python tools/build.py
 ```
 
 CI runs `python tools/build.py --check` on every push, so a generated file edited by hand fails the build rather than silently getting overwritten at the next release.
+
+### The website
+
+`src/web/engine.js` is a line-by-line port of the Python logic, so the two must agree. CI runs the real Python server and the JavaScript engine on the same OliTracker responses and compares every field they hand the designs, and checks the website stays within its request budget:
+
+```bash
+python tests/web/test_engine.py     # needs Node.js
+```
+
+If you change how `src/core_head.py` works out a number, make the same change in `src/web/engine.js`.
+
+The Cloudflare Worker the website talks to is `web/worker.js`; `web/README.md` covers deploying it. To try the site locally, run `python -m http.server` inside `docs/` and open `http://localhost:8000`.
 
 ### Cutting a release
 

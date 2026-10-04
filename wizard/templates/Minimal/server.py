@@ -1747,6 +1747,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             display: flex;
             justify-content: space-between;
             align-items: baseline;
+            gap: 28px;
             margin-bottom: 10px;
         }
 
