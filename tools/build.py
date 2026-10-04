@@ -99,6 +99,17 @@ WEB_SWAPS = [
 WEB_POLL = re.compile(r"setInterval\((?:tick|function\(\) \{ tick\(\); \})\s*,\s*POLL_MS\);")
 
 
+# If engine.js didn't arrive (a network blip as OBS starts, say), the page
+# would sit dead until someone refreshed the source by hand. Reload it instead,
+# backing off from 5 seconds to a minute so a real outage isn't hammered.
+ENGINE_GUARD = (
+    "if (!window.RankedEngine) { var n = 0; "
+    "try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} "
+    "setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } "
+    "else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }"
+)
+
+
 def asset_version(text):
     """Short content hash, so OBS never pairs a new page with an old engine."""
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
@@ -122,6 +133,7 @@ def render_web_overlay(design, engine_version):
     html = html.replace(
         "<script>",
         f'<script src="../engine.js?v={engine_version}"></script>\n'
+        "    <script>" + ENGINE_GUARD + "</script>\n"
         "    <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>\n"
         "    <script>",
         1,
@@ -144,7 +156,10 @@ def web_outputs():
 
     files[os.path.join(DOCS, "engine.js")] = engine
     index = read(os.path.join(WEB, "index.html"))
-    files[os.path.join(DOCS, "index.html")] = index.replace("__ENGINE_VERSION__", version)
+    if index.count("__ENGINE_GUARD__") != 1:
+        raise SystemExit("src/web/index.html: expected one __ENGINE_GUARD__")
+    files[os.path.join(DOCS, "index.html")] = (
+        index.replace("__ENGINE_VERSION__", version).replace("__ENGINE_GUARD__", ENGINE_GUARD))
     files[os.path.join(DOCS, "logo.svg")] = read(os.path.join(WEB, "logo.svg"))
     # Serve the files as they are, without Jekyll looking at them first.
     files[os.path.join(DOCS, ".nojekyll")] = ""
