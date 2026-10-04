@@ -857,18 +857,34 @@
             current = next;
           }
           // Swap as soon as the new overlay has its numbers. Waiting for the
-          // iframe's load event would also wait on its web fonts.
+          // iframe's load event would also wait on its web fonts. If the page
+          // itself didn't load (a dropped request leaves a browser error page,
+          // which reads as another origin), load it again, up to three times.
+          var attempts = 0;
           var tries = 0;
-          var poll = setInterval(function () {
-            if (next.parentNode !== frameBox) { clearInterval(poll); return; }
-            var ro = null;
-            try { ro = next.contentWindow && next.contentWindow.RankedOverlay; } catch (e) { ro = null; }
-            if (!ro && ++tries < 80) return;
+          var poll = 0;
+          function retry() {
             clearInterval(poll);
-            if (!ro) { swap(); return; }
-            ro.fetchData('/data').then(function () { setTimeout(swap, 120); }, swap);
-          }, 100);
-          setTimeout(swap, 8000);
+            if (attempts >= 3 || next.parentNode !== frameBox) { swap(); return; }
+            attempts++;
+            next.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + 'retry=' + attempts;
+            arm();
+          }
+          function arm() {
+            tries = 0;
+            clearInterval(poll);
+            poll = setInterval(function () {
+              if (next.parentNode !== frameBox) { clearInterval(poll); return; }
+              var ro = null;
+              try { ro = next.contentWindow && next.contentWindow.RankedOverlay; }
+              catch (e) { retry(); return; }
+              if (!ro && ++tries < 120) return;
+              clearInterval(poll);
+              if (!ro) { retry(); return; }
+              ro.fetchData('/data').then(function () { setTimeout(swap, 120); }, swap);
+            }, 100);
+          }
+          arm();
           // Drop any older frame that was still loading.
           frameBox.querySelectorAll('iframe.pending').forEach(function (f) { if (f !== next) f.remove(); });
         }
