@@ -1957,7 +1957,7 @@
   /*
    * The designs stack every button in one tall column, which can run past
    * the bottom of the OBS source. Side by side rows, close together, keep
-   * them all inside the default 800px height. Website overlays only.
+   * them all inside OBS's default 600px height. Website overlays only.
    */
   function compactButtons() {
     var css = document.createElement('style');
