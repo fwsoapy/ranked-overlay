@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proxy Test</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 16px; background: #111; color: #eee; font: 16px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  .row { margin: 6px 0; }
+  .ok { color: #4ade80; }
+  .bad { color: #f87171; }
+  pre { background: #1c1c1c; padding: 10px; border-radius: 6px; max-height: 50vh; overflow: auto; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  form { display: grid; gap: 8px; max-width: 520px; margin-bottom: 16px; }
+  input, button { font: inherit; padding: 6px 8px; border-radius: 4px; border: 1px solid #444; background: #1c1c1c; color: #eee; }
+  button { cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>Ranked overlay proxy test</h1>
+
+<!-- Fill these in, or skip the form by opening
+     test.html?proxy=https://ranked-proxy.NAME.workers.dev&id=ACCOUNTID -->
+<form id="f">
+  <input name="proxy" placeholder="Worker URL, e.g. https://ranked-proxy.yourname.workers.dev" required>
+  <input name="id" placeholder="Epic account ID (32 characters)" required>
+  <button>Run test</button>
+</form>
+
+<div id="out"></div>
+
+<script>
+const out = document.getElementById("out");
+const form = document.getElementById("f");
+
+function line(ok, text) {
+  const d = document.createElement("div");
+  d.className = "row " + (ok ? "ok" : "bad");
+  d.textContent = (ok ? "OK   " : "FAIL ") + text;
+  out.appendChild(d);
+}
+
+async function run(proxy, id) {
+  out.textContent = "";
+  proxy = proxy.replace(/\/+$/, "");
+
+  try {
+    const r = await fetch(`${proxy}/stats/${id}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.status);
+    line(true, `Stats loaded for ${data.cached_username || "(no name)"} - last updated ${data.last_updated}`);
+    const pre = document.createElement("pre");
+    pre.textContent = JSON.stringify(data, null, 2).slice(0, 4000);
+    out.appendChild(pre);
+  } catch (e) {
+    line(false, `Stats: ${e.message}`);
+  }
+
+  try {
+    const r = await fetch(`${proxy}/ranked/battle-royale`);
+    const html = await r.text();
+    if (!r.ok) throw new Error(r.status);
+    line(true, `Leaderboard page loaded (${Math.round(html.length / 1024)} KB of HTML)`);
+  } catch (e) {
+    line(false, `Leaderboard: ${e.message}`);
+  }
+}
+
+const params = new URLSearchParams(location.search);
+if (params.get("proxy")) form.proxy.value = params.get("proxy");
+if (params.get("id")) form.id.value = params.get("id");
+if (params.get("proxy") && params.get("id")) run(params.get("proxy"), params.get("id"));
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  run(form.proxy.value.trim(), form.id.value.trim());
+});
+</script>
+</body>
+</html>
