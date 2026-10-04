@@ -658,10 +658,9 @@
             <div class="bar-group">
               <span class="bar-label">ELO change</span>
               <div class="seg" data-seg="elo" role="group" aria-label="ELO change">
-                <button type="button" data-val="today" title="Since midnight Central Time">Today</button>
+                <button type="button" data-val="session" title="Counts from when you press Reset ELO gain in OBS. Shows as +23 ELO TODAY">Session</button>
                 <button type="button" data-val="12h" title="The last 12 hours">Last 12h</button>
                 <button type="button" data-val="24h" title="The last 24 hours">Last 24h</button>
-                <button type="button" data-val="session" title="Since you last pressed Reset ELO gain in OBS">Session</button>
               </div>
             </div>
           </div>
@@ -804,7 +803,7 @@
           customColor: '#ff7a00',
           labelCustom: false, labelColor: '#ffffff',
           show: 'stats', code: '',
-          mode: '', elo: 'today', refresh: '60', next: true,
+          mode: '', elo: 'session', refresh: '60', next: true,
           previewBg: 'checker',
         };
 
@@ -827,7 +826,8 @@
         var state = Object.assign({}, DEFAULTS, readJSON(STATE_KEY, {}));
         if (!BY_ID[state.design]) state.design = DEFAULTS.design;
         if (['60', '300', '600'].indexOf(String(state.refresh)) < 0) state.refresh = '60';
-        if (['today', '12h', '24h', 'session'].indexOf(state.elo) < 0) state.elo = 'today';
+        // "Today" (since midnight) isn't offered any more; Session took its place.
+        if (['session', '12h', '24h'].indexOf(state.elo) < 0) state.elo = 'session';
 
         function $(id) { return document.getElementById(id); }
 
@@ -852,7 +852,9 @@
           var code = cleanCode(state.code);
           if (state.show === 'code' && code) p.set('code', code);
           if (state.mode) p.set('mode', state.mode);
-          if (state.elo !== 'today') p.set('elo', state.elo);
+          // Always written: a link with no elo= counts from midnight Central,
+          // which is how links made before Session keep working.
+          p.set('elo', state.elo);
           if (String(state.refresh) !== '60') p.set('refresh', String(state.refresh));
           if (!state.next) p.set('next', '0');
           return p;
@@ -1207,8 +1209,8 @@
           state.code = q.get('code') || '';
           state.show = state.code ? 'code' : 'stats';
           state.mode = q.get('mode') || '';
-          var elo = q.get('elo') || 'today';
-          state.elo = ['today', '12h', '24h', 'session'].indexOf(elo) >= 0 ? elo : 'today';
+          var elo = q.get('elo') || 'session';
+          state.elo = ['session', '12h', '24h'].indexOf(elo) >= 0 ? elo : 'session';
           var r = parseInt(q.get('refresh') || '60', 10);
           state.refresh = String([300, 600].indexOf(r) >= 0 ? r : 60);
           state.next = q.get('next') !== '0';

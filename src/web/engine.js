@@ -667,14 +667,19 @@
 
   // The ELO change options, by their value in the link (elo=...): the
   // window the snapshot works out, and the words shown after the number.
-  //   session  since "Reset ELO gain" was last pressed in the overlay
+  //   session  since "Reset ELO gain" was last pressed in the overlay.
+  //            Shown as TODAY: streamers press it once a stream, and to
+  //            viewers that reads as today's gain.
+  //   today    since midnight Central Time. No longer offered on the setup
+  //            page, but links made before (and links with no elo= at all)
+  //            keep counting this way.
   //   opened   since the overlay opened, which is what the Python server
   //            shows; not offered on the setup page, kept for the tests
   var CHANGE_WINDOWS = {
     today: ['today', 'TODAY'],
     '12h': ['12h', 'PAST 12H'],
     '24h': ['24h', 'PAST 24H'],
-    session: ['reset', 'SESSION'],
+    session: ['reset', 'TODAY'],
     opened: ['opened', 'TODAY']
   };
   var WINDOW_LABELS = {};

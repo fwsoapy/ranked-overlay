@@ -190,25 +190,25 @@ async function websiteChecks() {
     const shown = async (engine) => (await (await engine.fetchData('/data?window=session')).json()).session_text;
     let engine = open();
     await engine.init();
-    check('session starts at +0', await shown(engine), '+0 ELO SESSION');
+    check('session starts at +0', await shown(engine), '+0 ELO TODAY');
     clock += 10 * 60 * 1000; data.ranked_stats['ranked-br-combined'].elo = 3110; data.last_updated = new Date(clock).toISOString();
     await engine.refresh(true);
-    check('session counts up', await shown(engine), '+30 ELO SESSION');
+    check('session counts up', await shown(engine), '+30 ELO TODAY');
     engine = open(); await engine.init();      // OBS restarted
-    check('session survives a restart', await shown(engine), '+30 ELO SESSION');
+    check('session survives a restart', await shown(engine), '+30 ELO TODAY');
     engine.resetSession();
-    check('reset puts it back to +0', await shown(engine), '+0 ELO SESSION');
+    check('reset puts it back to +0', await shown(engine), '+0 ELO TODAY');
     clock += 10 * 60 * 1000; data.ranked_stats['ranked-br-combined'].elo = 3095; data.last_updated = new Date(clock).toISOString();
     await engine.refresh(true);
-    check('counts from the reset', await shown(engine), '-15 ELO SESSION');
+    check('counts from the reset', await shown(engine), '-15 ELO TODAY');
     const second = open(); await second.init();
-    check('another overlay shares the reset', await shown(second), '-15 ELO SESSION');
+    check('another overlay shares the reset', await shown(second), '-15 ELO TODAY');
     // a new season wipes it rather than showing a huge loss
     clock += 10 * 60 * 1000;
     data.stats.seasonal.all.both.overall.matches_played = 1;
     data.ranked_stats['ranked-br-combined'].elo = 1200; data.last_updated = new Date(clock).toISOString();
     await engine.refresh(true);
-    check('new season starts it over', await shown(engine), '+0 ELO SESSION');
+    check('new season starts it over', await shown(engine), '+0 ELO TODAY');
   }
   {
     // below Unreal it counts progress, and the label says SESSION
@@ -220,7 +220,7 @@ async function websiteChecks() {
     await engine.init();
     clock += 10 * 60 * 1000; data.ranked_stats['ranked-squareclub'].promotion_progression = 62; data.last_updated = new Date(clock).toISOString();
     await engine.refresh(true);
-    check('session progress below Unreal', (await (await engine.fetchData('/data?window=session')).json()).session_text, '+32% SESSION');
+    check('session progress below Unreal', (await (await engine.fetchData('/data?window=session')).json()).session_text, '+32% TODAY');
   }
   return checks;
 }
