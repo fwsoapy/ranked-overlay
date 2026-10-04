@@ -924,9 +924,55 @@
 
     function pageKey(slug, page) { return 'ro1:lb:' + slug + ':' + page; }
 
+    var BUSY_MS = FETCH_TIMEOUT_MS + 2000;
+
+    function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+    /*
+     * Overlays opened together (OBS starting with the overlay in several
+     * scenes) would all fetch the same thing at once. Before fetching, an
+     * overlay claims the job in shared storage; the others wait for its
+     * answer to land in the cache instead of asking for it again.
+     */
+    function claim(key) {
+      var b = store.get(key);
+      if (isDict(b) && clock() - b.at < BUSY_MS) return Promise.resolve(false);
+      var token = Math.random().toString(36).slice(2);
+      store.set(key, { at: clock(), token: token });
+      // Two overlays can both see it free; the last write wins.
+      return sleep(40).then(function () {
+        var c = store.get(key);
+        return isDict(c) && c.token === token;
+      });
+    }
+
+    function release(key) {
+      var c = store.get(key);
+      if (isDict(c)) store.remove(key);
+    }
+
+    // Resolves with read()'s first non-null answer, or null after `ms` of
+    // real time (real time, so a stopped test clock can't hang it).
+    function waitFor(read, ms) {
+      var until = Date.now() + ms;
+      return new Promise(function (resolve) {
+        (function poll() {
+          var v = read();
+          if (v !== null && v !== undefined) return resolve(v);
+          if (Date.now() >= until) return resolve(null);
+          setTimeout(poll, 200);
+        })();
+      });
+    }
+
     function pruneLeaderboardCache() {
       var cutoff = clock() - 2 * 60 * 60 * 1000;
       store.keys().forEach(function (k) {
+        if (k.indexOf('ro1:lbbusy:') === 0) {
+          var b = store.get(k);
+          if (!isDict(b) || clock() - b.at > 60 * 1000) store.remove(k);
+          return;
+        }
         if (k.indexOf('ro1:lb:') !== 0) return;
         var v = store.get(k);
         if (!isDict(v) || typeof v.at !== 'number' || v.at < cutoff) store.remove(k);
@@ -946,16 +992,27 @@
       }
       if (pageInflight[key]) return pageInflight[key];
       var url = cfg.proxy + '/ranked/' + slug + (page > 1 ? '?page=' + page : '');
-      var p = get(url).then(function (html) {
-        var rows = parseLeaderboardRows(html);
-        store.set(key, {
-          at: clock(),
-          rows: rows.map(function (r) { return [r.placement, r.elo, r.account_id]; })
+      var lock = 'ro1:lbbusy:' + slug + ':' + page;
+      var asked = clock();
+      var fetchIt = function () {
+        return get(url).then(function (html) {
+          var rows = parseLeaderboardRows(html);
+          store.set(key, {
+            at: clock(),
+            rows: rows.map(function (r) { return [r.placement, r.elo, r.account_id]; })
+          });
+          return rows;
+        }, function () {
+          // A stale copy beats blanking the ELO on one bad fetch.
+          return isDict(hit) && Array.isArray(hit.rows) ? rowsOf(hit) : [];
         });
-        return rows;
-      }, function () {
-        // A stale copy beats blanking the ELO on one bad fetch.
-        return isDict(hit) && Array.isArray(hit.rows) ? rowsOf(hit) : [];
+      };
+      var p = claim(lock).then(function (mine) {
+        if (mine) return fetchIt().finally(function () { release(lock); });
+        return waitFor(function () {
+          var h = store.get(key);
+          return isDict(h) && Array.isArray(h.rows) && h.at >= asked ? h : null;
+        }, BUSY_MS).then(function (h) { return h ? rowsOf(h) : fetchIt(); });
       });
       pageInflight[key] = p;
       return p.finally(function () { delete pageInflight[key]; });
@@ -1144,11 +1201,6 @@
       return clock() >= dueAt(readCachedStats()) - 1500;
     }
 
-    function busyElsewhere() {
-      var b = store.get(K.busy);
-      return typeof b === 'number' && clock() - b < FETCH_TIMEOUT_MS + 2000;
-    }
-
     /*
      * One refresh. Uses the shared cache when it is fresh enough, otherwise
      * fetches. Resolves to true when it had something new to show.
@@ -1165,9 +1217,26 @@
         if (data !== null) return absorb(data, cached.at).then(function () { return true; });
         // A damaged cache entry: fetch instead.
       }
-      if (!force && busyElsewhere()) return Promise.resolve(false);
+      return claim(K.busy).then(function (mine) {
+        if (!mine && !force) {
+          // Another overlay is fetching right now: use its answer.
+          var since = cached ? cached.at : 0;
+          return waitFor(function () {
+            var c = readCachedStats();
+            return c && c.at > since ? c : null;
+          }, BUSY_MS).then(function (c) {
+            var data = null;
+            if (c) { try { data = parseStats(c.text); } catch (e) { data = null; } }
+            // Nothing came of it: the next scheduled run tries again itself.
+            return data === null ? false : absorb(data, c.at).then(function () { return true; });
+          });
+        }
+        return fetchStats(cached).finally(function () { release(K.busy); });
+      });
+    }
 
-      store.set(K.busy, t);
+    function fetchStats(cached) {
+      var t = clock();
       lastAttempt = t;
       return get(cfg.proxy + '/stats/' + id).then(function (text) {
         var data = parseStats(text);
@@ -1199,7 +1268,7 @@
           catch (ignored) { /* nothing usable */ }
         }
         return true;
-      }).finally(function () { store.remove(K.busy); });
+      });
     }
 
     // When the next refresh is due, in ms from now.
