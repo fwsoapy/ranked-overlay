@@ -1835,6 +1835,7 @@
     var engine = createEngine({ cfg: cfg, store: store, isIdle: idle });
     var timer = null;
 
+    compactButtons();
     if (cfg.changeWindow === 'reset') addResetButton(engine);
     keepButtonsBelowCut();
 
@@ -1951,6 +1952,22 @@
     });
     bar.appendChild(btn);
     after.parentNode.insertBefore(bar, after.nextSibling);
+  }
+
+  /*
+   * The designs stack every button in one tall column, which can run past
+   * the bottom of the OBS source. Side by side rows, close together, keep
+   * them all inside the default 800px height. Website overlays only.
+   */
+  function compactButtons() {
+    var css = document.createElement('style');
+    css.textContent =
+      '.mode-bar{flex-direction:row!important;flex-wrap:wrap!important;gap:6px!important}' +
+      '#displayToggleBar,#sessionBar{margin-top:10px!important}' +
+      '.mode-bar>.mode-btn{flex:1 1 120px!important;width:auto!important;min-width:0!important;' +
+        'box-sizing:border-box!important;padding:10px 12px!important;white-space:nowrap}' +
+      '#codeInput{flex-basis:100%!important}';
+    (document.head || document.documentElement).appendChild(css);
   }
 
   /*

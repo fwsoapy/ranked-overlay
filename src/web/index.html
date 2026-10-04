@@ -613,12 +613,14 @@
               <div class="step-action"><button id="copy-2" class="primary small" type="button">Copy OBS link</button></div>
             </li>
             <li>In OBS, click <span class="kbd">+</span> under <b>Sources</b> and pick <b>Browser</b>.</li>
-            <li>Paste it into <b>URL</b>, set <b>Width</b> to <span class="kbd" id="obs-w">520</span> and <b>Height</b> to <span class="kbd" id="obs-h">240</span>, then click <b>OK</b>.</li>
+            <li>Paste it into <b>URL</b>, set <b>Width</b> to <span class="kbd" id="obs-w">520</span> and <b>Height</b> to <span class="kbd">800</span>, then click <b>OK</b>. The tall height leaves room for the buttons under the card.</li>
+            <li>Hold <span class="kbd">Alt</span> (<span class="kbd">Option</span> on Mac) and drag the bottom edge of the source up until it sits just under the card. That crops the buttons out of your stream.</li>
             <li>Drag it where you want it. It updates on its own.</li>
           </ol>
           <p class="tip">
-            To switch modes or flip to your creator code live, right-click the source and pick <b>Interact</b>.
-            The buttons sit just under the card, out of your viewers' sight.
+            To switch modes, flip to your creator code or reset your ELO gain live, right-click the source and pick
+            <b>Interact</b>. The buttons are under the card there. Can't see them all? Raise the Height in the source's
+            properties, the crop keeps them hidden from viewers.
           </p>
           <p class="tip session-tip" data-show-val="elo=session">
             <b>Using Session:</b> it starts over by itself once your ELO hasn't moved for 6 hours, so each
@@ -1345,7 +1347,6 @@
             el.hidden = String(state[p[0]]) !== p[1];
           });
           $('obs-w').textContent = d.w;
-          $('obs-h').textContent = d.h;
           $('obs-link').value = hasAccount() ? overlayUrl(false) : 'Add your account to get your link';
           $('copy').disabled = false;
           renderDataNote();
