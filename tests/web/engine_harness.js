@@ -33,9 +33,9 @@ async function parity() {
     let current = null;
     const fetchText = async (url) => (url.includes('/stats/') ? JSON.stringify(current) : leaderboard(url));
     const engine = E.createEngine({
-      // elo=session: the old since-the-overlay-opened count, which is what
-      // the Python server shows, so the two can be compared directly.
-      cfg: E.parseConfig(`?id=${accountId}&name=tester&elo=session`),
+      // elo=opened: the since-the-overlay-opened count, which is what the
+      // Python server shows, so the two can be compared directly.
+      cfg: E.parseConfig(`?id=${accountId}&name=tester&elo=opened`),
       store: E.makeStore(memoryStorage()),
       fetchText,
       now: () => clock,
@@ -180,6 +180,48 @@ async function websiteChecks() {
   check('missing mode still shows best', s1.rank_display, '#40 UNREAL');
   const s2 = await text(`?${id}&mode=br-combined`, raw);
   check('no notice when the mode exists', s2.error, null);
+  // "Session": counts from the last Reset ELO gain, kept across restarts.
+  {
+    const storage = memoryStorage();
+    let clock = now;
+    let data = JSON.parse(JSON.stringify(raw));
+    const open = () => E.createEngine({ cfg: E.parseConfig(`?${id}&elo=session`), store: E.makeStore(storage),
+      fetchText: async () => JSON.stringify(data), now: () => clock });
+    const shown = async (engine) => (await (await engine.fetchData('/data?window=session')).json()).session_text;
+    let engine = open();
+    await engine.init();
+    check('session starts at +0', await shown(engine), '+0 ELO SESSION');
+    clock += 10 * 60 * 1000; data.ranked_stats['ranked-br-combined'].elo = 3110; data.last_updated = new Date(clock).toISOString();
+    await engine.refresh(true);
+    check('session counts up', await shown(engine), '+30 ELO SESSION');
+    engine = open(); await engine.init();      // OBS restarted
+    check('session survives a restart', await shown(engine), '+30 ELO SESSION');
+    engine.resetSession();
+    check('reset puts it back to +0', await shown(engine), '+0 ELO SESSION');
+    clock += 10 * 60 * 1000; data.ranked_stats['ranked-br-combined'].elo = 3095; data.last_updated = new Date(clock).toISOString();
+    await engine.refresh(true);
+    check('counts from the reset', await shown(engine), '-15 ELO SESSION');
+    const second = open(); await second.init();
+    check('another overlay shares the reset', await shown(second), '-15 ELO SESSION');
+    // a new season wipes it rather than showing a huge loss
+    clock += 10 * 60 * 1000;
+    data.stats.seasonal.all.both.overall.matches_played = 1;
+    data.ranked_stats['ranked-br-combined'].elo = 1200; data.last_updated = new Date(clock).toISOString();
+    await engine.refresh(true);
+    check('new season starts it over', await shown(engine), '+0 ELO SESSION');
+  }
+  {
+    // below Unreal it counts progress, and the label says SESSION
+    const storage = memoryStorage();
+    let clock = now;
+    let data = JSON.parse(JSON.stringify(low));
+    const engine = E.createEngine({ cfg: E.parseConfig(`?${id}&elo=session`), store: E.makeStore(storage),
+      fetchText: async () => JSON.stringify(data), now: () => clock });
+    await engine.init();
+    clock += 10 * 60 * 1000; data.ranked_stats['ranked-squareclub'].promotion_progression = 62; data.last_updated = new Date(clock).toISOString();
+    await engine.refresh(true);
+    check('session progress below Unreal', (await (await engine.fetchData('/data?window=session')).json()).session_text, '+32% SESSION');
+  }
   return checks;
 }
 

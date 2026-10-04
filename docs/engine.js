@@ -665,9 +665,20 @@
     }
   }
 
-  // The ELO change options the setup page offers. "session" is the old
-  // since-the-overlay-opened count, kept for links that ask for it.
-  var CHANGE_WINDOWS = { today: 'TODAY', '12h': 'PAST 12H', '24h': 'PAST 24H', session: 'TODAY' };
+  // The ELO change options, by their value in the link (elo=...): the
+  // window the snapshot works out, and the words shown after the number.
+  //   session  since "Reset ELO gain" was last pressed in the overlay
+  //   opened   since the overlay opened, which is what the Python server
+  //            shows; not offered on the setup page, kept for the tests
+  var CHANGE_WINDOWS = {
+    today: ['today', 'TODAY'],
+    '12h': ['12h', 'PAST 12H'],
+    '24h': ['24h', 'PAST 24H'],
+    session: ['reset', 'SESSION'],
+    opened: ['opened', 'TODAY']
+  };
+  var WINDOW_LABELS = {};
+  Object.keys(CHANGE_WINDOWS).forEach(function (k) { WINDOW_LABELS[CHANGE_WINDOWS[k][0]] = CHANGE_WINDOWS[k][1]; });
 
   /* ------------------------------------------------------------------
    * The engine: state, refreshing, and the /data answer
@@ -687,7 +698,7 @@
     var change = String(q.get('elo') || 'today').toLowerCase();
     if (!hasOwn.call(CHANGE_WINDOWS, change)) change = 'today';
     return {
-      changeWindow: change,
+      changeWindow: CHANGE_WINDOWS[change][0],
       accountId: String(q.get('id') || '').trim().toLowerCase(),
       username: String(q.get('name') || '').trim(),
       creatorCode: String(q.get('code') || '').trim(),
@@ -798,6 +809,7 @@
       stats: 'ro1:stats:' + id,
       lookup: 'ro1:lookup:' + id,
       session: 'ro1:session:' + id,
+      reset: 'ro1:reset:' + id,
       busy: 'ro1:busy:' + id
     };
 
@@ -900,7 +912,51 @@
       if (previous !== null && previous !== undefined && fp * 2 < previous) {
         session.elos = {};
         session.progs = {};
+        store.remove(K.reset);
       }
+    }
+
+    /*
+     * The "Session" ELO change: counts from the last time "Reset ELO gain"
+     * was pressed in the overlay (or from the first reading, before it ever
+     * was). Kept in shared storage, so it survives OBS restarts and scene
+     * switches, and every overlay for the account counts from the same
+     * point. A mode first seen after a reset gets its baseline then.
+     */
+    function loadReset() {
+      var r = store.get(K.reset);
+      return isDict(r) && isDict(r.elos) && isDict(r.progs) ? r : null;
+    }
+
+    function recordResetBaseline(key, elo, points) {
+      if (cfg.changeWindow !== 'reset') return;
+      var r = loadReset();
+      var changed = !r;
+      if (!r) r = { at: clock(), elos: {}, progs: {} };
+      if (elo !== null && !hasOwn.call(r.elos, key)) { r.elos[key] = elo; changed = true; }
+      if (points !== null && !hasOwn.call(r.progs, key)) { r.progs[key] = points; changed = true; }
+      if (changed) store.set(K.reset, r);
+    }
+
+    function resetDeltas(key, elo, points) {
+      var r = loadReset();
+      if (!r) return [0, 0];
+      var e = hasOwn.call(r.elos, key) ? r.elos[key] : null;
+      var p = hasOwn.call(r.progs, key) ? r.progs[key] : null;
+      return [
+        elo !== null && e !== null ? elo - e : 0,
+        points !== null && p !== null ? points - p : 0
+      ];
+    }
+
+    function resetSession() {
+      var r = { at: clock(), elos: {}, progs: {} };
+      modes.forEach(function (m) {
+        var v = modeView(m[0], m[1]);
+        if (v.elo !== null) r.elos[v.key] = v.elo;
+        if (v.points !== null) r.progs[v.key] = v.points;
+      });
+      store.set(K.reset, r);
     }
 
     function recordBaseline(key, elo, points) {
@@ -1197,6 +1253,7 @@
       modes.forEach(function (m) {
         var v = modeView(m[0], m[1]);
         recordBaseline(v.key, v.elo, v.points);
+        recordResetBaseline(v.key, v.elo, v.points);
       });
       var available = modes.slice().sort(function (a, b) {
         return compareTuples(modeRankKey(b), modeRankKey(a));
@@ -1456,7 +1513,7 @@
       var cutoff = null;
       if (window === 'today') cutoff = Math.floor(centralMidnight(clock()) / 1000);
       else if (window === '12h' || window === '24h') cutoff = nowSec() - WINDOW_SECS[window];
-      var changeLabel = hasOwn.call(CHANGE_WINDOWS, window) ? CHANGE_WINDOWS[window] : 'TODAY';
+      var changeLabel = hasOwn.call(WINDOW_LABELS, window) ? WINDOW_LABELS[window] : 'TODAY';
       var signOf = function (n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : 'zero'); };
 
       var sign;
@@ -1464,6 +1521,11 @@
         if (window === 'season') {
           s.session_text = elo !== null ? '+' + elo + ' ALL SEASON' : '- ALL SEASON';
           s.session_sign = elo !== null ? 'pos' : 'zero';
+        } else if (window === 'reset') {
+          var rd = resetDeltas(resolvedKey, elo, null)[0];
+          sign = rd >= 0 ? '+' : '';
+          s.session_text = sign + rd + ' ELO ' + changeLabel;
+          s.session_sign = signOf(rd);
         } else if (cutoff !== null) {
           var wd = eloDeltaSince(raw, cutoff, elo, resolvedKey || null, '');
           if (wd === null) wd = delta;
@@ -1478,12 +1540,14 @@
       } else {
         s.pct_to_next = progression !== null ? 100 - progression : null;
         var pd = progDelta;
-        if (cutoff !== null) {
+        if (window === 'reset') {
+          pd = resetDeltas(resolvedKey, null, v.points)[1];
+        } else if (cutoff !== null) {
           var pw = progressDeltaSince(raw, cutoff, v.points, resolvedKey || null);
           if (pw !== null) pd = pw;
         }
         sign = pd >= 0 ? '+' : '';
-        s.session_text = sign + pd + '% ' + (cutoff !== null ? changeLabel : 'TODAY');
+        s.session_text = sign + pd + '% ' + (cutoff !== null || window === 'reset' ? changeLabel : 'TODAY');
         s.session_sign = signOf(pd);
       }
 
@@ -1531,12 +1595,14 @@
           return withTimeout(resolveMode(pm[0], pm[1]).then(function () {
             var v = modeView(pm[0], pm[1]);
             recordBaseline(v.key, v.elo, v.points);
+            recordResetBaseline(v.key, v.elo, v.points);
             saveSession();
           }), LOOKUP_WAIT_MS);
         }
       }).then(function () {
         var win = p.window === 'session' ? cfg.changeWindow : p.window;
         var snap = snapshot(win, p.mode || null);
+        snap.window = p.window;   // answer with the window that was asked for, like the server
         return { ok: true, json: function () { return Promise.resolve(snap); } };
       });
     }
@@ -1582,6 +1648,7 @@
       interval: interval,
       keys: K,
       requestCount: function () { return requests; },
+      resetSession: resetSession,
       _state: function () { return { STATE: STATE, lookups: lookups, session: session, modes: modes }; },
       _setDemo: function (data, demoLookups, baselines) {
         raw = data;
@@ -1589,6 +1656,8 @@
         modes = findRankedModes(data);
         lookups = demoLookups;
         session = { start: nowSec(), seen: clock(), fp: null, elos: baselines.elos, progs: baselines.progs, resolvedAll: true };
+        // The demo's "Session" count shows the same +23 as its "Today".
+        store.set(K.reset, { at: clock(), elos: Object.assign({}, baselines.elos), progs: Object.assign({}, baselines.progs) });
         finalize();
         firstDone = Promise.resolve();
       }
@@ -1675,6 +1744,7 @@
     var engine = createEngine({ cfg: cfg, store: store, isIdle: idle });
     var timer = null;
 
+    if (cfg.changeWindow === 'reset') addResetButton(engine);
     keepButtonsBelowCut();
 
     function visible() { return obsVisible && tabVisible; }
@@ -1744,6 +1814,7 @@
 
     // Another overlay (another scene, another design) fetched: show it too.
     window.addEventListener('storage', function (e) {
+      if (e.key === engine.keys.reset) { engine.emit(); return; }
       if (cfg.demo || e.key !== engine.keys.stats) return;
       engine.adoptShared().then(function (changed) {
         if (changed) engine.emit();
@@ -1757,8 +1828,38 @@
       fetchData: engine.fetchData,
       onUpdate: engine.onUpdate,
       requestCount: engine.requestCount,
+      resetSession: function () { engine.resetSession(); engine.emit(); },
       snapshot: engine.snapshot
     };
+  }
+
+  /*
+   * "Reset ELO gain", for the Session ELO change. It joins the design's own
+   * buttons under the card (same classes, so it matches every design), out
+   * of viewers' sight; in OBS it is reached through right-click > Interact.
+   */
+  function addResetButton(engine) {
+    var after = document.getElementById('displayToggleBar') || document.getElementById('modeBar');
+    if (!after) return;
+    var bar = document.createElement('div');
+    bar.className = 'mode-bar';
+    bar.id = 'sessionBar';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mode-btn';
+    btn.id = 'resetSessionBtn';
+    btn.textContent = 'Reset ELO gain';
+    btn.title = 'Start counting the Session ELO change from now';
+    var timer = null;
+    btn.addEventListener('click', function () {
+      engine.resetSession();
+      engine.emit();
+      btn.textContent = 'ELO gain reset ✓';
+      clearTimeout(timer);
+      timer = setTimeout(function () { btn.textContent = 'Reset ELO gain'; }, 2000);
+    });
+    bar.appendChild(btn);
+    after.parentNode.insertBefore(bar, after.nextSibling);
   }
 
   /*
