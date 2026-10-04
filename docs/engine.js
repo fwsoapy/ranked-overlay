@@ -576,7 +576,13 @@
     if (currentElo === null || data === null || data === undefined) return null;
     var secs = WINDOW_SECS[window];
     if (secs === undefined) return null;
-    var cutoff = nowSec - secs;
+    return eloDeltaSince(data, nowSec - secs, currentElo, rankingId, override);
+  }
+
+  // windowed_elo_delta() with the cutoff passed in, so "since midnight" works
+  // the same way as "past 12 hours".
+  function eloDeltaSince(data, cutoff, currentElo, rankingId, override) {
+    if (currentElo === null || data === null || data === undefined) return null;
     var rid = rankingId || detectRankingId(data, null, override);
     var points = eloSeries(data, rid);
     if (!points.length) return null;
@@ -591,6 +597,77 @@
     }
     return currentElo - baseline;
   }
+
+  // The same idea below Unreal, where progress is division * 100 + the
+  // promotion percentage. OliTracker records it after every batch of
+  // matches, but keeps no start-of-day value, so with nothing recorded
+  // before the cutoff this returns null and the caller falls back.
+  function progressSeries(data, rankingId) {
+    var points = [];
+    var want = rankingId ? normalizeModeKey(rankingId) : null;
+    iter(isDict(data) ? data.match_history : null).forEach(function (day) {
+      iter(dget(day, 'matches')).forEach(function (grp) {
+        var rd = dget(grp, 'ranked_data');
+        rd = truthy(rd) ? rd : {};
+        if (want && normalizeModeKey(dget(rd, 'ranking_id')) !== want) return;
+        if (num(dget(rd, 'unreal_placement')) !== null || num(dget(rd, 'current_unreal_placement')) !== null) return;
+        var div = num(dget(rd, 'division'));
+        var prog = num(dget(rd, 'promotion_progression'));
+        var ts = dget(grp, 'last_modified');
+        if (div !== null && prog !== null && truthy(ts)) points.push([Math.trunc(Number(ts)), div * 100 + prog]);
+      });
+    });
+    points.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    return points;
+  }
+
+  function progressDeltaSince(data, cutoff, currentPoints, rankingId) {
+    if (currentPoints === null || data === null || data === undefined) return null;
+    var points = progressSeries(data, rankingId);
+    var baseline = null;
+    for (var i = 0; i < points.length; i++) {
+      if (points[i][0] <= cutoff) baseline = points[i][1];
+      else break;
+    }
+    return baseline === null ? null : currentPoints - baseline;
+  }
+
+  /*
+   * Midnight, Central Time (America/Chicago, so daylight saving is handled),
+   * of the day `nowMs` falls in, as a UTC timestamp in ms. "ELO today" counts
+   * from here.
+   */
+  function centralMidnight(nowMs) {
+    try {
+      var fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Chicago', hourCycle: 'h23',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+      var parts = function (ms) {
+        var o = {};
+        fmt.formatToParts(new Date(ms)).forEach(function (p) { o[p.type] = p.value; });
+        return o;
+      };
+      // Central wall-clock time minus UTC at a moment: -5h or -6h.
+      var offset = function (ms) {
+        var p = parts(ms);
+        var wall = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+        return wall - Math.floor(ms / 1000) * 1000;
+      };
+      var p = parts(nowMs);
+      var wallMidnight = Date.UTC(+p.year, +p.month - 1, +p.day, 0, 0, 0);
+      var guess = wallMidnight - offset(nowMs);
+      return wallMidnight - offset(guess);   // right even on a daylight-saving day
+    } catch (e) {
+      var d = new Date(nowMs - 6 * 3600 * 1000);   // no time zone data: assume CST
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) + 6 * 3600 * 1000;
+    }
+  }
+
+  // The ELO change options the setup page offers. "session" is the old
+  // since-the-overlay-opened count, kept for links that ask for it.
+  var CHANGE_WINDOWS = { today: 'TODAY', '12h': 'PAST 12H', '24h': 'PAST 24H', session: 'TODAY' };
 
   /* ------------------------------------------------------------------
    * The engine: state, refreshing, and the /data answer
@@ -607,7 +684,10 @@
     };
     var proxy = String(q.get('proxy') || '').trim().replace(/\/+$/, '');
     if (!/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(proxy)) proxy = DEFAULT_PROXY;
+    var change = String(q.get('elo') || 'today').toLowerCase();
+    if (!hasOwn.call(CHANGE_WINDOWS, change)) change = 'today';
     return {
+      changeWindow: change,
       accountId: String(q.get('id') || '').trim().toLowerCase(),
       username: String(q.get('name') || '').trim(),
       creatorCode: String(q.get('code') || '').trim(),
@@ -619,6 +699,13 @@
       demo: q.get('demo') === '1',
       proxy: proxy
     };
+  }
+
+  function hintLabel(hint) {
+    if (hint.indexOf('squareclub') >= 0 || hint.indexOf('boxfight') >= 0) return 'Boxfights';
+    if (hint.indexOf('blastberry') >= 0 || hint.indexOf('reload') >= 0) return 'Reload';
+    if (hint.indexOf('br') >= 0) return 'BR';
+    return hint;
   }
 
   function validAccountId(id) {
@@ -1362,32 +1449,50 @@
         s.next_pos = null;
       }
 
+      // The ELO change row. "today" counts from midnight Central Time, 12h and
+      // 24h from that long ago, all from OliTracker's match history so games
+      // played before the overlay was opened still count. With nothing in
+      // the history to measure from, it counts from when the overlay opened.
+      var cutoff = null;
+      if (window === 'today') cutoff = Math.floor(centralMidnight(clock()) / 1000);
+      else if (window === '12h' || window === '24h') cutoff = nowSec() - WINDOW_SECS[window];
+      var changeLabel = hasOwn.call(CHANGE_WINDOWS, window) ? CHANGE_WINDOWS[window] : 'TODAY';
+      var signOf = function (n) { return n > 0 ? 'pos' : (n < 0 ? 'neg' : 'zero'); };
+
       var sign;
       if (isUnreal) {
         if (window === 'season') {
           s.session_text = elo !== null ? '+' + elo + ' ALL SEASON' : '- ALL SEASON';
           s.session_sign = elo !== null ? 'pos' : 'zero';
-        } else if (window === '12h' || window === '24h') {
-          var wd = windowedEloDelta(raw, window, elo, resolvedKey || null, nowSec(), '');
-          var labelStr = window === '12h' ? 'PAST 12H' : 'PAST 24H';
-          if (wd === null) {
-            s.session_text = '+0 ELO ' + labelStr;
-            s.session_sign = 'zero';
-          } else {
-            sign = wd >= 0 ? '+' : '';
-            s.session_text = sign + wd + ' ELO ' + labelStr;
-            s.session_sign = wd > 0 ? 'pos' : (wd < 0 ? 'neg' : 'zero');
-          }
+        } else if (cutoff !== null) {
+          var wd = eloDeltaSince(raw, cutoff, elo, resolvedKey || null, '');
+          if (wd === null) wd = delta;
+          sign = wd >= 0 ? '+' : '';
+          s.session_text = sign + wd + ' ELO ' + changeLabel;
+          s.session_sign = signOf(wd);
         } else {
           sign = delta >= 0 ? '+' : '';
           s.session_text = sign + delta + ' ELO TODAY';
-          s.session_sign = delta > 0 ? 'pos' : (delta < 0 ? 'neg' : 'zero');
+          s.session_sign = signOf(delta);
         }
       } else {
         s.pct_to_next = progression !== null ? 100 - progression : null;
-        sign = progDelta >= 0 ? '+' : '';
-        s.session_text = sign + progDelta + '% TODAY';
-        s.session_sign = progDelta > 0 ? 'pos' : (progDelta < 0 ? 'neg' : 'zero');
+        var pd = progDelta;
+        if (cutoff !== null) {
+          var pw = progressDeltaSince(raw, cutoff, v.points, resolvedKey || null);
+          if (pw !== null) pd = pw;
+        }
+        sign = pd >= 0 ? '+' : '';
+        s.session_text = sign + pd + '% ' + (cutoff !== null ? changeLabel : 'TODAY');
+        s.session_sign = signOf(pd);
+      }
+
+      // Asked for a mode this account has no rank in: say so instead of
+      // silently showing another one.
+      var hint = cfg.modeHint.trim().toLowerCase();
+      if (hint && modes.length && !modes.some(function (m) { return pathStr(m[0]).indexOf(hint) >= 0; })) {
+        var notice = 'no ranked ' + hintLabel(hint) + ' games yet, showing ' + (resolvedKey ? modeLabel(resolvedKey) : 'your best mode');
+        s.error = s.error ? s.error + ' · ' + notice : notice;
       }
 
       s.gap_unavailable = !!(isUnreal && (s.next_gap === null || s.next_pos === null));
@@ -1430,7 +1535,8 @@
           }), LOOKUP_WAIT_MS);
         }
       }).then(function () {
-        var snap = snapshot(p.window, p.mode || null);
+        var win = p.window === 'session' ? cfg.changeWindow : p.window;
+        var snap = snapshot(win, p.mode || null);
         return { ok: true, json: function () { return Promise.resolve(snap); } };
       });
     }
@@ -1534,6 +1640,13 @@
     try { storage = window.localStorage; } catch (e) { storage = null; }
     var store = makeStore(storage);
 
+    // The designs remember the last mode button clicked, and that used to beat
+    // the Mode picked on the setup page forever after. A link that names a
+    // mode now always opens on it; clicks still switch it until a reload.
+    if (cfg.modeHint) {
+      try { storage && storage.removeItem('fn_overlay_mode'); } catch (e) { /* blocked */ }
+    }
+
     if (cfg.labelColor) {
       var style = document.createElement('style');
       style.textContent = ':root{--stat-label-color:#' + cfg.labelColor + ' !important}';
@@ -1561,6 +1674,8 @@
 
     var engine = createEngine({ cfg: cfg, store: store, isIdle: idle });
     var timer = null;
+
+    keepButtonsBelowCut();
 
     function visible() { return obsVisible && tabVisible; }
 
@@ -1646,6 +1761,36 @@
     };
   }
 
+  /*
+   * The mode and stats/code buttons sit under the card, and the OBS source is
+   * sized (meta obs-height) to stop just above them so viewers never see
+   * them. A shorter card, an Unreal rank with no ELO row for instance, used to
+   * pull them up into view. This keeps the first button below that line.
+   */
+  function keepButtonsBelowCut() {
+    var meta = document.querySelector('meta[name="obs-height"]');
+    var cut = meta ? parseInt(meta.getAttribute('content'), 10) : 0;
+    var bar = document.getElementById('modeBar');
+    if (!cut || !bar) return;
+    var GAP = 24;
+    function place() {
+      bar.style.marginTop = '';
+      var natural = parseFloat(getComputedStyle(bar).marginTop) || 0;
+      var top = bar.getBoundingClientRect().top + (window.scrollY || 0);
+      if (top < cut + GAP) bar.style.marginTop = (natural + cut + GAP - top) + 'px';
+    }
+    place();
+    var watch = [bar.previousElementSibling, bar.previousElementSibling && bar.previousElementSibling.previousElementSibling];
+    if (typeof ResizeObserver === 'function') {
+      var ro = new ResizeObserver(function () { place(); });
+      watch.forEach(function (el) { if (el) ro.observe(el); });
+    } else {
+      setInterval(place, 1000);
+    }
+    // Web fonts change the card's size once they arrive.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+  }
+
   /* ------------------------------------------------------------------
    * Used by the setup page
    * ---------------------------------------------------------------- */
@@ -1679,6 +1824,9 @@
       lookupLeaderboardElo: lookupLeaderboardElo,
       computeWindowedStats: computeWindowedStats,
       windowedEloDelta: windowedEloDelta,
+      eloDeltaSince: eloDeltaSince,
+      progressDeltaSince: progressDeltaSince,
+      centralMidnight: centralMidnight,
       modeLabel: modeLabel,
       slugForMode: slugForMode,
       pyRound: pyRound,

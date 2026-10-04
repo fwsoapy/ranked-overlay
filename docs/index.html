@@ -442,18 +442,45 @@
 
       .preview-bar {
         display: flex;
-        align-items: center;
-        gap: 10px;
+        align-items: flex-end;
+        gap: 12px 22px;
         flex-wrap: wrap;
         margin-top: 12px;
       }
-      .preview-bar .seg { margin-right: auto; }
-      .size-note { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+      .bar-group { display: flex; flex-direction: column; gap: 5px; }
+      .bar-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .preview-bar .seg button { padding: 6px 11px; font-size: 13px; }
+      .seg button:disabled:hover { border-color: var(--line); }
       .data-note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
 
       .link-box { display: flex; gap: 8px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
       .link-box input { flex: 1 1 320px; min-width: 0; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
-      .status { font-size: 13px; color: var(--accent); }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        z-index: 20;
+        max-width: calc(100% - 32px);
+        padding: 10px 16px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--bg-raised);
+        color: var(--text);
+        font-size: 13.5px;
+        box-shadow: 0 10px 30px var(--shadow);
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, 12px);
+        transition: opacity 0.18s ease, transform 0.18s ease;
+      }
+      .toast.show { opacity: 1; transform: translate(-50%, 0); }
+      .toast.bad { border-color: var(--danger); color: var(--danger); }
 
       button {
         font: inherit;
@@ -599,16 +626,31 @@
             <div id="frame-box" class="frame-box" aria-label="Overlay preview"></div>
           </div>
           <div class="preview-bar">
-            <div class="seg" id="stage-bg" role="group" aria-label="Preview background">
-              <button type="button" data-val="checker" class="on">Transparent</button>
-              <button type="button" data-val="game">Gameplay</button>
-              <button type="button" data-val="green">Green screen</button>
+            <div class="bar-group">
+              <span class="bar-label">Background</span>
+              <div class="seg" id="stage-bg" role="group" aria-label="Preview background">
+                <button type="button" data-val="checker" class="on">Transparent</button>
+                <button type="button" data-val="game">Gameplay</button>
+                <button type="button" data-val="green">Green screen</button>
+              </div>
             </div>
-            <div class="seg" id="preview-data" role="group" aria-label="Preview data" hidden>
-              <button type="button" data-val="live" class="on">My stats</button>
-              <button type="button" data-val="demo">Demo numbers</button>
+            <div class="bar-group">
+              <span class="bar-label">Mode</span>
+              <div class="seg" data-seg="mode" id="mode-seg" role="group" aria-label="Mode">
+                <button type="button" data-val="" title="Starts on your best rank">Auto</button>
+                <button type="button" data-val="br-combined" data-label="BR">BR</button>
+                <button type="button" data-val="blastberry" data-label="Reload">Reload</button>
+                <button type="button" data-val="squareclub" data-label="Boxfights">Boxfights</button>
+              </div>
             </div>
-            <span id="size-note" class="size-note"></span>
+            <div class="bar-group">
+              <span class="bar-label">ELO change</span>
+              <div class="seg" data-seg="elo" role="group" aria-label="ELO change">
+                <button type="button" data-val="today" title="Since midnight Central Time">Today</button>
+                <button type="button" data-val="12h" title="The last 12 hours">Last 12h</button>
+                <button type="button" data-val="24h" title="The last 24 hours">Last 24h</button>
+              </div>
+            </div>
           </div>
           <p id="data-note" class="data-note"></p>
 
@@ -616,7 +658,6 @@
             <input id="obs-link" type="text" readonly aria-label="Your OBS link" value="" />
             <button id="copy" class="primary" type="button">Copy OBS link</button>
             <button id="open" class="secondary" type="button">Open</button>
-            <span id="status" class="status" role="status"></span>
           </div>
         </section>
 
@@ -640,16 +681,6 @@
             <div class="field">
               <span>Custom accent</span>
               <div class="color-input" data-color="color"></div>
-            </div>
-            <div class="field">
-              <span>Mode</span>
-              <div class="seg" data-seg="mode">
-                <button type="button" data-val="">Auto</button>
-                <button type="button" data-val="br-combined">BR</button>
-                <button type="button" data-val="blastberry">Reload</button>
-                <button type="button" data-val="squareclub">Boxfights</button>
-              </div>
-              <span class="field-hint">Where it starts. Auto picks your best rank. The buttons under the card still switch it.</span>
             </div>
             <div class="field">
               <span>Below your rank</span>
@@ -702,13 +733,15 @@
       </div>
     </main>
 
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
     <footer class="site-footer">
       By <a href="https://github.com/fwsoapy" target="_blank" rel="noreferrer noopener">fwsoapy</a>.
       Data from <a href="https://olitracker.com" target="_blank" rel="noreferrer noopener">OliTracker</a>.
       Also check out <a href="https://fwsoapy.github.io/code-overlay/" target="_blank" rel="noreferrer noopener">Code Overlay</a>.
     </footer>
 
-    <script src="./engine.js?v=8d3cf72be1"></script>
+    <script src="./engine.js?v=d3387bbad1"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>
       (function () {
@@ -717,26 +750,32 @@
         /* Each design's default accent comes from its own stylesheet, and the
            OBS size is the card plus a little room, cut off just above the mode
            buttons so viewers never see them. */
+        // OBS width and height per design, from tools/build.py.
+        var OBS_SIZES = {minimal: [680, 235], classic: [560, 245], sharp: [600, 265], wide: [640, 160], slash: [600, 245], rainbow: [800, 220], modern: [540, 194], pulse: [660, 230]};
         var DESIGNS = [
-          { id: 'minimal', name: 'Minimal', accent: '#ac46ff', w: 680, h: 235,
+          { id: 'minimal', name: 'Minimal', accent: '#ac46ff',
             blurb: 'Clean single row with rank and ELO side by side and a bold left border.' },
-          { id: 'classic', name: 'Classic', accent: '#3b82f6', w: 560, h: 245,
+          { id: 'classic', name: 'Classic', accent: '#3b82f6',
             blurb: 'Dark card with a thin top accent line and subtle dividers.' },
-          { id: 'sharp', name: 'Sharp', accent: '#cc1111', w: 600, h: 265,
+          { id: 'sharp', name: 'Sharp', accent: '#cc1111',
             blurb: 'Big stacked text with clipped corners. Structured and aggressive.' },
-          { id: 'wide', name: 'Wide', accent: '#38bdf8', w: 640, h: 160,
+          { id: 'wide', name: 'Wide', accent: '#38bdf8',
             blurb: 'Spread out sideways with a glowing bar on the left. For wide layouts.' },
-          { id: 'slash', name: 'Slash', accent: '#a855f7', w: 600, h: 245,
+          { id: 'slash', name: 'Slash', accent: '#a855f7',
             blurb: 'A diagonal cut splits rank and ELO into two panels.' },
-          { id: 'rainbow', name: 'Rainbow', accent: '#c080ff', w: 800, h: 220,
+          { id: 'rainbow', name: 'Rainbow', accent: '#c080ff',
             blurb: 'Animated rainbow rank text and a shimmering ELO value.' },
-          { id: 'modern', name: 'Modern', accent: '#dc2626', w: 540, h: 194,
+          { id: 'modern', name: 'Modern', accent: '#dc2626',
             blurb: 'Sleek card with a soft radial glow and a bold left border.' },
-          { id: 'pulse', name: 'Pulse', accent: '#2dff91', w: 660, h: 230,
+          { id: 'pulse', name: 'Pulse', accent: '#2dff91',
             blurb: 'Green terminal HUD with a radial gauge and a monospace readout.' },
         ];
         var BY_ID = {};
-        DESIGNS.forEach(function (d) { BY_ID[d.id] = d; });
+        DESIGNS.forEach(function (d) {
+          d.w = OBS_SIZES[d.id][0];
+          d.h = OBS_SIZES[d.id][1];
+          BY_ID[d.id] = d;
+        });
 
         // Same names the setup tool accepts.
         var SWATCHES = [
@@ -752,8 +791,8 @@
           customColor: '#ff7a00',
           labelCustom: false, labelColor: '#ffffff',
           show: 'stats', code: '',
-          mode: '', refresh: '60', next: true,
-          previewBg: 'checker', previewData: 'live',
+          mode: '', elo: 'today', refresh: '60', next: true,
+          previewBg: 'checker',
         };
 
         var STATE_KEY = 'ranked-overlay:setup-v1';
@@ -775,6 +814,7 @@
         var state = Object.assign({}, DEFAULTS, readJSON(STATE_KEY, {}));
         if (!BY_ID[state.design]) state.design = DEFAULTS.design;
         if (['60', '300', '600'].indexOf(String(state.refresh)) < 0) state.refresh = '60';
+        if (['today', '12h', '24h'].indexOf(state.elo) < 0) state.elo = 'today';
 
         function $(id) { return document.getElementById(id); }
 
@@ -791,7 +831,7 @@
 
         function overlayParams(forPreview) {
           var p = new URLSearchParams();
-          var demo = forPreview && (!hasAccount() || state.previewData === 'demo');
+          var demo = forPreview && !hasAccount();
           if (demo) p.set('demo', '1');
           else if (hasAccount()) p.set('id', state.accountId);
           if (state.color) p.set('color', state.color.replace('#', ''));
@@ -799,6 +839,7 @@
           var code = cleanCode(state.code);
           if (state.show === 'code' && code) p.set('code', code);
           if (state.mode) p.set('mode', state.mode);
+          if (state.elo !== 'today') p.set('elo', state.elo);
           if (String(state.refresh) !== '60') p.set('refresh', String(state.refresh));
           if (!state.next) p.set('next', '0');
           return p;
@@ -833,7 +874,6 @@
             f.style.height = d.h + 'px';
             f.style.transform = 'scale(' + k + ')';
           });
-          $('size-note').textContent = d.w + ' x ' + d.h + ' px';
         }
 
         function loadPreview() {
@@ -855,6 +895,7 @@
             if (current && current !== next) current.remove();
             next.classList.remove('pending');
             current = next;
+            readModes(next);
           }
           // Swap as soon as the new overlay has its numbers. Waiting for the
           // iframe's load event would also wait on its web fonts. If the page
@@ -894,13 +935,35 @@
           previewTimer = setTimeout(loadPreview, 250);
         }
 
+        // Which modes the account actually has, read from the live preview.
+        // null means unknown (demo numbers, or not loaded yet): all enabled.
+        var accountModes = null;
+        function renderModeAvailability() {
+          document.querySelectorAll('#mode-seg button[data-label]').forEach(function (b) {
+            var label = b.getAttribute('data-label');
+            var off = !!accountModes && accountModes.indexOf(label) < 0;
+            b.disabled = off;
+            b.title = off ? 'No ranked ' + label + ' games on this account yet' : '';
+          });
+        }
+
+        function readModes(frame) {
+          accountModes = null;
+          if (hasAccount()) {
+            try {
+              var snap = frame.contentWindow.RankedOverlay.snapshot('session');
+              if (snap && snap.modes_available && snap.modes_available.length) {
+                accountModes = snap.modes_available.map(function (m) { return m.label; });
+              }
+            } catch (e) { accountModes = null; }
+          }
+          renderModeAvailability();
+        }
+
         function renderDataNote() {
           var note = $('data-note');
-          $('preview-data').hidden = !hasAccount();
           if (!hasAccount()) {
             note.textContent = 'Showing demo numbers. Add your account to see your own.';
-          } else if (state.previewData === 'demo') {
-            note.textContent = 'Showing demo numbers. Your link still uses your live stats.';
           } else {
             note.textContent = 'Showing your live stats' + (state.accountName ? ' for ' + state.accountName : '') + '.';
           }
@@ -1131,6 +1194,8 @@
           state.code = q.get('code') || '';
           state.show = state.code ? 'code' : 'stats';
           state.mode = q.get('mode') || '';
+          var elo = q.get('elo') || 'today';
+          state.elo = ['today', '12h', '24h'].indexOf(elo) >= 0 ? elo : 'today';
           var r = parseInt(q.get('refresh') || '60', 10);
           state.refresh = String([300, 600].indexOf(r) >= 0 ? r : 60);
           state.next = q.get('next') !== '0';
@@ -1160,13 +1225,24 @@
          * Copy / open
          * ------------------------------------------------------------- */
 
-        var statusEl = $('status');
+        // Messages pop up at the bottom of the screen so nothing on the page
+        // moves when they appear.
+        var toast = $('toast');
         var flashTimer = 0;
         function flash(msg, bad) {
-          statusEl.textContent = msg;
-          statusEl.style.color = bad ? 'var(--danger)' : '';
+          toast.textContent = msg;
+          toast.classList.toggle('bad', !!bad);
+          toast.classList.add('show');
           clearTimeout(flashTimer);
-          flashTimer = setTimeout(function () { statusEl.textContent = ''; }, 2600);
+          flashTimer = setTimeout(function () { toast.classList.remove('show'); }, 2600);
+        }
+
+        function confirmButton(b) {
+          if (!b.dataset.label) b.dataset.label = b.textContent;
+          b.style.minWidth = b.getBoundingClientRect().width + 'px';   // same size, so nothing shifts
+          b.textContent = '✓ Copied';
+          clearTimeout(b._t);
+          b._t = setTimeout(function () { b.textContent = b.dataset.label; }, 1800);
         }
 
         function copyText(text) {
@@ -1179,27 +1255,22 @@
           });
         }
 
-        function copyLink() {
+        function copyLink(button) {
           if (!hasAccount()) {
             flash('Add your account first', true);
             accountInput.focus();
             return;
           }
           copyText(overlayUrl(false)).then(function () {
+            if (button) confirmButton(button);
             flash('Copied. Paste it into an OBS Browser source.');
           }, function () {
             $('obs-link').select();
             flash('Press Ctrl+C to copy it', true);
           });
         }
-        $('copy').addEventListener('click', copyLink);
-        $('copy-2').addEventListener('click', function () {
-          copyLink();
-          var b = $('copy-2');
-          if (!hasAccount()) return;
-          b.textContent = 'Copied!';
-          setTimeout(function () { b.textContent = 'Copy OBS link'; }, 1800);
-        });
+        $('copy').addEventListener('click', function () { copyLink($('copy')); });
+        $('copy-2').addEventListener('click', function () { copyLink($('copy-2')); });
 
         $('open').addEventListener('click', function () {
           window.open(hasAccount() ? overlayUrl(false) : overlayUrl(true), '_blank', 'noopener');
@@ -1223,12 +1294,6 @@
           state.previewBg = btn.getAttribute('data-val');
           applyStageBg();
           writeJSON(STATE_KEY, state);
-        });
-        $('preview-data').addEventListener('click', function (e) {
-          var btn = e.target.closest('button');
-          if (!btn) return;
-          state.previewData = btn.getAttribute('data-val');
-          changed();
         });
 
         /* ---------------------------------------------------------------
@@ -1254,9 +1319,6 @@
             group.querySelectorAll('button').forEach(function (b) {
               b.classList.toggle('on', b.getAttribute('data-val') === String(state[key]));
             });
-          });
-          $('preview-data').querySelectorAll('button').forEach(function (b) {
-            b.classList.toggle('on', b.getAttribute('data-val') === state.previewData);
           });
           if (document.activeElement !== $('code')) $('code').value = state.code;
           $('next-lookup').checked = !!state.next;

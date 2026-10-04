@@ -31,7 +31,10 @@ FX = os.path.join(HERE, "fixtures")
 
 T0 = 1791080000          # a fixed clock, in seconds
 STEP_SECS = 400          # time between refreshes in a scenario
-WINDOWS = ["session", "season", "12h", "24h"]
+# The windows the Python designs ask for. The website's own ELO change
+# windows (today / 12h / 24h, from match history) are checked separately in
+# engine_harness.js, since the Python server has no equivalent.
+WINDOWS = ["session", "season"]
 
 
 def stats(name):
@@ -187,6 +190,13 @@ def main():
                     if diffs <= 40:
                         print(f"{name} step {want[0]} mode={want[1]} window={want[2]} {key}: python={a} js={b}")
 
+    checks_ok = True
+    for name, ok, got, want in report["checks"]:
+        checks_ok &= ok
+        if not ok:
+            print(f"FAIL {name}: got {json.dumps(got)}, want {json.dumps(want)}")
+    print(f"website checks: {sum(1 for c in report['checks'] if c[1])}/{len(report['checks'])} passed")
+
     budget_ok = True
     for label, used, limit in report["budget"]:
         flag = "ok" if used <= limit else "OVER"
@@ -194,7 +204,7 @@ def main():
         print(f"requests/hour {label}: {used:.1f} (limit {limit}) {flag}")
 
     print(f"compared {compared} fields across {sum(len(r) for r in expected.values())} answers: {diffs} differences")
-    return 0 if diffs == 0 and budget_ok else 1
+    return 0 if diffs == 0 and budget_ok and checks_ok else 1
 
 
 if __name__ == "__main__":

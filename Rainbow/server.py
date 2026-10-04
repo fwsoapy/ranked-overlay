@@ -1753,10 +1753,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             text-transform: uppercase; white-space: nowrap;
         }
 
-        /* Slow rainbow for rank label */
+        /* Slow rainbow for rank label: red, orange, yellow, green, blue,
+           indigo, violet and back to red. Every stop is bright, so the blend
+           between two neighbours never turns brown or grey. */
         .unreal-rainbow {
             background: linear-gradient(120deg,
-                #3333ff,#9933ff,#ff3333,#ff9933,#ffff33,#33cc33,#3333ff);
+                #ff3b3b,#ff8a1f,#ffe31a,#36e05a,#2f7bff,#6a4bff,#b14dff,#ff3b3b);
             background-size: 800% 100%;
             background-repeat: repeat;
             -webkit-background-clip: text; background-clip: text;
