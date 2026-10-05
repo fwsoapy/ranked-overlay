@@ -319,6 +319,25 @@ def _normalize_mode_key(key):
     return str(key or "").lower().replace("_", "-")
 
 
+def _mode_family(key):
+    """A mode key without its -combined / -build ending.
+
+    OliTracker names a mode one way in ranked_stats and another in
+    match_history: Reload is ranked_blastberry_build in one and
+    ranked-blastberry-combined in the other. Matching on the family keeps
+    Reload's games from being missed.
+    """
+    parts = [p for p in _normalize_mode_key(key).split("-") if p]
+    while len(parts) > 2 and parts[-1] in ("combined", "build"):
+        parts.pop()
+    return "-".join(parts)
+
+
+def _same_mode(history_key, mode_key):
+    """Whether a match_history ranking_id belongs to a ranked mode."""
+    return bool(history_key) and bool(mode_key) and _mode_family(history_key) == _mode_family(mode_key)
+
+
 def _num(v):
     if isinstance(v, bool):
         return None
@@ -571,7 +590,7 @@ def _stats_from_history(data, ranking_id):
     for day in (data.get("match_history") or []):
         for grp in (day.get("matches") or []):
             rd = grp.get("ranked_data") or {}
-            if _normalize_mode_key(rd.get("ranking_id")) != _normalize_mode_key(ranking_id):
+            if not _same_mode(rd.get("ranking_id"), ranking_id):
                 continue
             total_wins    += int(grp.get("wins",    0) or 0)
             total_matches += int(grp.get("matches", 0) or 0)
@@ -650,7 +669,7 @@ def record_placements(data, window_spec, ranking_id=None):
     for day in (data.get("match_history") or []):
         for grp in (day.get("matches") or []):
             rd = grp.get("ranked_data") or {}
-            if rid and rd.get("ranking_id") != rid:
+            if rid and not _same_mode(rd.get("ranking_id"), rid):
                 continue
             tiers = _team_tiers(grp.get("playlist_id"))
             ts = grp.get("last_modified") or 0
@@ -689,7 +708,7 @@ def compute_windowed_stats(data, window_spec, ranking_id=None):
             if (grp.get("last_modified") or 0) < cutoff:
                 continue
             rd = grp.get("ranked_data") or {}
-            if rid and rd.get("ranking_id") != rid:
+            if rid and not _same_mode(rd.get("ranking_id"), rid):
                 continue
             total_wins    += int(grp.get("wins",    0) or 0)
             total_matches += int(grp.get("matches", 0) or 0)
@@ -937,7 +956,7 @@ def _elo_series(data, ranking_id):
     for day in ((data or {}).get("match_history") or []):
         for grp in (day.get("matches") or []):
             rd = grp.get("ranked_data") or {}
-            if want and _normalize_mode_key(rd.get("ranking_id")) != want:
+            if want and not _same_mode(rd.get("ranking_id"), want):
                 continue
             elo = _num(rd.get("elo"))
             ts  = grp.get("last_modified")
@@ -951,7 +970,7 @@ def _earliest_day_start_elo(data, ranking_id):
     want = _normalize_mode_key(ranking_id) if ranking_id else None
     for day in reversed((data or {}).get("match_history") or []):
         for key, value in (day.get("elo") or {}).items():
-            if want and _normalize_mode_key(key) != want:
+            if want and not _same_mode(key, want):
                 continue
             start = _num((value or {}).get("start"))
             if start is not None:

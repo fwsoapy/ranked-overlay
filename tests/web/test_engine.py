@@ -52,6 +52,13 @@ def scenarios():
     b = copy.deepcopy(a)
     b["ranked_stats"]["ranked-squareclub"]["promotion_progression"] = 65
     b["ranked_stats"]["ranked-br-combined"]["current_unreal_placement"] = 4401
+    # Reload games: match_history calls the mode ranked-blastberry-combined
+    # while ranked_stats calls it ranked_blastberry_build.
+    b.setdefault("match_history", [{"date": "x", "elo": {}, "matches": []}])
+    b["match_history"][0].setdefault("matches", []).append(
+        {"matches": 4, "wins": 3, "kills": 20, "last_modified": T0 + 100,
+         "top_3_5_10": 3, "top_6_12_25": 4, "playlist_id": "playlist_habanero_nobuild_piperboot_duos",
+         "ranked_data": {"ranking_id": "ranked-blastberry-combined"}})
     c = copy.deepcopy(b)
     c["ranked_stats"]["ranked-squareclub"]["division"] = 4
     c["ranked_stats"]["ranked-squareclub"]["promotion_progression"] = 5

@@ -306,6 +306,16 @@ async function websiteChecks() {
     check('no games: labels follow the last one', top(await text(`?${id}&elo=session`, placed)), [0, 0, 'TOP 5', 'TOP 12']);
     check('no history: solo labels', top(await text(`?${id}&elo=session`, bare)), [0, 0, 'TOP 10', 'TOP 25']);
 
+    // Reload: ranked_stats says ranked_blastberry_build, match_history says
+    // ranked-blastberry-combined. Its games must still count.
+    const reload = JSON.parse(JSON.stringify(raw));
+    reload.ranked_stats = { 'ranked_blastberry_build': { division: 12, promotion_progression: 40, current_unreal_placement: null, elo: null } };
+    reload.match_history = [{ date: 'x', elo: {}, matches: [
+      { matches: 3, wins: 2, kills: 9, top_3_5_10: 2, top_6_12_25: 3, playlist_id: 'playlist_habanero_nobuild_piperboot_duos',
+        last_modified: t('2026-07-04T19:00:00Z'), ranked_data: { ranking_id: 'ranked-blastberry-combined' } }] }];
+    const r1 = await text(`?${id}&elo=12h`, reload);
+    check('reload games count', [r1.record_wins, r1.record_losses, r1.record_top1, r1.record_top1_label], [2, 1, 2, 'TOP 5']);
+
     const H = 60 * 60 * 1000;
     const storage = memoryStorage();
     let clock = now;

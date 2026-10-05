@@ -193,6 +193,20 @@
     return String(truthy(key) ? key : '').toLowerCase().replace(/_/g, '-');
   }
 
+  // _mode_family / _same_mode: OliTracker names a mode one way in
+  // ranked_stats and another in match_history (Reload is
+  // ranked_blastberry_build in one, ranked-blastberry-combined in the other),
+  // so history is matched to a mode on the key without -combined / -build.
+  function modeFamily(key) {
+    var parts = normalizeModeKey(key).split('-').filter(function (p) { return p; });
+    while (parts.length > 2 && (parts[parts.length - 1] === 'combined' || parts[parts.length - 1] === 'build')) parts.pop();
+    return parts.join('-');
+  }
+
+  function sameMode(historyKey, modeKey) {
+    return truthy(historyKey) && truthy(modeKey) && modeFamily(historyKey) === modeFamily(modeKey);
+  }
+
   function compareTuples(a, b) {
     for (var i = 0; i < a.length; i++) {
       if (a[i] < b[i]) return -1;
@@ -376,7 +390,7 @@
       iter(dget(day, 'matches')).forEach(function (grp) {
         var rd = dget(grp, 'ranked_data');
         rd = truthy(rd) ? rd : {};
-        if (normalizeModeKey(dget(rd, 'ranking_id')) !== want) return;
+        if (!sameMode(dget(rd, 'ranking_id'), rankingId)) return;
         wins += pyInt(dget(grp, 'wins'));
         matches += pyInt(dget(grp, 'matches'));
         kills += pyInt(dget(grp, 'kills'));
@@ -430,7 +444,7 @@
       iter(dget(day, 'matches')).forEach(function (grp) {
         var rd = dget(grp, 'ranked_data');
         rd = truthy(rd) ? rd : {};
-        if (rid && dget(rd, 'ranking_id') !== rid) return;
+        if (rid && !sameMode(dget(rd, 'ranking_id'), rid)) return;
         var tiers = teamTiers(dget(grp, 'playlist_id'));
         var ts = dget(grp, 'last_modified') || 0;
         if (tiers && (latest === null || ts > latest[0])) latest = [ts, tiers];
@@ -459,7 +473,7 @@
         if ((dget(grp, 'last_modified') || 0) < cutoff) return;
         var rd = dget(grp, 'ranked_data');
         rd = truthy(rd) ? rd : {};
-        if (rid && dget(rd, 'ranking_id') !== rid) return;
+        if (rid && !sameMode(dget(rd, 'ranking_id'), rid)) return;
         wins += pyInt(dget(grp, 'wins'));
         matches += pyInt(dget(grp, 'matches'));
         kills += pyInt(dget(grp, 'kills'));
@@ -584,7 +598,7 @@
       iter(dget(day, 'matches')).forEach(function (grp) {
         var rd = dget(grp, 'ranked_data');
         rd = truthy(rd) ? rd : {};
-        if (want && normalizeModeKey(dget(rd, 'ranking_id')) !== want) return;
+        if (want && !sameMode(dget(rd, 'ranking_id'), want)) return;
         var elo = num(dget(rd, 'elo'));
         var ts = dget(grp, 'last_modified');
         if (elo !== null && truthy(ts)) points.push([Math.trunc(Number(ts)), elo]);
@@ -602,7 +616,7 @@
       elo = truthy(elo) ? elo : {};
       var keys = Object.keys(elo);
       for (var j = 0; j < keys.length; j++) {
-        if (want && normalizeModeKey(keys[j]) !== want) continue;
+        if (want && !sameMode(keys[j], want)) continue;
         var value = elo[keys[j]];
         var start = num(dget(truthy(value) ? value : {}, 'start'));
         if (start !== null) return start;
@@ -648,7 +662,7 @@
       iter(dget(day, 'matches')).forEach(function (grp) {
         var rd = dget(grp, 'ranked_data');
         rd = truthy(rd) ? rd : {};
-        if (want && normalizeModeKey(dget(rd, 'ranking_id')) !== want) return;
+        if (want && !sameMode(dget(rd, 'ranking_id'), want)) return;
         if (num(dget(rd, 'unreal_placement')) !== null || num(dget(rd, 'current_unreal_placement')) !== null) return;
         var div = num(dget(rd, 'division'));
         var prog = num(dget(rd, 'promotion_progression'));
@@ -982,7 +996,7 @@
           iter(dget(day, 'matches')).forEach(function (grp) {
             var rd = dget(grp, 'ranked_data');
             rd = truthy(rd) ? rd : {};
-            if (want && normalizeModeKey(dget(rd, 'ranking_id')) !== want) return;
+            if (want && !sameMode(dget(rd, 'ranking_id'), want)) return;
             latest = Math.max(latest, (Number(dget(grp, 'last_modified')) || 0) * 1000);
           });
         });
@@ -1179,7 +1193,7 @@
           iter(dget(day, 'matches')).forEach(function (grp) {
             var rd = dget(grp, 'ranked_data');
             rd = truthy(rd) ? rd : {};
-            if (normalizeModeKey(dget(rd, 'ranking_id')) !== want) return;
+            if (!sameMode(dget(rd, 'ranking_id'), key)) return;
             count += pyInt(dget(grp, 'matches'));
             latest = Math.max(latest, Number(dget(grp, 'last_modified')) || 0);
           });
