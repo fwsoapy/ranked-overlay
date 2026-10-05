@@ -65,10 +65,12 @@ def scenarios():
     # Games after the overlay started, for the Record design's wins and losses.
     b["match_history"][0]["matches"].append(
         {"matches": 3, "wins": 1, "kills": 11, "last_modified": T0 + 100,
+         "top_3_5_10": 2, "top_6_12_25": 3, "playlist_id": "playlist_nobuildbr_habanero_duo",
          "ranked_data": {"ranking_id": "ranked-br-combined"}})
     c = copy.deepcopy(b)
     c["match_history"][0]["matches"].append(
         {"matches": 2, "wins": 0, "kills": 1, "last_modified": T0 + 500,
+         "top_3_5_10": 1, "top_6_12_25": 2, "playlist_id": "playlist_nobuildbr_habanero_solo",
          "ranked_data": {"ranking_id": "ranked-br-combined"}})
     out.append(("top1", acct["top1"], [a, b, c]))
 

@@ -291,6 +291,21 @@ async function websiteChecks() {
     check('record past 24h', rec(await text(`?${id}&elo=24h`, raw)), [0, 4, 6, '1.50', '0.0%', 'PAST 24H']);
     check('record past 12h', rec(await text(`?${id}&elo=12h`, raw)), [0, 2, 3, '1.50', '0.0%', 'PAST 12H']);
 
+    // Placements: Fortnite's two tiers, labelled by team size.
+    const placed = JSON.parse(JSON.stringify(raw));
+    const pg = (playlist, t1, t2, iso) => ({ matches: 1, wins: 0, kills: 1, top_3_5_10: t1, top_6_12_25: t2,
+      playlist_id: playlist, last_modified: t(iso), ranked_data: { ranking_id: 'ranked-br-combined' } });
+    placed.match_history = [{ date: 'x', elo: {}, matches: [
+      pg('playlist_nobuildbr_habanero_duo', 1, 1, '2026-07-04T19:00:00Z'),
+      pg('playlist_nobuildbr_habanero_duo', 0, 1, '2026-07-04T18:00:00Z'),
+      pg('playlist_nobuildbr_habanero_solo', 1, 1, '2026-07-03T22:00:00Z'),
+      pg('playlist_habanero_squads', 1, 1, '2026-07-01T22:00:00Z')] }];
+    const top = (d) => [d.record_top1, d.record_top2, d.record_top1_label, d.record_top2_label];
+    check('duos label top 5 / 12', top(await text(`?${id}&elo=12h`, placed)), [1, 2, 'TOP 5', 'TOP 12']);
+    check('solos and duos together', top(await text(`?${id}&elo=24h`, placed)), [2, 3, 'TOP 10/5', 'TOP 25/12']);
+    check('no games: labels follow the last one', top(await text(`?${id}&elo=session`, placed)), [0, 0, 'TOP 5', 'TOP 12']);
+    check('no history: solo labels', top(await text(`?${id}&elo=session`, bare)), [0, 0, 'TOP 10', 'TOP 25']);
+
     const H = 60 * 60 * 1000;
     const storage = memoryStorage();
     let clock = now;

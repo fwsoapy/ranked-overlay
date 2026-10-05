@@ -62,11 +62,12 @@
             color: var(--accent-light);
         }
 
+        /* A text dot rather than a filled box: browser night modes (Brave's)
+           repaint bright backgrounds, so a white box went dark. */
         .head .dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--accent);
+            font-size: 11px;
+            line-height: 1;
+            color: var(--accent);
         }
 
         .record {
@@ -114,10 +115,20 @@
 
         /* The bottom row: stats, win %, or a creator code. All three keep the
            same height so the card doesn't jump when it's switched. */
+        /* Sized by the record above it, never the other way round, so a long
+           creator code can't stretch the card: what's inside is positioned,
+           and positioned content doesn't count towards the card's width. */
         .bottom {
-            min-height: 40px;
-            display: flex;
-            align-items: center;
+            position: relative;
+            height: 42px;
+        }
+
+        .bottom > * {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
         }
 
         .stats-row {
@@ -147,39 +158,10 @@
             color: #f1f5f9;
         }
 
-        .pct-row {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            width: 100%;
-        }
-
-        .pct-bar {
-            flex: 1 1 auto;
-            height: 10px;
-            border-radius: 5px;
-            overflow: hidden;
-            display: flex;
-            background: rgba(255, 255, 255, 0.10);
-        }
-
-        .pct-bar .w { background: var(--win); transition: width 0.4s ease; }
-        .pct-bar .l { background: var(--loss); transition: width 0.4s ease; }
-
-        .pct-text {
-            display: flex;
-            gap: 12px;
-            font-size: 16px;
-            font-weight: 800;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .pct-text .w { color: var(--win); }
-        .pct-text .l { color: var(--loss); }
-
         .creator-row {
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
             font-size: 22px;
             font-weight: 800;
             letter-spacing: 0.06em;
@@ -247,7 +229,7 @@
 <body>
     <div class="wrap">
         <div class="overlay-container">
-            <div class="head"><span class="dot"></span><span id="headText">RECORD TODAY</span></div>
+            <div class="head"><span class="dot">&#9679;</span><span id="headText">RECORD TODAY</span></div>
 
             <div class="record">
                 <div class="tally wins"><span class="num" id="winsNum">0</span><span class="word" id="winsWord">WINS</span></div>
@@ -276,9 +258,19 @@
                         <div class="stat-value" id="recWr">-</div>
                     </div>
                 </div>
-                <div class="pct-row" id="pctRow">
-                    <div class="pct-bar"><div class="w" id="pctWinBar" style="width:0%"></div><div class="l" id="pctLossBar" style="width:0%"></div></div>
-                    <div class="pct-text"><span class="w" id="pctWin">0% W</span><span class="l" id="pctLoss">0% L</span></div>
+                <div class="stats-row" id="pctRow">
+                    <div class="stat">
+                        <div class="stat-label">WIN%</div>
+                        <div class="stat-value" id="pctWr">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label" id="top1Label">TOP 10</div>
+                        <div class="stat-value" id="top1">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label" id="top2Label">TOP 25</div>
+                        <div class="stat-value" id="top2">0</div>
+                    </div>
                 </div>
                 <div class="creator-row" id="creatorRow"></div>
             </div>
@@ -290,11 +282,11 @@
             <button class="mode-btn" id="statsToggleBtn">Stats</button>
             <button class="mode-btn" id="pctToggleBtn">Win %</button>
             <button class="mode-btn" id="codeToggleBtn">Creator Code</button>
-            <input class="mode-btn" id="codeInput" type="text" placeholder="Enter creator code" style="display:none;">
+            <input class="mode-btn" id="codeInput" type="text" size="1" placeholder="Enter creator code" style="display:none;">
         </div>
     </div>
 
-    <script src="../engine.js?v=3d72099ee8"></script>
+    <script src="../engine.js?v=47950321ab"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -345,8 +337,20 @@
             localStorage.setItem(K_CODE, creatorCode);
         }
 
+        // Long codes shrink to fit the card instead of widening it.
+        function fitCreatorText() {
+            var el = $('#creatorRow');
+            el.style.fontSize = '';
+            var size = 22;
+            while (size > 12 && el.scrollWidth > el.clientWidth) {
+                size -= 1;
+                el.style.fontSize = size + 'px';
+            }
+        }
+
         function renderCreatorText() {
             $('#creatorRow').textContent = creatorCode ? ('Use Code ' + creatorCode + ' #ad') : '';
+            fitCreatorText();
         }
 
         function applyDisplayMode() {
@@ -357,6 +361,7 @@
             $('#statsToggleBtn').classList.toggle('active', displayMode === 'stats');
             $('#pctToggleBtn').classList.toggle('active', displayMode === 'pct');
             $('#codeToggleBtn').classList.toggle('active', displayMode === 'code');
+            fitCreatorText();
         }
 
         function setDisplay(mode) {
@@ -376,6 +381,7 @@
         $('#codeInput').value = creatorCode || '';
         renderCreatorText();
         applyDisplayMode();
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitCreatorText);
 
         function buildModeBar(modes) {
             if (modeBarBuilt) return;
@@ -433,12 +439,11 @@
             $('#recKd').textContent      = d.record_kd || '-';
             $('#recWr').textContent      = played ? Math.round(wins / played * 100) + '%' : '-';
 
-            var wPct = played ? Math.round(wins / played * 100) : 0;
-            var lPct = played ? 100 - wPct : 0;
-            $('#pctWinBar').style.width  = wPct + '%';
-            $('#pctLossBar').style.width = lPct + '%';
-            $('#pctWin').textContent     = (played ? wPct + '%' : '-%') + ' W';
-            $('#pctLoss').textContent    = (played ? lPct + '%' : '-%') + ' L';
+            $('#pctWr').textContent      = $('#recWr').textContent;
+            $('#top1Label').textContent  = d.record_top1_label || 'TOP 10';
+            $('#top1').textContent       = num(d.record_top1);
+            $('#top2Label').textContent  = d.record_top2_label || 'TOP 25';
+            $('#top2').textContent       = num(d.record_top2);
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {

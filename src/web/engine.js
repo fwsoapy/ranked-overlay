@@ -409,6 +409,44 @@
     }
   }
 
+  // Same as _TEAM_TIERS / record_placements: Fortnite's two placement tiers
+  // per match mean top 10 / 25 in solos, 5 / 12 in duos, 3 / 6 in trios and
+  // squads, so the Record design labels them by what was played.
+  var TEAM_TIERS = [['solo', [10, 25]], ['duo', [5, 12]], ['trio', [3, 6]], ['squad', [3, 6]]];
+
+  function teamTiers(playlist) {
+    var p = String(playlist === null || playlist === undefined ? '' : playlist).toLowerCase();
+    for (var i = 0; i < TEAM_TIERS.length; i++) {
+      if (p.indexOf(TEAM_TIERS[i][0]) >= 0) return TEAM_TIERS[i][1];
+    }
+    return null;
+  }
+
+  function recordPlacements(data, cutoff, rankingId) {
+    if (data === null || data === undefined) return [0, 0, 'TOP 10', 'TOP 25'];
+    var rid = detectRankingId(data, rankingId, '');
+    var first = 0, second = 0, seen = [], latest = null;
+    iter(dget(data, 'match_history')).forEach(function (day) {
+      iter(dget(day, 'matches')).forEach(function (grp) {
+        var rd = dget(grp, 'ranked_data');
+        rd = truthy(rd) ? rd : {};
+        if (rid && dget(rd, 'ranking_id') !== rid) return;
+        var tiers = teamTiers(dget(grp, 'playlist_id'));
+        var ts = dget(grp, 'last_modified') || 0;
+        if (tiers && (latest === null || ts > latest[0])) latest = [ts, tiers];
+        if (ts < cutoff) return;
+        first += pyInt(dget(grp, 'top_3_5_10'));
+        second += pyInt(dget(grp, 'top_6_12_25'));
+        if (tiers && !seen.some(function (t) { return t[0] === tiers[0] && t[1] === tiers[1]; })) seen.push(tiers);
+      });
+    });
+    if (!seen.length) seen = [latest ? latest[1] : [10, 25]];
+    seen.sort(function (a, b) { return b[0] - a[0]; });
+    return [first, second,
+      'TOP ' + seen.map(function (t) { return t[0]; }).join('/'),
+      'TOP ' + seen.map(function (t) { return t[1]; }).join('/')];
+  }
+
   function computeWindowedStats(data, spec, rankingId, nowSec, sessionStart, override) {
     if (data === null || data === undefined) return emptyStats();
     if (spec === 'season') return seasonalRankedStats(data, rankingId);
@@ -1665,6 +1703,11 @@
       s.record_kd = rec.kd !== null ? rec.kd.toFixed(2) : '-';
       s.record_wr = rec.wr !== null ? rec.wr.toFixed(1) + '%' : '-%';
       s.record_label = window === 'reset' || cutoff !== null ? changeLabel : 'TODAY';
+      var places = recordPlacements(raw, recordFrom, resolvedKey || null);
+      s.record_top1 = places[0];
+      s.record_top2 = places[1];
+      s.record_top1_label = places[2];
+      s.record_top2_label = places[3];
 
       // Asked for a mode this account has no rank in: say so instead of
       // silently showing another one.
@@ -1791,8 +1834,9 @@
     };
     // A few hours of games, for the Record design's wins and losses.
     var nowS = Math.floor((typeof nowMs === 'number' ? nowMs : Date.now()) / 1000);
-    var games = function (rid, wins, matches, kills, minsAgo) {
-      return { matches: matches, wins: wins, kills: kills, last_modified: nowS - minsAgo * 60, ranked_data: { ranking_id: rid } };
+    var games = function (rid, playlist, wins, matches, kills, top1, top2, minsAgo) {
+      return { matches: matches, wins: wins, kills: kills, top_3_5_10: top1, top_6_12_25: top2,
+        playlist_id: playlist, last_modified: nowS - minsAgo * 60, ranked_data: { ranking_id: rid } };
     };
     return {
       raw: {
@@ -1811,11 +1855,11 @@
           'ranked-squareclub': { division: 8, promotion_progression: 72, current_unreal_placement: null, elo: null }
         },
         match_history: [{ date: 'today', elo: {}, matches: [
-          games('ranked-br-combined', 6, 10, 21, 150),
-          games('ranked-br-combined', 5, 8, 15, 75),
-          games('ranked-br-combined', 4, 7, 12, 10),
-          games('ranked_blastberry_build', 5, 12, 30, 40),
-          games('ranked-squareclub', 13, 20, 41, 20)
+          games('ranked-br-combined', 'playlist_habanero_duo', 6, 10, 21, 8, 9, 150),
+          games('ranked-br-combined', 'playlist_habanero_duo', 5, 8, 15, 6, 7, 75),
+          games('ranked-br-combined', 'playlist_habanero_duo', 4, 7, 12, 5, 6, 10),
+          games('ranked_blastberry_build', 'playlist_blastberry_squads', 5, 12, 30, 7, 9, 40),
+          games('ranked-squareclub', 'playlist_squareclub', 13, 20, 41, 0, 0, 20)
         ] }]
       },
       lookups: { 'ranked-br-combined': { elo: 1542, next_pos: 65, gap: 14, at: 0, sig: '' } },

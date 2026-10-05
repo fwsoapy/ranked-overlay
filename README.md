@@ -144,7 +144,7 @@ Click a design's name to open its folder. Every design can show either **season 
 <td align="center" width="40%"><img src="Pulse/preview-code.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, creator code mode"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Record"><b>Record</b></a><br>A simple win/loss record: wins in green, losses in red, with matches, kills and K/D (or your win %) under it. On the website it counts the same stretch as the ELO change (Session, 12h or 24h), in the download it counts since the overlay started.</td>
+<td width="20%"><a href="Record"><b>Record</b></a><br>A simple win/loss record: wins in green, losses in red, with matches, kills and K/D under it, or your win % and top placements (top 5 / top 12 in duos, top 10 / top 25 in solos, the tiers Fortnite tracks). On the website it counts the same stretch as the ELO change (Session, 12h or 24h), in the download it counts since the overlay started.</td>
 <td align="center" width="40%"><img src="Record/preview-stats.png" width="300" alt="Record Fortnite ranked win/loss overlay design for OBS, stats mode"></td>
 <td align="center" width="40%"><img src="Record/preview-code.png" width="300" alt="Record Fortnite ranked win/loss overlay design for OBS, creator code mode"></td>
 </tr>

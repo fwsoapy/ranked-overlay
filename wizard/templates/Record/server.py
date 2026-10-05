@@ -617,6 +617,59 @@ def _lifetime_ranked_stats(data, ranking_id=None):
         return dict(_EMPTY_STATS)
 
 
+# Fortnite tracks two placement tiers per match, and which places they mean
+# depends on the team size: top 10 / top 25 in solos, top 5 / top 12 in duos,
+# top 3 / top 6 in trios and squads. OliTracker has those, not the exact place.
+_TEAM_TIERS = (("solo", (10, 25)), ("duo", (5, 12)), ("trio", (3, 6)), ("squad", (3, 6)))
+
+
+def _team_tiers(playlist):
+    p = str(playlist or "").lower()
+    for word, tiers in _TEAM_TIERS:
+        if word in p:
+            return tiers
+    return None
+
+
+def record_placements(data, window_spec, ranking_id=None):
+    """Top placements for the Record design, with labels for what was played.
+
+    Returns (first tier count, second tier count, first label, second label),
+    e.g. (4, 9, "TOP 5", "TOP 12") for duos, or "TOP 10/5" when solos and duos
+    were both played. With no games in the window the labels follow the last
+    game played in the mode, or solos.
+    """
+    if data is None:
+        return 0, 0, "TOP 10", "TOP 25"
+    now = int(time.time())
+    cutoff = SESSION_START if window_spec == "session" else now - _WINDOW_SECS.get(window_spec, 86400)
+    rid = _detect_ranking_id(data, ranking_id)
+    first = second = 0
+    seen = []
+    latest = None
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if rid and rd.get("ranking_id") != rid:
+                continue
+            tiers = _team_tiers(grp.get("playlist_id"))
+            ts = grp.get("last_modified") or 0
+            if tiers and (latest is None or ts > latest[0]):
+                latest = (ts, tiers)
+            if ts < cutoff:
+                continue
+            first  += int(grp.get("top_3_5_10",  0) or 0)
+            second += int(grp.get("top_6_12_25", 0) or 0)
+            if tiers and tiers not in seen:
+                seen.append(tiers)
+    if not seen:
+        seen = [latest[1] if latest else (10, 25)]
+    seen.sort(key=lambda t: -t[0])
+    return (first, second,
+            "TOP " + "/".join(str(t[0]) for t in seen),
+            "TOP " + "/".join(str(t[1]) for t in seen))
+
+
 def compute_windowed_stats(data, window_spec, ranking_id=None):
     if data is None:
         return dict(_EMPTY_STATS)
@@ -1604,6 +1657,8 @@ def snapshot(window="session", mode_key=None):
     s["record_kd"]      = f"{record['kd']:.2f}" if record["kd"] is not None else "-"
     s["record_wr"]      = f"{record['wr']:.1f}%" if record["wr"] is not None else "-%"
     s["record_label"]   = {"12h": "PAST 12H", "24h": "PAST 24H"}.get(record_window, "TODAY")
+    (s["record_top1"], s["record_top2"],
+     s["record_top1_label"], s["record_top2_label"]) = record_placements(raw, record_window, resolved_key or None)
 
     next_div_name = None
     if not is_unreal:
@@ -1769,11 +1824,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: var(--accent-light);
         }
 
+        /* A text dot rather than a filled box: browser night modes (Brave's)
+           repaint bright backgrounds, so a white box went dark. */
         .head .dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--accent);
+            font-size: 11px;
+            line-height: 1;
+            color: var(--accent);
         }
 
         .record {
@@ -1821,10 +1877,20 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         /* The bottom row: stats, win %, or a creator code. All three keep the
            same height so the card doesn't jump when it's switched. */
+        /* Sized by the record above it, never the other way round, so a long
+           creator code can't stretch the card: what's inside is positioned,
+           and positioned content doesn't count towards the card's width. */
         .bottom {
-            min-height: 40px;
-            display: flex;
-            align-items: center;
+            position: relative;
+            height: 42px;
+        }
+
+        .bottom > * {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
         }
 
         .stats-row {
@@ -1854,39 +1920,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: #f1f5f9;
         }
 
-        .pct-row {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            width: 100%;
-        }
-
-        .pct-bar {
-            flex: 1 1 auto;
-            height: 10px;
-            border-radius: 5px;
-            overflow: hidden;
-            display: flex;
-            background: rgba(255, 255, 255, 0.10);
-        }
-
-        .pct-bar .w { background: var(--win); transition: width 0.4s ease; }
-        .pct-bar .l { background: var(--loss); transition: width 0.4s ease; }
-
-        .pct-text {
-            display: flex;
-            gap: 12px;
-            font-size: 16px;
-            font-weight: 800;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            white-space: nowrap;
-        }
-
-        .pct-text .w { color: var(--win); }
-        .pct-text .l { color: var(--loss); }
-
         .creator-row {
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
             font-size: 22px;
             font-weight: 800;
             letter-spacing: 0.06em;
@@ -1954,7 +1991,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 <body>
     <div class="wrap">
         <div class="overlay-container">
-            <div class="head"><span class="dot"></span><span id="headText">RECORD TODAY</span></div>
+            <div class="head"><span class="dot">&#9679;</span><span id="headText">RECORD TODAY</span></div>
 
             <div class="record">
                 <div class="tally wins"><span class="num" id="winsNum">0</span><span class="word" id="winsWord">WINS</span></div>
@@ -1983,9 +2020,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                         <div class="stat-value" id="recWr">-</div>
                     </div>
                 </div>
-                <div class="pct-row" id="pctRow">
-                    <div class="pct-bar"><div class="w" id="pctWinBar" style="width:0%"></div><div class="l" id="pctLossBar" style="width:0%"></div></div>
-                    <div class="pct-text"><span class="w" id="pctWin">0% W</span><span class="l" id="pctLoss">0% L</span></div>
+                <div class="stats-row" id="pctRow">
+                    <div class="stat">
+                        <div class="stat-label">WIN%</div>
+                        <div class="stat-value" id="pctWr">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label" id="top1Label">TOP 10</div>
+                        <div class="stat-value" id="top1">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label" id="top2Label">TOP 25</div>
+                        <div class="stat-value" id="top2">0</div>
+                    </div>
                 </div>
                 <div class="creator-row" id="creatorRow"></div>
             </div>
@@ -1997,7 +2044,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             <button class="mode-btn" id="statsToggleBtn">Stats</button>
             <button class="mode-btn" id="pctToggleBtn">Win %</button>
             <button class="mode-btn" id="codeToggleBtn">Creator Code</button>
-            <input class="mode-btn" id="codeInput" type="text" placeholder="Enter creator code" style="display:none;">
+            <input class="mode-btn" id="codeInput" type="text" size="1" placeholder="Enter creator code" style="display:none;">
         </div>
     </div>
 
@@ -2049,8 +2096,20 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             localStorage.setItem(K_CODE, creatorCode);
         }
 
+        // Long codes shrink to fit the card instead of widening it.
+        function fitCreatorText() {
+            var el = $('#creatorRow');
+            el.style.fontSize = '';
+            var size = 22;
+            while (size > 12 && el.scrollWidth > el.clientWidth) {
+                size -= 1;
+                el.style.fontSize = size + 'px';
+            }
+        }
+
         function renderCreatorText() {
             $('#creatorRow').textContent = creatorCode ? ('Use Code ' + creatorCode + ' #ad') : '';
+            fitCreatorText();
         }
 
         function applyDisplayMode() {
@@ -2061,6 +2120,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             $('#statsToggleBtn').classList.toggle('active', displayMode === 'stats');
             $('#pctToggleBtn').classList.toggle('active', displayMode === 'pct');
             $('#codeToggleBtn').classList.toggle('active', displayMode === 'code');
+            fitCreatorText();
         }
 
         function setDisplay(mode) {
@@ -2080,6 +2140,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         $('#codeInput').value = creatorCode || '';
         renderCreatorText();
         applyDisplayMode();
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitCreatorText);
 
         function buildModeBar(modes) {
             if (modeBarBuilt) return;
@@ -2137,12 +2198,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             $('#recKd').textContent      = d.record_kd || '-';
             $('#recWr').textContent      = played ? Math.round(wins / played * 100) + '%' : '-';
 
-            var wPct = played ? Math.round(wins / played * 100) : 0;
-            var lPct = played ? 100 - wPct : 0;
-            $('#pctWinBar').style.width  = wPct + '%';
-            $('#pctLossBar').style.width = lPct + '%';
-            $('#pctWin').textContent     = (played ? wPct + '%' : '-%') + ' W';
-            $('#pctLoss').textContent    = (played ? lPct + '%' : '-%') + ' L';
+            $('#pctWr').textContent      = $('#recWr').textContent;
+            $('#top1Label').textContent  = d.record_top1_label || 'TOP 10';
+            $('#top1').textContent       = num(d.record_top1);
+            $('#top2Label').textContent  = d.record_top2_label || 'TOP 25';
+            $('#top2').textContent       = num(d.record_top2);
 
             var modes = d.modes_available;
             if (modes && modes.length > 0) {

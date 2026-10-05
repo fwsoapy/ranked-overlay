@@ -609,6 +609,59 @@ def _lifetime_ranked_stats(data, ranking_id=None):
         return dict(_EMPTY_STATS)
 
 
+# Fortnite tracks two placement tiers per match, and which places they mean
+# depends on the team size: top 10 / top 25 in solos, top 5 / top 12 in duos,
+# top 3 / top 6 in trios and squads. OliTracker has those, not the exact place.
+_TEAM_TIERS = (("solo", (10, 25)), ("duo", (5, 12)), ("trio", (3, 6)), ("squad", (3, 6)))
+
+
+def _team_tiers(playlist):
+    p = str(playlist or "").lower()
+    for word, tiers in _TEAM_TIERS:
+        if word in p:
+            return tiers
+    return None
+
+
+def record_placements(data, window_spec, ranking_id=None):
+    """Top placements for the Record design, with labels for what was played.
+
+    Returns (first tier count, second tier count, first label, second label),
+    e.g. (4, 9, "TOP 5", "TOP 12") for duos, or "TOP 10/5" when solos and duos
+    were both played. With no games in the window the labels follow the last
+    game played in the mode, or solos.
+    """
+    if data is None:
+        return 0, 0, "TOP 10", "TOP 25"
+    now = int(time.time())
+    cutoff = SESSION_START if window_spec == "session" else now - _WINDOW_SECS.get(window_spec, 86400)
+    rid = _detect_ranking_id(data, ranking_id)
+    first = second = 0
+    seen = []
+    latest = None
+    for day in (data.get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if rid and rd.get("ranking_id") != rid:
+                continue
+            tiers = _team_tiers(grp.get("playlist_id"))
+            ts = grp.get("last_modified") or 0
+            if tiers and (latest is None or ts > latest[0]):
+                latest = (ts, tiers)
+            if ts < cutoff:
+                continue
+            first  += int(grp.get("top_3_5_10",  0) or 0)
+            second += int(grp.get("top_6_12_25", 0) or 0)
+            if tiers and tiers not in seen:
+                seen.append(tiers)
+    if not seen:
+        seen = [latest[1] if latest else (10, 25)]
+    seen.sort(key=lambda t: -t[0])
+    return (first, second,
+            "TOP " + "/".join(str(t[0]) for t in seen),
+            "TOP " + "/".join(str(t[1]) for t in seen))
+
+
 def compute_windowed_stats(data, window_spec, ranking_id=None):
     if data is None:
         return dict(_EMPTY_STATS)
@@ -1596,6 +1649,8 @@ def snapshot(window="session", mode_key=None):
     s["record_kd"]      = f"{record['kd']:.2f}" if record["kd"] is not None else "-"
     s["record_wr"]      = f"{record['wr']:.1f}%" if record["wr"] is not None else "-%"
     s["record_label"]   = {"12h": "PAST 12H", "24h": "PAST 24H"}.get(record_window, "TODAY")
+    (s["record_top1"], s["record_top2"],
+     s["record_top1_label"], s["record_top2_label"]) = record_placements(raw, record_window, resolved_key or None)
 
     next_div_name = None
     if not is_unreal:
