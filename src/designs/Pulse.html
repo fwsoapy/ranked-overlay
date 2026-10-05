@@ -310,7 +310,7 @@
                 <div class="next-row hidden" id="nextRow">
                     <span id="nextLabel">NEXT</span>
                     <span class="hi" id="nextGap">-</span>
-                    <span class="br" id="nextArrow">&gt;&gt;</span>
+                    <span class="br" id="nextArrow">TO</span>
                     <span class="hi" id="nextPos">#-</span>
                     <span class="br">|</span>
                     <span class="session-zero" id="sessionText">+0 TODAY</span>
@@ -454,7 +454,7 @@
                     if (activeMode === m.key) return;
                     activeMode = m.key;
                     localStorage.setItem('fn_overlay_mode', activeMode);
-                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
                     tick();
@@ -521,7 +521,7 @@
             if (d.is_unreal) {
                 $('#nextLabel').textContent = 'NEXT';
                 $('#nextGap').textContent   = d.next_gap ? d.next_gap + ' ELO' : '-';
-                $('#nextArrow').textContent = '>>';
+                $('#nextArrow').textContent = 'TO';
                 $('#nextPos').textContent   = d.next_pos ? '#' + d.next_pos : '#-';
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 TODAY';
@@ -567,7 +567,7 @@
                     activeMode = d.active_mode_key || modes[0].key;
                 }
                 buildModeBar(modes);
-                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                     b.classList.toggle('active', b.dataset.key === activeMode);
                 });
             }

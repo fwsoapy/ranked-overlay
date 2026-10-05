@@ -2,7 +2,7 @@
 
 A free, live Fortnite ranked overlay and ELO tracker for streamers. Pulls real-time **ELO**, **rank**, and **season stats** from [OliTracker](https://olitracker.com) and displays them as an OBS browser source, so your Fortnite stream overlay always shows your current rank without you touching a thing.
 
-✨ **8 designs** to choose from, any accent color you want, each one self-contained in its own folder, just grab the one you like.
+✨ **9 designs** to choose from, any accent color you want, each one self-contained in its own folder, just grab the one you like.
 
 ![Fortnite ranked overlay demo showing live ELO and rank tracking in OBS](demo.gif)
 
@@ -24,7 +24,7 @@ A start-to-finish video showing how to download, set up, and use the overlay:
 
 Type your Epic name, pick a design and a color, copy the link, and paste it into an OBS Browser Source (leave Height at the default `600`, then hold **Alt** and drag the bottom edge up to crop it to the card, so the buttons under it stay off stream). That's the whole setup. Nothing runs on your PC, so there's no Python, no `.bat` files, no antivirus or SmartScreen warnings, and nothing to update. It's always the newest version.
 
-It's the same 8 designs and the same numbers as the download version below, with every option the download has (accent color, stats or creator code, starting mode, update speed, leaderboard lookups) plus a choice of what the ELO change counts: Session (the default), which shows as "+23 ELO TODAY" and starts over by itself once your ELO hasn't moved for 6 hours, so each stream opens on +0 (to start over sooner, right-click the source in OBS > **Interact** and press **Reset ELO gain** under the card), or the last 12 or 24 hours. The download version still works exactly as before if you prefer it.
+It's the same 9 designs and the same numbers as the download version below, with every option the download has (accent color, stats or creator code, starting mode, update speed, leaderboard lookups) plus a choice of what the ELO change counts: Session (the default), which shows as "+23 ELO TODAY" and starts over by itself once your ELO hasn't moved for 6 hours, so each stream opens on +0 (to start over sooner, right-click the source in OBS > **Interact** and press **Reset ELO gain** under the card), or the last 12 or 24 hours. The download version still works exactly as before if you prefer it.
 
 ---
 
@@ -88,7 +88,7 @@ It walks you through everything in a console window: pick a design from a previe
 - **Season stats** (K/D, Win%, Kills, Wins), accurate per game mode
 - **Keeps itself current**: checks this repo for a newer version on startup and once a day after, and asks before installing it. Your account ID, creator code, accent color and port all carry across untouched. If an update ever fails to start, it puts the old one back on its own, see [below](#-auto-updates)
 - **Survives new seasons**: season stats reset with the season, a ranked playlist added in a future season turns up as its own button with its own stats and ELO, and the ELO counter re-baselines on rollover instead of reading as a huge loss
-- **8 overlay designs**, any accent color you want
+- **9 overlay designs**, any accent color you want
 - **Built-in error messages**: if something goes wrong (bad account ID, OliTracker is down, etc.) a small message shows under the card instead of the overlay just sitting there blank
 
 ---
@@ -143,6 +143,11 @@ Click a design's name to open its folder. Every design can show either **season 
 <td align="center" width="40%"><img src="Pulse/preview-stats.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, stats mode"></td>
 <td align="center" width="40%"><img src="Pulse/preview-code.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, creator code mode"></td>
 </tr>
+<tr>
+<td width="20%"><a href="Record"><b>Record</b></a><br>A simple win/loss record: wins in green, losses in red, with matches, kills and K/D (or your win %) under it. On the website it counts the same stretch as the ELO change (Session, 12h or 24h), in the download it counts since the overlay started.</td>
+<td align="center" width="40%"><img src="Record/preview-stats.png" width="300" alt="Record Fortnite ranked win/loss overlay design for OBS, stats mode"></td>
+<td align="center" width="40%"><img src="Record/preview-code.png" width="300" alt="Record Fortnite ranked win/loss overlay design for OBS, creator code mode"></td>
+</tr>
 </table>
 
 ---
@@ -158,7 +163,7 @@ Click a design's name to open its folder. Every design can show either **season 
 
 ## 🛠️ Setup
 
-> 💡 Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`, `Pulse/`) holds three files and nothing else:
+> 💡 Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`, `Pulse/`, `Record/`) holds three files and nothing else:
 >
 > | | |
 > |---|---|
@@ -170,7 +175,7 @@ Click a design's name to open its folder. Every design can show either **season 
 
 ### 1️⃣ Download the files
 
-Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on your PC. Your Desktop works fine. The ZIP includes all 8 designs, so open the folder for the one you picked from the gallery above, everything you need is in there.
+Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on your PC. Your Desktop works fine. The ZIP includes all 9 designs, so open the folder for the one you picked from the gallery above, everything you need is in there.
 
 If you'd rather not dig through folders, run `setup.bat` in the unzipped repo. It asks which design you want and copies just that one to your Desktop in a clean folder by itself.
 
@@ -361,7 +366,7 @@ Only needed if you're changing the code. If you just want to use the overlay, yo
 
 ### The repo layout
 
-All 8 designs share the same server. `src/` is the only place anything is written by hand:
+All 9 designs share the same server. `src/` is the only place anything is written by hand:
 
 ```
 src/core_head.py      the server, everything above the overlay markup
@@ -398,7 +403,7 @@ The Cloudflare Worker the website talks to is `web/worker.js`; `web/README.md` c
 python tools/release.py 2.3.0 --notes "Fixes ELO after the season reset"
 ```
 
-That stamps the version into `src/`, rebuilds all 16 design folders, and rewrites [`update.json`](update.json). Then commit and push **the tag along with the commit**:
+That stamps the version into `src/`, rebuilds all 18 design folders, and rewrites [`update.json`](update.json). Then commit and push **the tag along with the commit**:
 
 ```bash
 git add -A && git commit -m "v2.3.0: fixes ELO after the season reset"

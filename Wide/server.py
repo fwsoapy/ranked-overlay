@@ -1087,7 +1087,7 @@ UPDATABLE_FILES = ("server.py", "overlay.bat")
 # The designs the repo actually publishes. A build renamed or hand-made by
 # somebody else has nothing to download, so it is left alone.
 DESIGNS_WITH_TEMPLATES = ("Minimal", "Classic", "Sharp", "Wide",
-                          "Slash", "Rainbow", "Modern", "Pulse")
+                          "Slash", "Rainbow", "Modern", "Pulse", "Record")
 
 
 def _parse_version(text):
@@ -1593,6 +1593,18 @@ def snapshot(window="session", mode_key=None):
     s["season_wins"]  = season_stats["wins"]
     s["season_kills"] = season_stats["kills"]
 
+    # Wins and losses over the same stretch as the ELO change (the Record
+    # design): since the overlay started, or the last 12h / 24h.
+    record_window = window if window in _WINDOW_SECS else "session"
+    record = compute_windowed_stats(raw, record_window, resolved_key or None)
+    s["record_wins"]    = record["wins"]
+    s["record_losses"]  = record["losses"]
+    s["record_matches"] = record["matches"]
+    s["record_kills"]   = record["kills"]
+    s["record_kd"]      = f"{record['kd']:.2f}" if record["kd"] is not None else "-"
+    s["record_wr"]      = f"{record['wr']:.1f}%" if record["wr"] is not None else "-%"
+    s["record_label"]   = {"12h": "PAST 12H", "24h": "PAST 24H"}.get(record_window, "TODAY")
+
     next_div_name = None
     if not is_unreal:
         div = _num(mode.get("division")) if mode is not None else None
@@ -2046,7 +2058,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
                 <div class="mid-row">
                     <span class="next-value hidden" id="nextRow">
-                        <span id="nextLabel">NEXT</span> <span class="hl" id="nextGap">-</span><span id="nextUnit"> ELO</span> <span id="nextArrow">&rarr;</span> <span class="hl" id="nextPos">#-</span>
+                        <span id="nextLabel">NEXT</span> <span class="hl" id="nextGap">-</span><span id="nextUnit"> ELO</span> <span id="nextArrow">TO</span> <span class="hl" id="nextPos">#-</span>
                     </span>
                     <div class="stats-row" id="statsRow">
                         <div class="stat-chip">
@@ -2184,7 +2196,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     if (activeMode === m.key) return;
                     activeMode = m.key;
                     localStorage.setItem('fn_overlay_mode', activeMode);
-                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
                     tick();
@@ -2237,7 +2249,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     $('#nextLabel').textContent = 'NEXT';
                     $('#nextGap').textContent   = d.next_gap;
                     $('#nextUnit').textContent  = ' ELO';
-                    $('#nextArrow').textContent = '→';
+                    $('#nextArrow').textContent = 'TO';
                     $('#nextPos').textContent   = '#' + d.next_pos;
                     nextRow.classList.remove('hidden');
                 } else {
@@ -2293,7 +2305,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     activeMode = d.active_mode_key || modes[0].key;
                 }
                 buildModeBar(modes);
-                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                     b.classList.toggle('active', b.dataset.key === activeMode);
                 });
             }

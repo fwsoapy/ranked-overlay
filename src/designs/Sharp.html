@@ -419,7 +419,7 @@
                     if (activeMode === m.key) return;
                     activeMode = m.key;
                     localStorage.setItem('fn_overlay_mode', activeMode);
-                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
                     tick();
@@ -530,7 +530,7 @@
                     activeMode = d.active_mode_key || modes[0].key;
                 }
                 buildModeBar(modes);
-                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                     b.classList.toggle('active', b.dataset.key === activeMode);
                 });
             }

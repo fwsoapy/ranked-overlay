@@ -285,6 +285,52 @@ async function websiteChecks() {
     check('manual reset after idle', await st.step(engine, 10 * 60 * 1000, 3100), '-10 ELO TODAY');
     check('manual reset holds', await st.step(engine, 1 * H), '-10 ELO TODAY');
   }
+  // The Record design: wins and losses over the same stretch as the ELO change.
+  {
+    const rec = (d) => [d.record_wins, d.record_losses, d.record_kills, d.record_kd, d.record_wr, d.record_label];
+    check('record past 24h', rec(await text(`?${id}&elo=24h`, raw)), [0, 4, 6, '1.50', '0.0%', 'PAST 24H']);
+    check('record past 12h', rec(await text(`?${id}&elo=12h`, raw)), [0, 2, 3, '1.50', '0.0%', 'PAST 12H']);
+
+    const H = 60 * 60 * 1000;
+    const storage = memoryStorage();
+    let clock = now;
+    const data = JSON.parse(JSON.stringify(raw));
+    const open = async () => {
+      const e = E.createEngine({ cfg: E.parseConfig(`?${id}&elo=session`), store: E.makeStore(storage),
+        fetchText: async () => JSON.stringify(data), now: () => clock });
+      await e.init();
+      return e;
+    };
+    const game = (won, elo, at) => {
+      data.ranked_stats['ranked-br-combined'].elo = elo;
+      data.match_history[0].matches.push({ matches: 1, wins: won ? 1 : 0, kills: won ? 9 : 2,
+        last_modified: Math.floor(at / 1000), ranked_data: { ranking_id: 'ranked-br-combined', elo } });
+    };
+    const shown = async (engine, ms) => {
+      clock += ms || 0;
+      data.last_updated = new Date(clock).toISOString();
+      await engine.refresh(true);
+      return rec(await (await engine.fetchData('/data?window=session')).json()).slice(0, 2);
+    };
+    let engine = await open();
+    check('session record starts 0-0', await shown(engine), [0, 0]);
+    game(true, 3120, clock + 5 * 60 * 1000);
+    game(false, 3105, clock + 25 * 60 * 1000);
+    check('session record counts games', await shown(engine, 30 * 60 * 1000), [1, 1]);
+    check('session record survives a restart', await shown(await open()), [1, 1]);
+    engine.resetSession();
+    check('reset clears the record', await shown(engine), [0, 0]);
+    game(true, 3130, clock + 5 * 60 * 1000);
+    check('counts after the reset', await shown(engine, 10 * 60 * 1000), [1, 0]);
+    // Closed for 10h, two games while closed: only those count.
+    clock += 10 * H;
+    game(false, 3110, clock - 3 * H);
+    game(true, 3140, clock - 2 * H);
+    data.last_updated = new Date(clock).toISOString();
+    check('new session counts games while closed', rec(await (await (await open()).fetchData('/data?window=session')).json()).slice(0, 2), [1, 1]);
+    // And 6 quiet hours later it starts over.
+    check('record starts over after 6h', await shown(engine, 7 * H), [0, 0]);
+  }
   {
     // below Unreal it counts progress, and the label says SESSION
     const storage = memoryStorage();

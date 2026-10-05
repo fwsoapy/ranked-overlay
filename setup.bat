@@ -16,10 +16,11 @@ echo   5. Slash
 echo   6. Rainbow
 echo   7. Modern
 echo   8. Pulse
+echo   9. Record
 echo.
 
 set "CHOICE="
-set /p "CHOICE=Enter a number (1-8): "
+set /p "CHOICE=Enter a number (1-9): "
 
 if "%CHOICE%"=="1" set "DESIGN=Minimal"
 if "%CHOICE%"=="2" set "DESIGN=Classic"
@@ -29,10 +30,11 @@ if "%CHOICE%"=="5" set "DESIGN=Slash"
 if "%CHOICE%"=="6" set "DESIGN=Rainbow"
 if "%CHOICE%"=="7" set "DESIGN=Modern"
 if "%CHOICE%"=="8" set "DESIGN=Pulse"
+if "%CHOICE%"=="9" set "DESIGN=Record"
 
 if not defined DESIGN (
     echo.
-    echo That is not one of the options. Run setup.bat again and pick 1-8.
+    echo That is not one of the options. Run setup.bat again and pick 1-9.
     echo.
     pause
     exit /b 1

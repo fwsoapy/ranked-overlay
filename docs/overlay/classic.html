@@ -151,6 +151,7 @@
 
         .stats-row {
             display: flex;
+            justify-content: space-between;
             gap: 22px;
             min-height: 42px;
             align-items: center;
@@ -160,6 +161,7 @@
         .stat {
             display: flex;
             flex-direction: column;
+            align-items: center;
             gap: 2px;
         }
 
@@ -271,7 +273,7 @@
                 <div class="next-target">
                     <span id="nextLabel">NEXT</span>
                     <span class="hi" id="nextGap">-</span>
-                    <span id="nextArrow">→</span>
+                    <span id="nextArrow">TO</span>
                     <span class="hi" id="nextPos">#-</span>
                 </div>
                 <span class="session-zero" id="sessionText">+0 TODAY</span>
@@ -310,7 +312,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=cc4d3d8483"></script>
+    <script src="../engine.js?v=3d72099ee8"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -413,7 +415,7 @@
                     if (activeMode === m.key) return;
                     activeMode = m.key;
                     localStorage.setItem('fn_overlay_mode', activeMode);
-                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
                     tick();
@@ -484,7 +486,7 @@
             if (d.is_unreal) {
                 $('#nextLabel').textContent = 'NEXT';
                 $('#nextGap').textContent   = d.next_gap ? d.next_gap + ' ELO' : '-';
-                $('#nextArrow').textContent = '→';
+                $('#nextArrow').textContent = 'TO';
                 $('#nextPos').textContent   = d.next_pos ? '#' + d.next_pos : '#-';
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 TODAY';
@@ -533,7 +535,7 @@
                     activeMode = d.active_mode_key || modes[0].key;
                 }
                 buildModeBar(modes);
-                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                     b.classList.toggle('active', b.dataset.key === activeMode);
                 });
             }

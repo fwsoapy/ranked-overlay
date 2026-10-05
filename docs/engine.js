@@ -973,7 +973,7 @@
       if (!r) {
         var seen = 0;
         views.forEach(function (v) { seen = Math.max(seen, latestMatchMs(v.key)); });
-        r = { at: t, elos: {}, progs: {}, last: {}, activity: seen && seen <= t ? seen : t };
+        r = { at: t, since: t, elos: {}, progs: {}, last: {}, activity: seen && seen <= t ? seen : t };
       }
       if (!isDict(r.last)) r.last = {};
       if (typeof r.activity !== 'number') r.activity = r.at;
@@ -1006,12 +1006,15 @@
             return [prev[0] !== null ? prev[0] : v.elo, prev[1] !== null ? prev[1] : v.points];
           });
           r.at = changeAt;
+          // The Record counts every match after the last stream's final one.
+          r.since = r.activity + 1000;
         }
         r.activity = Math.max(r.activity, changeAt);
       }
       if (t - r.activity >= SESSION_IDLE_MS && r.at < r.activity + SESSION_IDLE_MS) {
         startFrom(function (v) { return [v.elo, v.points]; });
         r.at = t;
+        r.since = t;
       }
 
       // Modes seen for the first time since the session started count from now.
@@ -1039,7 +1042,7 @@
     // the 6-hour start-over still works from real activity.
     function resetSession() {
       var old = loadReset();
-      var r = { at: clock(), elos: {}, progs: {}, last: {},
+      var r = { at: clock(), since: clock(), elos: {}, progs: {}, last: {},
         activity: old && typeof old.activity === 'number' ? old.activity : clock() };
       modes.forEach(function (m) {
         var v = modeView(m[0], m[1]);
@@ -1642,6 +1645,27 @@
         s.session_sign = signOf(pd);
       }
 
+      // Wins and losses over the same stretch as the ELO change (the Record
+      // design). Session counts from the session's start, so Reset ELO gain
+      // and the 6-hour start-over clear it too.
+      var recordFrom;
+      if (window === 'reset') {
+        var rr = loadReset();
+        recordFrom = rr ? Math.floor((typeof rr.since === 'number' ? rr.since : rr.at) / 1000) : nowSec();
+      } else if (cutoff !== null) {
+        recordFrom = cutoff;
+      } else {
+        recordFrom = session ? session.start : nowSec();
+      }
+      var rec = computeWindowedStats(raw, 'session', resolvedKey || null, nowSec(), recordFrom, '');
+      s.record_wins = rec.wins;
+      s.record_losses = rec.losses;
+      s.record_matches = rec.matches;
+      s.record_kills = rec.kills;
+      s.record_kd = rec.kd !== null ? rec.kd.toFixed(2) : '-';
+      s.record_wr = rec.wr !== null ? rec.wr.toFixed(1) + '%' : '-%';
+      s.record_label = window === 'reset' || cutoff !== null ? changeLabel : 'TODAY';
+
       // Asked for a mode this account has no rank in: say so instead of
       // silently showing another one.
       var hint = cfg.modeHint.trim().toLowerCase();
@@ -1748,7 +1772,8 @@
         lookups = demoLookups;
         session = { start: nowSec(), seen: clock(), fp: null, elos: baselines.elos, progs: baselines.progs, resolvedAll: true };
         // The demo's "Session" count shows the same +23 as its "Today".
-        store.set(K.reset, { at: clock(), elos: Object.assign({}, baselines.elos), progs: Object.assign({}, baselines.progs) });
+        store.set(K.reset, { at: clock(), since: clock() - 3 * 60 * 60 * 1000,
+          elos: Object.assign({}, baselines.elos), progs: Object.assign({}, baselines.progs) });
         finalize();
         firstDone = Promise.resolve();
       }
@@ -1760,9 +1785,14 @@
    * Matches the numbers on the design preview images.
    * ---------------------------------------------------------------- */
 
-  function demoData() {
+  function demoData(nowMs) {
     var overall = function (wins, matches, kills) {
       return { both: { overall: { wins: wins, matches_played: matches, kills: kills } } };
+    };
+    // A few hours of games, for the Record design's wins and losses.
+    var nowS = Math.floor((typeof nowMs === 'number' ? nowMs : Date.now()) / 1000);
+    var games = function (rid, wins, matches, kills, minsAgo) {
+      return { matches: matches, wins: wins, kills: kills, last_modified: nowS - minsAgo * 60, ranked_data: { ranking_id: rid } };
     };
     return {
       raw: {
@@ -1780,7 +1810,13 @@
           'ranked_blastberry_build': { division: 13, promotion_progression: 47, current_unreal_placement: null, elo: null },
           'ranked-squareclub': { division: 8, promotion_progression: 72, current_unreal_placement: null, elo: null }
         },
-        match_history: []
+        match_history: [{ date: 'today', elo: {}, matches: [
+          games('ranked-br-combined', 6, 10, 21, 150),
+          games('ranked-br-combined', 5, 8, 15, 75),
+          games('ranked-br-combined', 4, 7, 12, 10),
+          games('ranked_blastberry_build', 5, 12, 30, 40),
+          games('ranked-squareclub', 13, 20, 41, 20)
+        ] }]
       },
       lookups: { 'ranked-br-combined': { elo: 1542, next_pos: 65, gap: 14, at: 0, sig: '' } },
       baselines: {
@@ -1864,7 +1900,7 @@
     }
 
     if (cfg.demo) {
-      var d = demoData();
+      var d = demoData(Date.now());
       engine._setDemo(d.raw, d.lookups, d.baselines);
     } else {
       // The design's first tick() already waits for this, so no emit needed.

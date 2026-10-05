@@ -25,7 +25,7 @@ jobs:
 
       - name: Every design compiles
         run: |
-          for design in Minimal Classic Sharp Wide Slash Rainbow Modern Pulse; do
+          for design in Minimal Classic Sharp Wide Slash Rainbow Modern Pulse Record; do
             python -m py_compile "$design/server.py"
             python -m py_compile "wizard/templates/$design/server.py"
           done

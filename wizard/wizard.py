@@ -9,7 +9,7 @@ import webbrowser
 import urllib.request
 import urllib.parse
 
-DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse"]
+DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse", "Record"]
 
 COLOR_NAMES = {
     "red":     "ff3b30",
@@ -169,10 +169,10 @@ def show_previews():
     try:
         import tkinter as tk
         root = tk.Tk()
-        root.title("Pick a design (1-8)")
+        root.title(f"Pick a design (1-{len(DESIGNS)})")
         img = tk.PhotoImage(file=path)
         # Cap the window at a sensible size so it never feels huge.
-        max_w = 620
+        max_w = 940
         if img.width() > max_w:
             factor = max(2, round(img.width() / max_w))
             img = img.subsample(factor, factor)
@@ -204,12 +204,12 @@ def auto_close(seconds=5):
 
 
 def ask_design():
-    print("\nWhich design do you want? A preview image with all 8 just opened.\n")
+    print(f"\nWhich design do you want? A preview image with all {len(DESIGNS)} just opened.\n")
     for i, name in enumerate(DESIGNS, 1):
         print(f"  {i}. {name}")
     while True:
-        choice = input("\nType a number (1-8): ").strip()
-        if choice.isdigit() and 1 <= int(choice) <= 8:
+        choice = input(f"\nType a number (1-{len(DESIGNS)}): ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(DESIGNS):
             return DESIGNS[int(choice) - 1]
         print("  Not a valid choice, try again.")
 

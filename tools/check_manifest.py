@@ -15,7 +15,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse"]
+DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse", "Record"]
 ALLOWED_FILES = {"server.py", "overlay.bat"}
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 

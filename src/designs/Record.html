@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortnite Rank Overlay</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --accent: #fbbf24;
+            --accent-rgb: 251, 191, 36;
+            --accent-light: color-mix(in srgb, var(--accent) 60%, white);
+            --win: #4ade80;
+            --win-rgb: 74, 222, 128;
+            --loss: #f87171;
+            --loss-rgb: 248, 113, 113;
+        }
+
+        body {
+            background: transparent;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: flex-start;
+            align-items: flex-start;
+            height: 100vh;
+            padding: 24px;
+        }
+
+        .wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+        }
+
+        .overlay-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(9, 10, 14, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 14px 22px 16px;
+            min-width: 400px;
+            user-select: none;
+        }
+
+        .head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+        }
+
+        .head .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .record {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+
+        .tally {
+            display: flex;
+            align-items: baseline;
+            gap: 9px;
+            white-space: nowrap;
+        }
+
+        .tally .num {
+            font-size: 52px;
+            font-weight: 900;
+            line-height: 1;
+            letter-spacing: -0.01em;
+        }
+
+        .tally .word {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .tally.wins   { color: var(--win); }
+        .tally.losses { color: var(--loss); }
+
+        .split {
+            width: 2px;
+            align-self: stretch;
+            margin: 6px 0;
+            background: rgba(255, 255, 255, 0.14);
+            border-radius: 1px;
+        }
+
+        .rule {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        /* The bottom row: stats, win %, or a creator code. All three keep the
+           same height so the card doesn't jump when it's switched. */
+        .bottom {
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            width: 100%;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 800;
+            color: #f1f5f9;
+        }
+
+        .pct-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .pct-bar {
+            flex: 1 1 auto;
+            height: 10px;
+            border-radius: 5px;
+            overflow: hidden;
+            display: flex;
+            background: rgba(255, 255, 255, 0.10);
+        }
+
+        .pct-bar .w { background: var(--win); transition: width 0.4s ease; }
+        .pct-bar .l { background: var(--loss); transition: width 0.4s ease; }
+
+        .pct-text {
+            display: flex;
+            gap: 12px;
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .pct-text .w { color: var(--win); }
+        .pct-text .l { color: var(--loss); }
+
+        .creator-row {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+
+        .error-text {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(245, 166, 35, 0.9);
+            text-align: center;
+            line-height: 1.4;
+            margin-top: 4px;
+        }
+
+        .mode-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            width: 100%;
+            margin-top: 50px;
+        }
+
+        .mode-btn {
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.10em;
+            color: rgba(220, 220, 220, 0.55);
+            background: rgba(20, 20, 20, 0.90);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 13px 18px;
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+            text-align: center;
+            transition: color 0.12s, background 0.12s, border-color 0.12s;
+        }
+
+        .mode-btn:hover {
+            color: rgba(255, 255, 255, 0.90);
+            background: rgba(40, 40, 40, 0.95);
+            border-color: rgba(255, 255, 255, 0.20);
+        }
+
+        .mode-btn.active {
+            color: #ffffff;
+            background: rgba(55, 55, 55, 0.98);
+            border-color: rgba(255, 255, 255, 0.30);
+        }
+
+        #codeInput.mode-btn {
+            text-align: left;
+            cursor: text;
+        }
+
+        #codeInput.mode-btn::placeholder {
+            color: rgba(220, 220, 220, 0.35);
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="overlay-container">
+            <div class="head"><span class="dot"></span><span id="headText">RECORD TODAY</span></div>
+
+            <div class="record">
+                <div class="tally wins"><span class="num" id="winsNum">0</span><span class="word" id="winsWord">WINS</span></div>
+                <div class="split"></div>
+                <div class="tally losses"><span class="num" id="lossesNum">0</span><span class="word" id="lossesWord">LOSSES</span></div>
+            </div>
+
+            <div class="rule"></div>
+
+            <div class="bottom">
+                <div class="stats-row" id="statsRow">
+                    <div class="stat">
+                        <div class="stat-label">MATCHES</div>
+                        <div class="stat-value" id="recMatches">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">KILLS</div>
+                        <div class="stat-value" id="recKills">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">K/D</div>
+                        <div class="stat-value" id="recKd">-</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">WIN%</div>
+                        <div class="stat-value" id="recWr">-</div>
+                    </div>
+                </div>
+                <div class="pct-row" id="pctRow">
+                    <div class="pct-bar"><div class="w" id="pctWinBar" style="width:0%"></div><div class="l" id="pctLossBar" style="width:0%"></div></div>
+                    <div class="pct-text"><span class="w" id="pctWin">0% W</span><span class="l" id="pctLoss">0% L</span></div>
+                </div>
+                <div class="creator-row" id="creatorRow"></div>
+            </div>
+        </div>
+
+        <div class="error-text" id="errorText" style="display:none"></div>
+        <div class="mode-bar" id="modeBar"></div>
+        <div class="mode-bar" id="displayToggleBar">
+            <button class="mode-btn" id="statsToggleBtn">Stats</button>
+            <button class="mode-btn" id="pctToggleBtn">Win %</button>
+            <button class="mode-btn" id="codeToggleBtn">Creator Code</button>
+            <input class="mode-btn" id="codeInput" type="text" placeholder="Enter creator code" style="display:none;">
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            var c = new URLSearchParams(location.search).get('color');
+            if (c) {
+                c = c.replace('#', '');
+                if (/^[0-9a-fA-F]{6}$/.test(c)) {
+                    var r = parseInt(c.substr(0, 2), 16);
+                    var g = parseInt(c.substr(2, 2), 16);
+                    var b = parseInt(c.substr(4, 2), 16);
+                    document.documentElement.style.setProperty('--accent', '#' + c);
+                    document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
+        })();
+
+        var POLL_MS      = __POLL_MS__;
+        var activeMode   = localStorage.getItem('fn_overlay_mode') || '';
+        var modeBarBuilt = false;
+
+        function $(s) { return document.querySelector(s); }
+
+        var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
+        // The bottom row starts on the creator code when one is set, otherwise
+        // on stats, or on win % when the link asks for it (show=pct).
+        var INITIAL_SHOW = new URLSearchParams(location.search).get('show') === 'pct' ? 'pct' : 'stats';
+        // localStorage is shared by every overlay on localhost, so namespace the
+        // keys per design and gate them on a signature of the server's config.
+        // That way the configured choice always wins on first load, and only an
+        // in-browser toggle for THIS overlay persists.
+        var FN_NS  = "Record";
+        var K_MODE = 'fn_display_mode_' + FN_NS;
+        var K_CODE = 'fn_creator_code_' + FN_NS;
+        var K_SIG  = 'fn_config_sig_' + FN_NS;
+        var SIG    = INITIAL_CREATOR_CODE + '|' + INITIAL_SHOW;
+
+        var displayMode, creatorCode;
+        if (localStorage.getItem(K_SIG) === SIG) {
+            displayMode = localStorage.getItem(K_MODE) || (INITIAL_CREATOR_CODE ? 'code' : INITIAL_SHOW);
+            var _savedCode = localStorage.getItem(K_CODE);
+            creatorCode = (_savedCode === null) ? INITIAL_CREATOR_CODE : _savedCode;
+        } else {
+            displayMode = INITIAL_CREATOR_CODE ? 'code' : INITIAL_SHOW;
+            creatorCode = INITIAL_CREATOR_CODE;
+            localStorage.setItem(K_SIG, SIG);
+            localStorage.setItem(K_MODE, displayMode);
+            localStorage.setItem(K_CODE, creatorCode);
+        }
+
+        function renderCreatorText() {
+            $('#creatorRow').textContent = creatorCode ? ('Use Code ' + creatorCode + ' #ad') : '';
+        }
+
+        function applyDisplayMode() {
+            $('#statsRow').style.display   = displayMode === 'stats' ? '' : 'none';
+            $('#pctRow').style.display     = displayMode === 'pct' ? '' : 'none';
+            $('#creatorRow').style.display = displayMode === 'code' ? '' : 'none';
+            $('#codeInput').style.display  = displayMode === 'code' ? '' : 'none';
+            $('#statsToggleBtn').classList.toggle('active', displayMode === 'stats');
+            $('#pctToggleBtn').classList.toggle('active', displayMode === 'pct');
+            $('#codeToggleBtn').classList.toggle('active', displayMode === 'code');
+        }
+
+        function setDisplay(mode) {
+            displayMode = mode;
+            localStorage.setItem(K_MODE, displayMode);
+            applyDisplayMode();
+        }
+
+        $('#statsToggleBtn').addEventListener('click', function() { setDisplay('stats'); });
+        $('#pctToggleBtn').addEventListener('click', function() { setDisplay('pct'); });
+        $('#codeToggleBtn').addEventListener('click', function() { setDisplay('code'); });
+        $('#codeInput').addEventListener('input', function(e) {
+            creatorCode = e.target.value;
+            localStorage.setItem(K_CODE, creatorCode);
+            renderCreatorText();
+        });
+        $('#codeInput').value = creatorCode || '';
+        renderCreatorText();
+        applyDisplayMode();
+
+        function buildModeBar(modes) {
+            if (modeBarBuilt) return;
+            modeBarBuilt = true;
+            var bar = $('#modeBar');
+            bar.innerHTML = '';
+            modes.forEach(function(m) {
+                var btn = document.createElement('button');
+                btn.className   = 'mode-btn';
+                btn.textContent = m.label;
+                btn.dataset.key = m.key;
+                btn.addEventListener('click', function() {
+                    if (activeMode === m.key) return;
+                    activeMode = m.key;
+                    localStorage.setItem('fn_overlay_mode', activeMode);
+                    document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
+                        b.classList.toggle('active', b.dataset.key === activeMode);
+                    });
+                    tick();
+                });
+                bar.appendChild(btn);
+            });
+        }
+
+        function num(v) {
+            v = Number(v);
+            return isFinite(v) ? v : 0;
+        }
+
+        function applyData(d) {
+            if (!d || !d.rank_display) return;
+
+            var errEl = $('#errorText');
+            if (errEl) {
+                if (d.error) {
+                    errEl.textContent = d.error;
+                    errEl.style.display = 'block';
+                } else {
+                    errEl.style.display = 'none';
+                }
+            }
+
+            var wins   = num(d.record_wins);
+            var losses = num(d.record_losses);
+            var played = wins + losses;
+
+            $('#headText').textContent   = 'RECORD ' + (d.record_label || 'TODAY');
+            $('#winsNum').textContent    = wins;
+            $('#winsWord').textContent   = wins === 1 ? 'WIN' : 'WINS';
+            $('#lossesNum').textContent  = losses;
+            $('#lossesWord').textContent = losses === 1 ? 'LOSS' : 'LOSSES';
+
+            $('#recMatches').textContent = played;
+            $('#recKills').textContent   = num(d.record_kills);
+            $('#recKd').textContent      = d.record_kd || '-';
+            $('#recWr').textContent      = played ? Math.round(wins / played * 100) + '%' : '-';
+
+            var wPct = played ? Math.round(wins / played * 100) : 0;
+            var lPct = played ? 100 - wPct : 0;
+            $('#pctWinBar').style.width  = wPct + '%';
+            $('#pctLossBar').style.width = lPct + '%';
+            $('#pctWin').textContent     = (played ? wPct + '%' : '-%') + ' W';
+            $('#pctLoss').textContent    = (played ? lPct + '%' : '-%') + ' L';
+
+            var modes = d.modes_available;
+            if (modes && modes.length > 0) {
+                if (!activeMode) {
+                    activeMode = d.active_mode_key || modes[0].key;
+                }
+                buildModeBar(modes);
+                document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
+                    b.classList.toggle('active', b.dataset.key === activeMode);
+                });
+            }
+        }
+
+        function tick() {
+            var url = '/data?window=session' + (activeMode ? '&mode=' + encodeURIComponent(activeMode) : '');
+            fetch(url, { cache: 'no-store' })
+                .then(function(r) { return r.json(); })
+                .then(applyData)
+                .catch(function() {});
+        }
+
+        tick();
+        setInterval(tick, POLL_MS);
+    </script>
+</body>
+</html>

@@ -347,7 +347,7 @@
 
                 <div class="mid-row">
                     <span class="next-value hidden" id="nextRow">
-                        <span id="nextLabel">NEXT</span> <span class="hl" id="nextGap">-</span><span id="nextUnit"> ELO</span> <span id="nextArrow">&rarr;</span> <span class="hl" id="nextPos">#-</span>
+                        <span id="nextLabel">NEXT</span> <span class="hl" id="nextGap">-</span><span id="nextUnit"> ELO</span> <span id="nextArrow">TO</span> <span class="hl" id="nextPos">#-</span>
                     </span>
                     <div class="stats-row" id="statsRow">
                         <div class="stat-chip">
@@ -485,7 +485,7 @@
                     if (activeMode === m.key) return;
                     activeMode = m.key;
                     localStorage.setItem('fn_overlay_mode', activeMode);
-                    document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                         b.classList.toggle('active', b.dataset.key === activeMode);
                     });
                     tick();
@@ -538,7 +538,7 @@
                     $('#nextLabel').textContent = 'NEXT';
                     $('#nextGap').textContent   = d.next_gap;
                     $('#nextUnit').textContent  = ' ELO';
-                    $('#nextArrow').textContent = '→';
+                    $('#nextArrow').textContent = 'TO';
                     $('#nextPos').textContent   = '#' + d.next_pos;
                     nextRow.classList.remove('hidden');
                 } else {
@@ -594,7 +594,7 @@
                     activeMode = d.active_mode_key || modes[0].key;
                 }
                 buildModeBar(modes);
-                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                document.querySelectorAll('#modeBar .mode-btn').forEach(function(b) {
                     b.classList.toggle('active', b.dataset.key === activeMode);
                 });
             }

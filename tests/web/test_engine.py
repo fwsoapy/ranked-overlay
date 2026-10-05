@@ -62,7 +62,15 @@ def scenarios():
     a = stats("top1")
     b = copy.deepcopy(a)
     b["ranked_stats"]["ranked-br-combined"]["elo"] -= 40
-    out.append(("top1", acct["top1"], [a, b]))
+    # Games after the overlay started, for the Record design's wins and losses.
+    b["match_history"][0]["matches"].append(
+        {"matches": 3, "wins": 1, "kills": 11, "last_modified": T0 + 100,
+         "ranked_data": {"ranking_id": "ranked-br-combined"}})
+    c = copy.deepcopy(b)
+    c["match_history"][0]["matches"].append(
+        {"matches": 2, "wins": 0, "kills": 1, "last_modified": T0 + 500,
+         "ranked_data": {"ranking_id": "ranked-br-combined"}})
+    out.append(("top1", acct["top1"], [a, b, c]))
 
     # The very last row of the board, then a new season wiping the baselines.
     a = stats("tail")

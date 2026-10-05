@@ -39,7 +39,7 @@ import re
 import shutil
 import sys
 
-DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse"]
+DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse", "Record"]
 LAUNCHERS = ["overlay.bat"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -102,6 +102,7 @@ OBS_SIZES = {
     "Rainbow": (800, 220),
     "Modern":  (540, 194),
     "Pulse":   (660, 230),
+    "Record":   (560, 210),
 }
 
 # The hooks a design's script is rewired through on the website. Each must be

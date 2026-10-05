@@ -64,7 +64,7 @@ jobs:
           if (-not (Test-Path "$dir/_internal")) { throw "the _internal folder is missing" }
           # The designs have to be inside, or the wizard builds nothing.
           $designs = Get-ChildItem "$dir/_internal/templates" -Directory -ErrorAction SilentlyContinue
-          if ($designs.Count -ne 8) { throw "expected 8 designs bundled, found $($designs.Count)" }
+          if ($designs.Count -ne 9) { throw "expected 9 designs bundled, found $($designs.Count)" }
           $size = (Get-Item "FortniteOverlaySetup.zip").Length
           Write-Host "FortniteOverlaySetup.zip is $([math]::Round($size/1MB,1)) MB"
           if ($size -lt 1MB) { throw "that zip is too small to be right" }
