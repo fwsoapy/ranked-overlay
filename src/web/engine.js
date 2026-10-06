@@ -47,7 +47,7 @@
   var STALE_RETRY_MS = 30 * 1000;        // came back unchanged: try again soon
   var SKEW_STEP_MS = 10 * 1000;          // ...and wait this much longer next time
   var SKEW_MAX_MS = 10 * 60 * 1000;
-  var SESSION_IDLE_MS = 6 * 60 * 60 * 1000;  // Session starts over after this long without an ELO change
+  var SESSION_IDLE_MS = 3 * 60 * 60 * 1000;  // Session starts over after this long without an ELO change
   var BACKOFF_MAX_MS = 10 * 60 * 1000;
   var LOOKUP_TTL_MS = 10 * 60 * 1000;    // leaderboard re-read when nothing changed
   var LOOKUP_HOT_MS = 60 * 1000;         // ...and right after a match
@@ -1215,7 +1215,7 @@
     }
 
     // The "Reset ELO gain" button. Keeps when the numbers last moved, so
-    // the 6-hour start-over still works from real activity.
+    // the 3-hour start-over still works from real activity.
     function resetSession() {
       var old = loadReset();
       var r = { at: clock(), since: clock(), elos: {}, progs: {}, recs: {}, last: {},
@@ -1829,7 +1829,7 @@
       // design), counted as the change in OliTracker's season totals since
       // the count started: every extra match is a game, and one that added
       // no win is a loss. Session counts from Reset ELO gain (or the first
-      // reading), so the 6-hour start-over clears it too. 12h / 24h add the
+      // reading), so the 3-hour start-over clears it too. 12h / 24h add the
       // games from before the overlay was opened out of match history.
       var recordFrom;
       if (window === 'reset') {

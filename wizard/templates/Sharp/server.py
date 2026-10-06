@@ -2102,6 +2102,19 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             letter-spacing: 1px;
         }
 
+        /* Optional "3 WINS, 1 LOSS" line (?rec=1 in the link). Hidden unless asked for. */
+        .rec-line {
+            display: none;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .rec-line .rw { color: #4ade80; }
+        .rec-line .rl { color: #f87171; }
+        .rec-line .rs { color: rgba(255, 255, 255, 0.45); }
+
         .error-text {
             font-size: 11px;
             font-weight: 600;
@@ -2207,6 +2220,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     <span class="ad-tag" id="creatorRow"></span>
                 </div>
             </div>
+            <div class="rec-line" id="recLine"></div>
         </div>
 
         <!-- MODE BUTTONS -->
@@ -2241,6 +2255,22 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         var curWin       = 'session';
 
         function $(s) { return document.querySelector(s); }
+
+        // "3 WINS, 1 LOSS" under the card when the link has ?rec=1.
+        var SHOW_REC = new URLSearchParams(location.search).get('rec') === '1';
+        function renderRecordLine(d) {
+            var el = $('#recLine');
+            if (!el) return;
+            if (!SHOW_REC || d.record_wins === undefined || d.record_wins === null) {
+                el.style.display = 'none';
+                return;
+            }
+            var w = Number(d.record_wins) || 0, l = Number(d.record_losses) || 0;
+            el.innerHTML = '<span class="rw">' + w + ' ' + (w === 1 ? 'WIN' : 'WINS') + '</span>'
+                + '<span class="rs">,</span> '
+                + '<span class="rl">' + l + ' ' + (l === 1 ? 'LOSS' : 'LOSSES') + '</span>';
+            el.style.display = 'block';
+        }
 
         var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";
         // localStorage is shared by every overlay on localhost, so namespace the
@@ -2332,6 +2362,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
 
         function applyData(d) {
             if (!d || !d.rank_display) return;
+
+            renderRecordLine(d);
 
             var errEl = $('#errorText');
             if (errEl) {

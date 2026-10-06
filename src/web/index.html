@@ -624,7 +624,7 @@
             minutes after each game, so a win or loss can take a few minutes to show up.
           </p>
           <p class="tip session-tip" data-show-val="elo=session">
-            <b>Session</b> starts over by itself after 6 hours with no ELO change, or when you press <b>Reset ELO gain</b>.
+            <b>Session</b> starts over by itself after 3 hours with no ELO change, or when you press <b>Reset ELO gain</b>.
           </p>
           <p class="tip">Changed something? Copy the link again and paste it over the old one.</p>
         </section>
@@ -659,7 +659,7 @@
             <div class="bar-group">
               <span class="bar-label" id="elo-label">ELO change</span>
               <div class="seg" data-seg="elo" role="group" aria-label="ELO change">
-                <button type="button" data-val="session" title="Starts over after 6 hours with no ELO change, or when you press Reset ELO gain in OBS. Shows as +23 ELO TODAY">Session</button>
+                <button type="button" data-val="session" title="Starts over after 3 hours with no ELO change, or when you press Reset ELO gain in OBS. Shows as +23 ELO TODAY">Session</button>
                 <button type="button" data-val="12h" title="The last 12 hours">Last 12h</button>
                 <button type="button" data-val="24h" title="The last 24 hours">Last 24h</button>
               </div>
@@ -702,6 +702,11 @@
                 <button type="button" data-val="pct" data-show-design="record">Win %</button>
                 <button type="button" data-val="code">Creator code</button>
               </div>
+            </div>
+            <div class="field" id="rec-field">
+              <span>Wins and losses</span>
+              <label class="check-line"><input id="rec-line" type="checkbox" /> Show "3 WINS, 1 LOSS" on the overlay</label>
+              <span class="field-hint">A small line under the card. It counts the same stretch as the ELO change.</span>
             </div>
             <label class="field" data-show-val="show=code">
               <span>Creator code</span>
@@ -807,7 +812,7 @@
           customColor: '#ff7a00',
           labelCustom: false, labelColor: '#ffffff',
           show: 'stats', code: '',
-          mode: '', elo: 'session', refresh: '60', next: true,
+          mode: '', elo: 'session', refresh: '60', next: true, rec: false,
           previewBg: 'checker',
         };
 
@@ -855,6 +860,7 @@
           if (state.design === 'rainbow' && state.labelCustom) p.set('label', state.labelColor.replace('#', ''));
           var code = cleanCode(state.code);
           if (state.show === 'code' && code) p.set('code', code);
+          if (state.rec && state.design !== 'record') p.set('rec', '1');
           if (state.show === 'pct' && state.design === 'record') p.set('show', 'pct');
           if (state.mode) p.set('mode', state.mode);
           // Always written: a link with no elo= counts from midnight Central,
@@ -885,13 +891,15 @@
 
         function fitPreview() {
           var d = BY_ID[state.design];
+          // The wins and losses line makes the card a little taller.
+          var h = d.h + (state.rec && state.design !== 'record' ? 32 : 0);
           var avail = stage.clientWidth - 32;
           var k = Math.min(1, avail / d.w);
           frameBox.style.width = Math.round(d.w * k) + 'px';
-          frameBox.style.height = Math.round(d.h * k) + 'px';
+          frameBox.style.height = Math.round(h * k) + 'px';
           frameBox.querySelectorAll('iframe').forEach(function (f) {
             f.style.width = d.w + 'px';
-            f.style.height = d.h + 'px';
+            f.style.height = h + 'px';
             f.style.transform = 'scale(' + k + ')';
           });
         }
@@ -1190,6 +1198,10 @@
           state.next = e.target.checked;
           changed();
         });
+        $('rec-line').addEventListener('change', function (e) {
+          state.rec = e.target.checked;
+          changed();
+        });
 
         function importLink(text) {
           var url;
@@ -1219,6 +1231,7 @@
           var r = parseInt(q.get('refresh') || '60', 10);
           state.refresh = String([300, 600].indexOf(r) >= 0 ? r : 60);
           state.next = q.get('next') !== '0';
+          state.rec = q.get('rec') === '1';
           return true;
         }
 
@@ -1349,6 +1362,9 @@
           });
           if (document.activeElement !== $('code')) $('code').value = state.code;
           $('next-lookup').checked = !!state.next;
+          // The Record design is the wins and losses, so it has nothing to add.
+          $('rec-line').checked = !!state.rec;
+          $('rec-field').hidden = isRecord;
           document.querySelectorAll('[data-show-design]').forEach(function (el) {
             el.hidden = el.getAttribute('data-show-design') !== state.design;
           });

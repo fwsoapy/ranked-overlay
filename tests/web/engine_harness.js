@@ -210,7 +210,7 @@ async function websiteChecks() {
     await engine.refresh(true);
     check('new season starts it over', await shown(engine), '+0 ELO TODAY');
   }
-  // "Session" starts over by itself after 6 hours without an ELO change.
+  // "Session" starts over by itself after 3 hours without an ELO change.
   {
     const H = 60 * 60 * 1000;
     const setup = () => {
@@ -234,15 +234,16 @@ async function websiteChecks() {
       return st;
     };
 
-    // Streams, then sits idle: still counted at 5h, gone after 6h.
+    // Streams, then sits idle: still counted at 2h, gone after 3h.
     let st = setup();
     let engine = await st.open();
     await st.step(engine, 10 * 60 * 1000, 3110);
-    check('idle 5h keeps the session', await st.step(engine, 5 * H), '+30 ELO TODAY');
-    check('idle 6h starts it over', await st.step(engine, 1 * H + 60 * 1000), '+0 ELO TODAY');
+    check('idle 2h keeps the session', await st.step(engine, 2 * H), '+30 ELO TODAY');
+    check('idle 3h starts it over', await st.step(engine, 1 * H + 60 * 1000), '+0 ELO TODAY');
     check('still +0 after a restart', await st.shown(await st.open()), '+0 ELO TODAY');
     check('counts the next stream', await st.step(engine, 10 * 60 * 1000, 3130), '+20 ELO TODAY');
-    check('a 5h break mid-session keeps counting', await st.step(engine, 5 * H, 3125), '+15 ELO TODAY');
+    check('a 2h break mid-session keeps counting', await st.step(engine, 2 * H, 3125), '+15 ELO TODAY');
+    check('a game after a 5h break is a fresh count', await st.step(engine, 5 * H, 3150), '+25 ELO TODAY');
 
     // Closed for 10h, games played while closed (dated by the history):
     // those count, the last stream's +30 doesn't.
@@ -274,7 +275,7 @@ async function websiteChecks() {
     st.data.ranked_stats['ranked-br-combined'].elo = 3150;
     st.data.match_history.unshift({ date: 'z', elo: {}, matches: [grp(Math.floor((last + 2 * H) / 1000), 3150)] });
     st.data.last_updated = new Date(st.clock).toISOString();
-    check('old games then 6h quiet starts over', await st.shown(await st.open()), '+0 ELO TODAY');
+    check('old games then 3h quiet starts over', await st.shown(await st.open()), '+0 ELO TODAY');
 
     // Pressing Reset after an idle stretch isn't undone by the timer.
     st = setup();
@@ -379,17 +380,17 @@ async function websiteChecks() {
       st.data.match_history[0].matches.push(grp(2 * T, 1, 1));   // history catches up later: not counted twice
       check('12h: history catching up does not double count', await st.tick(e, 4 * T), [2, 2]);
 
-      // Session starts over by itself after 6 quiet hours, and games played
+      // Session starts over by itself after 3 quiet hours, and games played
       // while the overlay was closed count when they come after a long gap.
       const H = 60 * 60 * 1000;
       st = rig();
       e = await st.open();
       addGames(st.data, 'duos', 1, 2, st.clock + 2 * T);
-      check('6h: a stream', await st.tick(e, 4 * T), [1, 1]);
-      check('6h: quiet for 5h keeps it', await st.tick(e, 5 * H), [1, 1]);
-      check('6h: quiet for 6h starts over', await st.tick(e, 1 * H + T), [0, 0]);
+      check('3h: a stream', await st.tick(e, 4 * T), [1, 1]);
+      check('3h: quiet for 2h keeps it', await st.tick(e, 2 * H), [1, 1]);
+      check('3h: quiet for 3h starts over', await st.tick(e, 1 * H + T), [0, 0]);
       addGames(st.data, 'duos', 1, 1, st.clock + 2 * T);
-      check('6h: counts the next stream', await st.tick(e, 4 * T), [1, 0]);
+      check('3h: counts the next stream', await st.tick(e, 4 * T), [1, 0]);
 
       st = rig();
       e = await st.open();
@@ -398,7 +399,7 @@ async function websiteChecks() {
       st.clock += 10 * H;
       addGames(st.data, 'duos', 2, 3, st.clock - 2 * H);   // played while the overlay was closed
       st.data.last_updated = new Date(st.clock).toISOString();
-      check('6h: games while closed count, the old stream does not', await st.rec(await st.open()), [2, 1]);
+      check('3h: games while closed count, the old stream does not', await st.rec(await st.open()), [2, 1]);
     }
 
     // Reload: ranked_stats says ranked_blastberry_build, match_history says
@@ -448,8 +449,8 @@ async function websiteChecks() {
     game(true, 3140, clock - 2 * H);
     data.last_updated = new Date(clock).toISOString();
     check('new session counts games while closed', rec(await (await (await open()).fetchData('/data?window=session')).json()).slice(0, 2), [1, 1]);
-    // And 6 quiet hours later it starts over.
-    check('record starts over after 6h', await shown(engine, 7 * H), [0, 0]);
+    // And 3 quiet hours later it starts over.
+    check('record starts over after 3h', await shown(engine, 7 * H), [0, 0]);
   }
   {
     // below Unreal it counts progress, and the label says SESSION

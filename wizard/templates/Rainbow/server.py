@@ -2099,6 +2099,20 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
 
         /* mode switcher - browser only, hidden by the OBS crop */
+        /* Optional "3 WINS, 1 LOSS" line (?rec=1 in the link). Hidden unless asked for. */
+        .rec-line {
+            display: none;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .rec-line .rw { color: #4ade80; }
+        .rec-line .rl { color: #f87171; }
+        .rec-line .rs { color: rgba(255, 255, 255, 0.45); }
+        .rec-line { text-align: center; padding-bottom: 6px; }
+
         .error-text {
             font-size: 11px;
             font-weight: 600;
@@ -2191,6 +2205,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 <div class="stat"><div class="stat-label">KILLS</div><div class="stat-value" id="seasonKills">-</div></div>
                 <div class="stat"><div class="stat-label">WINS</div><div class="stat-value" id="seasonWins">-</div></div>
             </div>
+            <div class="rec-line" id="recLine"></div>
         </div>
 
         <!-- mode switcher: open in your browser, OBS won't see this if cropped -->
@@ -2224,6 +2239,22 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
+
+        // "3 WINS, 1 LOSS" under the card when the link has ?rec=1.
+        var SHOW_REC = new URLSearchParams(location.search).get('rec') === '1';
+        function renderRecordLine(d) {
+            var el = $('#recLine');
+            if (!el) return;
+            if (!SHOW_REC || d.record_wins === undefined || d.record_wins === null) {
+                el.style.display = 'none';
+                return;
+            }
+            var w = Number(d.record_wins) || 0, l = Number(d.record_losses) || 0;
+            el.innerHTML = '<span class="rw">' + w + ' ' + (w === 1 ? 'WIN' : 'WINS') + '</span>'
+                + '<span class="rs">,</span> '
+                + '<span class="rl">' + l + ' ' + (l === 1 ? 'LOSS' : 'LOSSES') + '</span>';
+            el.style.display = 'block';
+        }
 
         // The rank text, one span per character, each starting the colour
         // loop RAINBOW_STEP seconds further along than the last, so the
@@ -2352,6 +2383,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                     }
 
                     if (d.ok === false && !d.elo_text) return;
+
+                    renderRecordLine(d);
 
                     setRainbowText($('#rankText'), d.rank_display || '#- UNREAL');
 
