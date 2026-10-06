@@ -105,7 +105,7 @@ Everything is on the setup page, and the link it gives you remembers all of it.
 | **Design** | One of the 9 above. |
 | **Accent color** | A swatch or any custom color. The header, labels and creator code all follow it. |
 | **Below your rank** | Season stats (K/D, win %, kills, wins) or your creator code. You can flip between them live in OBS. |
-| **Wins and losses** | Adds a small "3 WINS, 1 LOSS" line under the card of any design. See below. |
+| **Wins and losses** | Adds a "3 WINS, 1 LOSS" footer at the bottom of the card of any design. See below. |
 | **Mode** | Auto, BR, Reload or Boxfights, the mode the overlay starts on. Modes your account hasn't played are greyed out. |
 | **ELO change** | What "+23 ELO TODAY" counts. **Session** (the default) counts from when you press **Reset ELO gain** in OBS, and starts over by itself after 3 hours with no ELO change, so each stream opens on +0. Or pick **Last 12h** or **Last 24h**. |
 | **Update speed** | Auto checks right after OliTracker refreshes your profile (about every 3 minutes). You can slow it to every 5 or 10 minutes. |
@@ -135,7 +135,7 @@ Your last choices are remembered, so the overlay comes back the way you left it.
 
 You can show your record two ways:
 
-- tick **Wins and losses** on the setup page to add a small line like "3 WINS, 1 LOSS" under any design, or
+- tick **Wins and losses** on the setup page to add a footer like "3 WINS, 1 LOSS" to the bottom of any design, or
 - pick the **Record** design to make the record the whole overlay.
 
 It counts the same stretch as your ELO change (Session, Last 12h or Last 24h).

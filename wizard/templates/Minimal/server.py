@@ -2027,20 +2027,31 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             color: rgba(255, 255, 255, 0.90);
         }
 
-        /* Optional "3 WINS, 1 LOSS" line (?rec=1 in the link). Hidden unless asked for. */
+        /* Optional "3 WINS, 1 LOSS" footer (?rec=1 in the link). Hidden unless asked for.
+           A strip with a thin divider on top that runs down to the card's bottom edge,
+           with the text centered in it, so it sits evenly between the two. */
         .rec-line {
             display: none;
-            font-size: 14px;
+            align-items: center;
+            justify-content: center;
+            height: 46px;
+            width: 0;
+            min-width: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+            margin-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 18px;
             font-weight: 800;
             letter-spacing: 0.08em;
             text-transform: uppercase;
             white-space: nowrap;
+            text-align: center;
         }
         .rec-line .rw { color: #4ade80; }
         .rec-line .rl { color: #f87171; }
         .rec-line .rs { color: rgba(255, 255, 255, 0.45); }
-        .rec-line { text-align: center; }
-        .rec-line { margin-top: 2px; padding-top: 9px; margin-bottom: 2px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+        .rec-line { margin-bottom: -18px; }
 
         .error-text {
             font-size: 11px;
@@ -2170,10 +2181,14 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 return;
             }
             var w = Number(d.record_wins) || 0, l = Number(d.record_losses) || 0;
-            el.innerHTML = '<span class="rw">' + w + ' ' + (w === 1 ? 'WIN' : 'WINS') + '</span>'
+            el.innerHTML = '<span class="rec-in"><span class="rw">' + w + ' ' + (w === 1 ? 'WIN' : 'WINS') + '</span>'
                 + '<span class="rs">,</span> '
-                + '<span class="rl">' + l + ' ' + (l === 1 ? 'LOSS' : 'LOSSES') + '</span>';
-            el.style.display = 'block';
+                + '<span class="rl">' + l + ' ' + (l === 1 ? 'LOSS' : 'LOSSES') + '</span></span>';
+            el.style.display = 'flex';
+            // A long record shrinks to fit instead of widening the card.
+            el.style.fontSize = '';
+            var fs = 18, inner = el.firstChild;
+            while (fs > 11 && inner.offsetWidth > el.clientWidth) { fs -= 1; el.style.fontSize = fs + 'px'; }
         }
 
         var INITIAL_CREATOR_CODE = "__INITIAL_CREATOR_CODE__";

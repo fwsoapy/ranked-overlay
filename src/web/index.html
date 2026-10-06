@@ -706,7 +706,7 @@
             <div class="field" id="rec-field">
               <span>Wins and losses</span>
               <label class="check-line"><input id="rec-line" type="checkbox" /> Show "3 WINS, 1 LOSS" on the overlay</label>
-              <span class="field-hint">A small line under the card. It counts the same stretch as the ELO change.</span>
+              <span class="field-hint">A footer at the bottom of the card. It counts the same stretch as the ELO change.</span>
             </div>
             <label class="field" data-show-val="show=code">
               <span>Creator code</span>
@@ -891,8 +891,10 @@
 
         function fitPreview() {
           var d = BY_ID[state.design];
-          // The wins and losses line makes the card a little taller.
-          var h = d.h + (state.rec && state.design !== 'record' ? (state.design === 'wide' ? 52 : 32) : 0);
+          // The wins and losses footer makes the card taller, by a different
+          // amount in each design.
+          var REC_EXTRA = { minimal: 10, classic: 20, sharp: 10, wide: 14, slash: 32, rainbow: 10, modern: 40, pulse: 18 };
+          var h = d.h + (state.rec && REC_EXTRA[state.design] ? REC_EXTRA[state.design] : 0);
           var avail = stage.clientWidth - 32;
           var k = Math.min(1, avail / d.w);
           frameBox.style.width = Math.round(d.w * k) + 'px';
