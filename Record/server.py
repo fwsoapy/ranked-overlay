@@ -1913,7 +1913,6 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         :root {
             --accent: #fbbf24;
             --accent-rgb: 251, 191, 36;
-            --accent-light: color-mix(in srgb, var(--accent) 60%, white);
             --win: #4ade80;
             --win-rgb: 74, 222, 128;
             --loss: #f87171;
@@ -1957,13 +1956,13 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 800;
             letter-spacing: 0.18em;
             text-transform: uppercase;
-            color: var(--accent-light);
+            color: var(--accent);
         }
 
         /* A text dot rather than a filled box: browser night modes (Brave's)
            repaint bright backgrounds, so a white box went dark. */
         .head .dot {
-            font-size: 11px;
+            font-size: 17px;
             line-height: 1;
             color: var(--accent);
         }
@@ -2047,7 +2046,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
             font-weight: 800;
             letter-spacing: 0.12em;
             text-transform: uppercase;
-            color: var(--accent-light);
+            color: var(--accent);
         }
 
         .stat-value {
