@@ -200,6 +200,7 @@ BROWSER_HEADERS = {
 _lock               = threading.Lock()
 _start_elos         = {}
 _start_progressions = {}
+_start_counts       = {}   # Record baselines: season totals at the first reading
 _last_raw           = None
 _last_modes         = []
 _season_fp          = None
@@ -554,6 +555,11 @@ def _mode_stat_path(ranking_id, available=None):
 
 
 def _stat_block(data, timeframe, ranking_id):
+    both = _stat_both(data, timeframe, ranking_id)
+    return both["overall"] if both is not None else None
+
+
+def _stat_both(data, timeframe, ranking_id):
     """The stats bucket for exactly one ranked mode, or None.
 
     This must never fall back to another mode's bucket. OliTracker only emits a
@@ -572,7 +578,9 @@ def _stat_block(data, timeframe, ranking_id):
         block = data["stats"][timeframe]
         for k in path_key:
             block = block[k]
-        return block["both"]["overall"]
+        both = block["both"]
+        both["overall"]
+        return both if isinstance(both, dict) else None
     except (KeyError, TypeError):
         return None
 
@@ -628,57 +636,135 @@ def _lifetime_ranked_stats(data, ranking_id=None):
         return dict(_EMPTY_STATS)
 
 
-# Fortnite tracks two placement tiers per match, and which places they mean
-# depends on the team size: top 10 / top 25 in solos, top 5 / top 12 in duos,
-# top 3 / top 6 in trios and squads. OliTracker has those, not the exact place.
-_TEAM_TIERS = (("solo", (10, 25)), ("duo", (5, 12)), ("trio", (3, 6)), ("squad", (3, 6)))
+# The Record design. OliTracker's season totals (wins and matches played in a
+# mode) move as soon as a profile refreshes, but its match_history can trail by
+# many minutes or miss games altogether, so the record is the difference
+# between the totals now and the totals when the overlay started: each extra
+# match is a game, and a game that didn't add a win is a loss. Match history
+# stands in only for modes with no totals of their own (Boxfights).
+#
+# A count is a dict: wins, matches, kills, the two placement tiers Fortnite
+# tracks, and matches per team size. The tiers mean top 10 / 25 in solos, 5 /
+# 12 in duos and 3 / 6 in trios and squads, so they're labelled by team size.
+_SIZES = ("solo", "duos", "trios", "squads")
+_SIZE_TIERS = {"solo": (10, 25), "duos": (5, 12), "trios": (3, 6), "squads": (3, 6)}
+_COUNT_FIELDS = ("w", "m", "k", "t1", "t2")
 
 
-def _team_tiers(playlist):
+def _empty_counts():
+    return {"w": 0, "m": 0, "k": 0, "t1": 0, "t2": 0, "sz": {}, "last": None, "lm": 0}
+
+
+def _team_size(playlist):
     p = str(playlist or "").lower()
-    for word, tiers in _TEAM_TIERS:
+    for word, size in (("solo", "solo"), ("duo", "duos"), ("trio", "trios"), ("squad", "squads")):
         if word in p:
-            return tiers
+            return size
     return None
 
 
-def record_placements(data, window_spec, ranking_id=None):
-    """Top placements for the Record design, with labels for what was played.
+def _mode_counts(data, ranking_id):
+    """Season totals for one ranked mode as a count, or None without a bucket."""
+    try:
+        both = _stat_both(data, "seasonal", ranking_id)
+        if both is None:
+            return None
+        o = both["overall"]
+        c = _empty_counts()
+        c["w"]  = int(o.get("wins", 0) or 0)
+        c["m"]  = int(o.get("matches_played", 0) or 0)
+        c["k"]  = int(o.get("kills", 0) or 0)
+        c["t1"] = int(o.get("top_3_5_10", 0) or 0)
+        c["t2"] = int(o.get("top_6_12_25", 0) or 0)
+        try:
+            c["lm"] = float(o.get("last_modified") or 0)
+        except (TypeError, ValueError):
+            c["lm"] = 0
+        latest = -1
+        for z in _SIZES:
+            b = both.get(z)
+            if not isinstance(b, dict):
+                continue
+            c["sz"][z] = int(b.get("matches_played", 0) or 0)
+            try:
+                lm = float(b.get("last_modified") or 0)
+            except (TypeError, ValueError):
+                lm = 0
+            if lm > latest:
+                latest = lm
+                c["last"] = z
+        return c
+    except Exception:
+        return None
 
-    Returns (first tier count, second tier count, first label, second label),
-    e.g. (4, 9, "TOP 5", "TOP 12") for duos, or "TOP 10/5" when solos and duos
-    were both played. With no games in the window the labels follow the last
-    game played in the mode, or solos.
-    """
+
+def _diff_counts(cur, base):
+    """What was played between two readings (nothing yet when there's no earlier one)."""
+    d = _empty_counts()
+    d["last"] = cur["last"]
+    for f in _COUNT_FIELDS:
+        d[f] = max(0, cur[f] - base[f]) if base else 0
+    for z in _SIZES:
+        if z not in cur["sz"]:
+            continue
+        before = base["sz"].get(z, 0) if base else cur["sz"][z]
+        d["sz"][z] = max(0, cur["sz"][z] - before)
+    return d
+
+
+def _add_counts(a, b):
+    d = _empty_counts()
+    for f in _COUNT_FIELDS:
+        d[f] = a[f] + b[f]
+    for z in _SIZES:
+        if z in a["sz"] or z in b["sz"]:
+            d["sz"][z] = a["sz"].get(z, 0) + b["sz"].get(z, 0)
+    d["last"] = a["last"] or b["last"]
+    return d
+
+
+def _history_counts(data, ranking_id, start, end=None):
+    """Games from match_history in [start, end) seconds."""
+    c = _empty_counts()
     if data is None:
-        return 0, 0, "TOP 10", "TOP 25"
-    now = int(time.time())
-    cutoff = SESSION_START if window_spec == "session" else now - _WINDOW_SECS.get(window_spec, 86400)
+        return c
     rid = _detect_ranking_id(data, ranking_id)
-    first = second = 0
-    seen = []
-    latest = None
+    latest = -1
     for day in (data.get("match_history") or []):
         for grp in (day.get("matches") or []):
+            ts = grp.get("last_modified") or 0
             rd = grp.get("ranked_data") or {}
             if rid and not _same_mode(rd.get("ranking_id"), rid):
                 continue
-            tiers = _team_tiers(grp.get("playlist_id"))
-            ts = grp.get("last_modified") or 0
-            if tiers and (latest is None or ts > latest[0]):
-                latest = (ts, tiers)
-            if ts < cutoff:
+            # The team size of the last game, played in the window or not,
+            # names the placement labels when nothing was played in it.
+            z = _team_size(grp.get("playlist_id"))
+            if z and ts > latest:
+                latest = ts
+                c["last"] = z
+            if ts < start or (end is not None and ts >= end):
                 continue
-            first  += int(grp.get("top_3_5_10",  0) or 0)
-            second += int(grp.get("top_6_12_25", 0) or 0)
-            if tiers and tiers not in seen:
-                seen.append(tiers)
-    if not seen:
-        seen = [latest[1] if latest else (10, 25)]
-    seen.sort(key=lambda t: -t[0])
-    return (first, second,
-            "TOP " + "/".join(str(t[0]) for t in seen),
-            "TOP " + "/".join(str(t[1]) for t in seen))
+            c["w"]  += int(grp.get("wins", 0) or 0)
+            c["m"]  += int(grp.get("matches", 0) or 0)
+            c["k"]  += int(grp.get("kills", 0) or 0)
+            c["t1"] += int(grp.get("top_3_5_10", 0) or 0)
+            c["t2"] += int(grp.get("top_6_12_25", 0) or 0)
+            if z:
+                c["sz"][z] = c["sz"].get(z, 0) + int(grp.get("matches", 0) or 0)
+    return c
+
+
+def _tier_labels(c):
+    """"TOP 10/5" style labels for the team sizes played, else the last one played."""
+    sizes = [z for z in _SIZES if c["sz"].get(z, 0) > 0] or [c["last"] or "solo"]
+    tiers = []
+    for z in sizes:
+        t = _SIZE_TIERS[z]
+        if t not in tiers:
+            tiers.append(t)
+    tiers.sort(key=lambda t: -t[0])
+    return ("TOP " + "/".join(str(t[0]) for t in tiers),
+            "TOP " + "/".join(str(t[1]) for t in tiers))
 
 
 def compute_windowed_stats(data, window_spec, ranking_id=None):
@@ -911,10 +997,20 @@ def _roll_season_if_needed(data):
         if previous is not None and fp * 2 < previous:
             _start_elos.clear()
             _start_progressions.clear()
+            _start_counts.clear()
         else:
             previous = None
     if previous is not None:
         print(f"[overlay] new season detected ({previous} -> {fp} matches) - counters re-baselined")
+
+
+def _record_counts_baseline(mode_key, data):
+    counts = _mode_counts(data, mode_key)
+    if counts is None:
+        return
+    with _lock:
+        if mode_key not in _start_counts:
+            _start_counts[mode_key] = counts
 
 
 def _record_baseline(mode_key, elo, points):
@@ -1085,6 +1181,7 @@ def refresh_once():
     for mpath, mobj in modes:
         v = mode_view(mpath, mobj)
         _record_baseline(v["key"], v["elo"], v["points"])
+        _record_counts_baseline(v["key"], data)
 
     path, mode = pick_best_mode(modes)
     v = mode_view(path, mode)
@@ -1657,19 +1754,39 @@ def snapshot(window="session", mode_key=None):
     s["season_wins"]  = season_stats["wins"]
     s["season_kills"] = season_stats["kills"]
 
-    # Wins and losses over the same stretch as the ELO change (the Record
-    # design): since the overlay started, or the last 12h / 24h.
+    # Wins and losses (the Record design): the change in OliTracker's season
+    # totals since the overlay started, where each extra match is a game and
+    # one that added no win is a loss. Match history stands in for modes with
+    # no totals of their own, and fills in 12h / 24h games from before launch.
     record_window = window if window in _WINDOW_SECS else "session"
-    record = compute_windowed_stats(raw, record_window, resolved_key or None)
-    s["record_wins"]    = record["wins"]
-    s["record_losses"]  = record["losses"]
-    s["record_matches"] = record["matches"]
-    s["record_kills"]   = record["kills"]
-    s["record_kd"]      = f"{record['kd']:.2f}" if record["kd"] is not None else "-"
-    s["record_wr"]      = f"{record['wr']:.1f}%" if record["wr"] is not None else "-%"
+    rec_key = resolved_key or None
+    cur = _mode_counts(raw, rec_key)
+    if cur is None:
+        start = SESSION_START if record_window == "session" else int(time.time()) - _WINDOW_SECS[record_window]
+        rc = _history_counts(raw, rec_key, start)
+    else:
+        with _lock:
+            base = _start_counts.get(resolved_key)
+        rc = _diff_counts(cur, base or cur)
+        if record_window != "session":
+            cutoff = int(time.time()) - _WINDOW_SECS[record_window]
+            if cutoff < SESSION_START:
+                rc = _add_counts(rc, _history_counts(raw, rec_key, cutoff, SESSION_START))
+            else:
+                rc = _history_counts(raw, rec_key, cutoff)
+    wins, matches, kills = rc["w"], rc["m"], rc["k"]
+    losses = matches - wins
+    kd = round(kills / losses, 2) if losses > 0 else None
+    wr = round(wins / matches * 100, 1) if matches > 0 else None
+    s["record_wins"]    = wins
+    s["record_losses"]  = losses
+    s["record_matches"] = matches
+    s["record_kills"]   = kills
+    s["record_kd"]      = f"{kd:.2f}" if kd is not None else "-"
+    s["record_wr"]      = f"{wr:.1f}%" if wr is not None else "-%"
     s["record_label"]   = {"12h": "PAST 12H", "24h": "PAST 24H"}.get(record_window, "TODAY")
-    (s["record_top1"], s["record_top2"],
-     s["record_top1_label"], s["record_top2_label"]) = record_placements(raw, record_window, resolved_key or None)
+    s["record_top1"], s["record_top2"] = rc["t1"], rc["t2"]
+    s["record_top1_label"], s["record_top2_label"] = _tier_labels(rc)
 
     next_div_name = None
     if not is_unreal:

@@ -619,6 +619,10 @@
           <p class="tip">
             Right-click the source and pick <b>Interact</b> to switch modes, show your creator code or reset your ELO gain.
           </p>
+          <p class="tip" data-show-design="record">
+            <b>Record</b> counts the games you play from your season totals, which OliTracker updates a few
+            minutes after each game, so a win or loss can take a few minutes to show up.
+          </p>
           <p class="tip session-tip" data-show-val="elo=session">
             <b>Session</b> starts over by itself after 6 hours with no ELO change, or when you press <b>Reset ELO gain</b>.
           </p>
@@ -751,7 +755,7 @@
       Also check out <a href="https://fwsoapy.github.io/code-overlay/" target="_blank" rel="noreferrer noopener">Code Overlay</a>.
     </footer>
 
-    <script src="./engine.js?v=bb19850872"></script>
+    <script src="./engine.js?v=659197903b"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>
       (function () {

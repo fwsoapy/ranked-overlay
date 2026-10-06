@@ -59,6 +59,15 @@ def scenarios():
         {"matches": 4, "wins": 3, "kills": 20, "last_modified": T0 + 100,
          "top_3_5_10": 3, "top_6_12_25": 4, "playlist_id": "playlist_habanero_nobuild_piperboot_duos",
          "ranked_data": {"ranking_id": "ranked-blastberry-combined"}})
+    # The totals are what the Record counts: 4 Reload games, 3 won, in duos...
+    play(b, "reload", "duos", 3, 4, 20, 3, 4, T0 + 100)
+    # ...and 2 in BR that history never heard of: a win and a loss, in solos.
+    play(b, "ranked", "solo", 1, 2, 9, 1, 2, T0 + 100)
+    # Boxfights has no totals, so only history can count it.
+    b["match_history"][0]["matches"].append(
+        {"matches": 3, "wins": 1, "kills": 5, "last_modified": T0 + 100,
+         "top_3_5_10": 1, "top_6_12_25": 2, "playlist_id": "playlist_squareclub",
+         "ranked_data": {"ranking_id": "ranked-squareclub"}})
     c = copy.deepcopy(b)
     c["ranked_stats"]["ranked-squareclub"]["division"] = 4
     c["ranked_stats"]["ranked-squareclub"]["promotion_progression"] = 5
@@ -70,15 +79,10 @@ def scenarios():
     b = copy.deepcopy(a)
     b["ranked_stats"]["ranked-br-combined"]["elo"] -= 40
     # Games after the overlay started, for the Record design's wins and losses.
-    b["match_history"][0]["matches"].append(
-        {"matches": 3, "wins": 1, "kills": 11, "last_modified": T0 + 100,
-         "top_3_5_10": 2, "top_6_12_25": 3, "playlist_id": "playlist_nobuildbr_habanero_duo",
-         "ranked_data": {"ranking_id": "ranked-br-combined"}})
+    # Only the season totals move; match_history trails behind, as it does live.
+    play(b, "ranked", "duos", 1, 3, 11, 2, 3, T0 + 100)
     c = copy.deepcopy(b)
-    c["match_history"][0]["matches"].append(
-        {"matches": 2, "wins": 0, "kills": 1, "last_modified": T0 + 500,
-         "top_3_5_10": 1, "top_6_12_25": 2, "playlist_id": "playlist_nobuildbr_habanero_solo",
-         "ranked_data": {"ranking_id": "ranked-br-combined"}})
+    play(c, "ranked", "solo", 0, 2, 1, 1, 2, T0 + 500)
     out.append(("top1", acct["top1"], [a, b, c]))
 
     # The very last row of the board, then a new season wiping the baselines.
@@ -121,6 +125,19 @@ def scenarios():
             "match_history": [{"matches": [{"ranked_data": {"division": 1, "elo": 3}}]}]}
     out.append(("walk", "fedcba9876543210fedcba9876543210", [walk]))
     return out
+
+
+def play(data, bucket, size, wins, matches, kills, top1, top2, at):
+    """Add games to a season-totals bucket, the way OliTracker's totals move."""
+    both = data["stats"]["seasonal"][bucket]["both"]
+    for part in (both["overall"], both.setdefault(size, {"matches_played": 0, "wins": 0, "kills": 0,
+                                                         "top_3_5_10": 0, "top_6_12_25": 0})):
+        part["wins"] = part.get("wins", 0) + wins
+        part["matches_played"] = part.get("matches_played", 0) + matches
+        part["kills"] = part.get("kills", 0) + kills
+        part["top_3_5_10"] = part.get("top_3_5_10", 0) + top1
+        part["top_6_12_25"] = part.get("top_6_12_25", 0) + top2
+        part["last_modified"] = at
 
 
 def leaderboard_file(url):

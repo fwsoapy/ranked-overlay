@@ -352,6 +352,13 @@
   }
 
   function statBlock(data, timeframe, rankingId) {
+    var both = statBoth(data, timeframe, rankingId);
+    return both === null ? null : both.overall;
+  }
+
+  // The whole "both" object of a stats bucket (overall plus solo / duos /
+  // trios / squads), for the Record's per-team-size counts.
+  function statBoth(data, timeframe, rankingId) {
     var available = {};
     try {
       var tf = data.stats[timeframe];
@@ -368,7 +375,7 @@
         block = block[pathKey[i]];
       }
       if (!isDict(block) || !isDict(block.both) || !hasOwn.call(block.both, 'overall')) return null;
-      return block.both.overall;
+      return block.both;
     } catch (e) {
       return null;
     }
@@ -423,42 +430,131 @@
     }
   }
 
-  // Same as _TEAM_TIERS / record_placements: Fortnite's two placement tiers
-  // per match mean top 10 / 25 in solos, 5 / 12 in duos, 3 / 6 in trios and
-  // squads, so the Record design labels them by what was played.
-  var TEAM_TIERS = [['solo', [10, 25]], ['duo', [5, 12]], ['trio', [3, 6]], ['squad', [3, 6]]];
+  /*
+   * The Record design. OliTracker's season totals (wins and matches played in
+   * a mode) move as soon as a profile refreshes, but its match_history can
+   * trail by many minutes or miss games altogether, so the record is the
+   * difference between the totals now and the totals when the count started:
+   * each extra match is a game, and a game that didn't add a win is a loss.
+   * Match history only fills in 12h / 24h games from before the overlay was
+   * opened, and stands in for modes with no totals of their own (Boxfights).
+   *
+   * Same as _mode_counts / _diff_counts / _history_counts in core_head.py.
+   * A count is {w, m, k, t1, t2, sz, last}: wins, matches, kills, the two
+   * placement tiers Fortnite tracks, and matches per team size.
+   */
+  var SIZES = ['solo', 'duos', 'trios', 'squads'];
+  // Which places the two tiers mean: top 10 / 25 in solos, 5 / 12 in duos,
+  // 3 / 6 in trios and squads.
+  var SIZE_TIERS = { solo: [10, 25], duos: [5, 12], trios: [3, 6], squads: [3, 6] };
+  var COUNT_FIELDS = ['w', 'm', 'k', 't1', 't2'];
 
-  function teamTiers(playlist) {
+  function emptyCounts() { return { w: 0, m: 0, k: 0, t1: 0, t2: 0, sz: {}, last: null, lm: 0 }; }
+
+  function teamSize(playlist) {
     var p = String(playlist === null || playlist === undefined ? '' : playlist).toLowerCase();
-    for (var i = 0; i < TEAM_TIERS.length; i++) {
-      if (p.indexOf(TEAM_TIERS[i][0]) >= 0) return TEAM_TIERS[i][1];
-    }
+    if (p.indexOf('solo') >= 0) return 'solo';
+    if (p.indexOf('duo') >= 0) return 'duos';
+    if (p.indexOf('trio') >= 0) return 'trios';
+    if (p.indexOf('squad') >= 0) return 'squads';
     return null;
   }
 
-  function recordPlacements(data, cutoff, rankingId) {
-    if (data === null || data === undefined) return [0, 0, 'TOP 10', 'TOP 25'];
+  function modeCounts(data, rankingId) {
+    try {
+      var both = statBoth(data, 'seasonal', rankingId);
+      if (both === null) return null;
+      var o = both.overall;
+      var c = emptyCounts();
+      c.w = pyInt(dget(o, 'wins'));
+      c.m = pyInt(dget(o, 'matches_played'));
+      c.k = pyInt(dget(o, 'kills'));
+      c.t1 = pyInt(dget(o, 'top_3_5_10'));
+      c.t2 = pyInt(dget(o, 'top_6_12_25'));
+      c.lm = Number(dget(o, 'last_modified')) || 0;
+      var latest = -1;
+      SIZES.forEach(function (z) {
+        var b = dget(both, z);
+        if (!isDict(b)) return;
+        c.sz[z] = pyInt(dget(b, 'matches_played'));
+        var lm = Number(dget(b, 'last_modified')) || 0;
+        if (lm > latest) { latest = lm; c.last = z; }
+      });
+      return c;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // What was played between two readings. A mode with no earlier reading
+  // counts from now, so it shows nothing yet.
+  function diffCounts(cur, base) {
+    var d = emptyCounts();
+    d.last = cur.last;
+    COUNT_FIELDS.forEach(function (f) {
+      d[f] = base ? Math.max(0, cur[f] - base[f]) : 0;
+    });
+    SIZES.forEach(function (z) {
+      if (!hasOwn.call(cur.sz, z)) return;
+      var before = base && hasOwn.call(base.sz, z) ? base.sz[z] : (base ? 0 : cur.sz[z]);
+      d.sz[z] = Math.max(0, cur.sz[z] - before);
+    });
+    return d;
+  }
+
+  function addCounts(a, b) {
+    var d = emptyCounts();
+    COUNT_FIELDS.forEach(function (f) { d[f] = a[f] + b[f]; });
+    SIZES.forEach(function (z) {
+      if (hasOwn.call(a.sz, z) || hasOwn.call(b.sz, z)) d.sz[z] = (a.sz[z] || 0) + (b.sz[z] || 0);
+    });
+    d.last = a.last || b.last;
+    return d;
+  }
+
+  // Games from match_history in [from, until) seconds.
+  function historyCounts(data, rankingId, from, until) {
+    var c = emptyCounts();
+    if (data === null || data === undefined) return c;
     var rid = detectRankingId(data, rankingId, '');
-    var first = 0, second = 0, seen = [], latest = null;
+    var latest = -1;
     iter(dget(data, 'match_history')).forEach(function (day) {
       iter(dget(day, 'matches')).forEach(function (grp) {
+        var ts = dget(grp, 'last_modified') || 0;
         var rd = dget(grp, 'ranked_data');
         rd = truthy(rd) ? rd : {};
         if (rid && !sameMode(dget(rd, 'ranking_id'), rid)) return;
-        var tiers = teamTiers(dget(grp, 'playlist_id'));
-        var ts = dget(grp, 'last_modified') || 0;
-        if (tiers && (latest === null || ts > latest[0])) latest = [ts, tiers];
-        if (ts < cutoff) return;
-        first += pyInt(dget(grp, 'top_3_5_10'));
-        second += pyInt(dget(grp, 'top_6_12_25'));
-        if (tiers && !seen.some(function (t) { return t[0] === tiers[0] && t[1] === tiers[1]; })) seen.push(tiers);
+        // The team size of the last game, played in the window or not, names
+        // the placement labels when nothing was played in it.
+        var zs = teamSize(dget(grp, 'playlist_id'));
+        if (zs && ts > latest) { latest = ts; c.last = zs; }
+        if (ts < from || ts >= until) return;
+        c.w += pyInt(dget(grp, 'wins'));
+        c.m += pyInt(dget(grp, 'matches'));
+        c.k += pyInt(dget(grp, 'kills'));
+        c.t1 += pyInt(dget(grp, 'top_3_5_10'));
+        c.t2 += pyInt(dget(grp, 'top_6_12_25'));
+        if (zs) c.sz[zs] = (c.sz[zs] || 0) + pyInt(dget(grp, 'matches'));
       });
     });
-    if (!seen.length) seen = [latest ? latest[1] : [10, 25]];
-    seen.sort(function (a, b) { return b[0] - a[0]; });
-    return [first, second,
-      'TOP ' + seen.map(function (t) { return t[0]; }).join('/'),
-      'TOP ' + seen.map(function (t) { return t[1]; }).join('/')];
+    return c;
+  }
+
+  // "TOP 10/5" style labels for the team sizes that were played, or for the
+  // last one played when nothing was.
+  function tierLabels(c) {
+    var sizes = SIZES.filter(function (z) { return (c.sz[z] || 0) > 0; });
+    if (!sizes.length) sizes = [c.last || 'solo'];
+    var tiers = [];
+    sizes.forEach(function (z) {
+      var t = SIZE_TIERS[z];
+      if (!tiers.some(function (x) { return x[0] === t[0] && x[1] === t[1]; })) tiers.push(t);
+    });
+    tiers.sort(function (a, b) { return b[0] - a[0]; });
+    return [
+      'TOP ' + tiers.map(function (t) { return t[0]; }).join('/'),
+      'TOP ' + tiers.map(function (t) { return t[1]; }).join('/')
+    ];
   }
 
   function computeWindowedStats(data, spec, rankingId, nowSec, sessionStart, override) {
@@ -906,8 +1002,9 @@
       var s = store.get(K.session);
       var t = clock();
       if (!isDict(s) || typeof s.seen !== 'number' || t - s.seen > SESSION_GAP_MS || !isDict(s.elos)) {
-        s = { start: nowSec(), seen: t, fp: null, elos: {}, progs: {}, resolvedAll: false };
+        s = { start: nowSec(), seen: t, fp: null, elos: {}, progs: {}, recs: {}, resolvedAll: false };
       }
+      if (!isDict(s.recs)) s.recs = {};
       s.seen = t;
       session = s;
       saveSession();
@@ -927,6 +1024,10 @@
         var mine = session;
         session = fresh;
         if (!isDict(session.progs)) session.progs = {};
+        if (!isDict(session.recs)) session.recs = {};
+        Object.keys(mine.recs || {}).forEach(function (k) {
+          if (!hasOwn.call(session.recs, k)) session.recs[k] = mine.recs[k];
+        });
         Object.keys(mine.elos).forEach(function (k) {
           if (!hasOwn.call(session.elos, k)) session.elos[k] = mine.elos[k];
         });
@@ -941,6 +1042,9 @@
         });
         Object.keys(fresh.progs || {}).forEach(function (k) {
           if (!hasOwn.call(session.progs, k)) session.progs[k] = fresh.progs[k];
+        });
+        Object.keys(fresh.recs || {}).forEach(function (k) {
+          if (!hasOwn.call(session.recs, k)) session.recs[k] = fresh.recs[k];
         });
         if (fresh.resolvedAll) session.resolvedAll = true;
       }
@@ -970,6 +1074,7 @@
       if (previous !== null && previous !== undefined && fp * 2 < previous) {
         session.elos = {};
         session.progs = {};
+        session.recs = {};
         store.remove(K.reset);
       }
     }
@@ -1017,6 +1122,13 @@
      * A change is dated by the match history when it has a newer match,
      * otherwise by when the overlay noticed it.
      */
+    // When this mode last saw a game: the newer of its totals' timestamp and
+    // its match history's (ms), or 0 when neither says.
+    function activityMs(v) {
+      var c = modeCounts(raw, v.key);
+      return Math.max(latestMatchMs(v.key), c !== null ? c.lm * 1000 : 0);
+    }
+
     function observeSession() {
       if (cfg.changeWindow !== 'reset' || !modes.length) return;
       var t = clock();
@@ -1024,10 +1136,16 @@
       var r = loadReset();
       if (!r) {
         var seen = 0;
-        views.forEach(function (v) { seen = Math.max(seen, latestMatchMs(v.key)); });
-        r = { at: t, since: t, elos: {}, progs: {}, last: {}, activity: seen && seen <= t ? seen : t };
+        views.forEach(function (v) { seen = Math.max(seen, activityMs(v)); });
+        r = { at: t, since: t, elos: {}, progs: {}, recs: {}, last: {}, activity: seen && seen <= t ? seen : t };
       }
       if (!isDict(r.last)) r.last = {};
+      if (!isDict(r.recs)) r.recs = {};
+      var counts = {};
+      views.forEach(function (v) {
+        var c = modeCounts(raw, v.key);
+        if (c !== null) counts[v.key] = c;
+      });
       if (typeof r.activity !== 'number') r.activity = r.at;
 
       var changeAt = null;
@@ -1035,9 +1153,10 @@
         var prev = r.last[v.key];
         if (!Array.isArray(prev)) return;
         var moved = (v.elo !== null && prev[0] !== null && v.elo !== prev[0])
-          || (v.points !== null && prev[1] !== null && v.points !== prev[1]);
+          || (v.points !== null && prev[1] !== null && v.points !== prev[1])
+          || (hasOwn.call(counts, v.key) && isDict(prev[2]) && counts[v.key].m !== prev[2].m);
         if (!moved) return;
-        var hist = latestMatchMs(v.key);
+        var hist = activityMs(v);
         var at = hist > r.activity && hist <= t ? hist : t;
         changeAt = changeAt === null ? at : Math.min(changeAt, at);
       });
@@ -1045,17 +1164,20 @@
       var startFrom = function (pick) {
         r.elos = {};
         r.progs = {};
+        r.recs = {};
         views.forEach(function (v) {
           var vals = pick(v);
           if (vals[0] !== null) r.elos[v.key] = vals[0];
           if (vals[1] !== null) r.progs[v.key] = vals[1];
+          if (isDict(vals[2])) r.recs[v.key] = vals[2];
         });
       };
       if (changeAt !== null) {
         if (changeAt - r.activity >= SESSION_IDLE_MS) {
           startFrom(function (v) {
             var prev = Array.isArray(r.last[v.key]) ? r.last[v.key] : [null, null];
-            return [prev[0] !== null ? prev[0] : v.elo, prev[1] !== null ? prev[1] : v.points];
+            return [prev[0] !== null ? prev[0] : v.elo, prev[1] !== null ? prev[1] : v.points,
+              isDict(prev[2]) ? prev[2] : (counts[v.key] || null)];
           });
           r.at = changeAt;
           // The Record counts every match after the last stream's final one.
@@ -1064,7 +1186,7 @@
         r.activity = Math.max(r.activity, changeAt);
       }
       if (t - r.activity >= SESSION_IDLE_MS && r.at < r.activity + SESSION_IDLE_MS) {
-        startFrom(function (v) { return [v.elo, v.points]; });
+        startFrom(function (v) { return [v.elo, v.points, counts[v.key] || null]; });
         r.at = t;
         r.since = t;
       }
@@ -1073,8 +1195,10 @@
       views.forEach(function (v) {
         if (v.elo !== null && !hasOwn.call(r.elos, v.key)) r.elos[v.key] = v.elo;
         if (v.points !== null && !hasOwn.call(r.progs, v.key)) r.progs[v.key] = v.points;
-        var prev = Array.isArray(r.last[v.key]) ? r.last[v.key] : [null, null];
-        r.last[v.key] = [v.elo !== null ? v.elo : prev[0], v.points !== null ? v.points : prev[1]];
+        if (hasOwn.call(counts, v.key) && !hasOwn.call(r.recs, v.key)) r.recs[v.key] = counts[v.key];
+        var prev = Array.isArray(r.last[v.key]) ? r.last[v.key] : [null, null, null];
+        r.last[v.key] = [v.elo !== null ? v.elo : prev[0], v.points !== null ? v.points : prev[1],
+          hasOwn.call(counts, v.key) ? counts[v.key] : (isDict(prev[2]) ? prev[2] : null)];
       });
       store.set(K.reset, r);
     }
@@ -1094,18 +1218,22 @@
     // the 6-hour start-over still works from real activity.
     function resetSession() {
       var old = loadReset();
-      var r = { at: clock(), since: clock(), elos: {}, progs: {}, last: {},
+      var r = { at: clock(), since: clock(), elos: {}, progs: {}, recs: {}, last: {},
         activity: old && typeof old.activity === 'number' ? old.activity : clock() };
       modes.forEach(function (m) {
         var v = modeView(m[0], m[1]);
         if (v.elo !== null) r.elos[v.key] = v.elo;
         if (v.points !== null) r.progs[v.key] = v.points;
-        r.last[v.key] = [v.elo, v.points];
+        var c = modeCounts(raw, v.key);
+        if (c !== null) r.recs[v.key] = c;
+        r.last[v.key] = [v.elo, v.points, c];
       });
       store.set(K.reset, r);
     }
 
     function recordBaseline(key, elo, points) {
+      var c = modeCounts(raw, key);
+      if (c !== null && !hasOwn.call(session.recs, key)) session.recs[key] = c;
       if (elo !== null && !hasOwn.call(session.elos, key)) session.elos[key] = elo;
       if (points !== null && !hasOwn.call(session.progs, key)) session.progs[key] = points;
     }
@@ -1698,8 +1826,11 @@
       }
 
       // Wins and losses over the same stretch as the ELO change (the Record
-      // design). Session counts from the session's start, so Reset ELO gain
-      // and the 6-hour start-over clear it too.
+      // design), counted as the change in OliTracker's season totals since
+      // the count started: every extra match is a game, and one that added
+      // no win is a loss. Session counts from Reset ELO gain (or the first
+      // reading), so the 6-hour start-over clears it too. 12h / 24h add the
+      // games from before the overlay was opened out of match history.
       var recordFrom;
       if (window === 'reset') {
         var rr = loadReset();
@@ -1709,7 +1840,27 @@
       } else {
         recordFrom = session ? session.start : nowSec();
       }
-      var rec = computeWindowedStats(raw, 'session', resolvedKey || null, nowSec(), recordFrom, '');
+      var recKey = resolvedKey || null;
+      var cur = modeCounts(raw, recKey);
+      var rc;
+      if (cur === null) {
+        // No totals for this mode (Boxfights): only match history knows.
+        rc = historyCounts(raw, recKey, recordFrom, Infinity);
+      } else if (window === 'reset') {
+        var rr2 = loadReset();
+        var b1 = rr2 && isDict(rr2.recs) && hasOwn.call(rr2.recs, resolvedKey) ? rr2.recs[resolvedKey] : null;
+        rc = diffCounts(cur, b1 || cur);
+      } else {
+        var b2 = session && isDict(session.recs) && hasOwn.call(session.recs, resolvedKey) ? session.recs[resolvedKey] : null;
+        rc = diffCounts(cur, b2 || cur);
+        if (cutoff !== null) {
+          var opened = session ? session.start : nowSec();
+          rc = cutoff < opened
+            ? addCounts(rc, historyCounts(raw, recKey, cutoff, opened))
+            : historyCounts(raw, recKey, cutoff, Infinity);
+        }
+      }
+      var rec = totals(rc.w, rc.m, rc.k);
       s.record_wins = rec.wins;
       s.record_losses = rec.losses;
       s.record_matches = rec.matches;
@@ -1717,11 +1868,11 @@
       s.record_kd = rec.kd !== null ? rec.kd.toFixed(2) : '-';
       s.record_wr = rec.wr !== null ? rec.wr.toFixed(1) + '%' : '-%';
       s.record_label = window === 'reset' || cutoff !== null ? changeLabel : 'TODAY';
-      var places = recordPlacements(raw, recordFrom, resolvedKey || null);
-      s.record_top1 = places[0];
-      s.record_top2 = places[1];
-      s.record_top1_label = places[2];
-      s.record_top2_label = places[3];
+      var tiers = tierLabels(rc);
+      s.record_top1 = rc.t1;
+      s.record_top2 = rc.t2;
+      s.record_top1_label = tiers[0];
+      s.record_top2_label = tiers[1];
 
       // Asked for a mode this account has no rank in: say so instead of
       // silently showing another one.
@@ -1827,10 +1978,11 @@
         rawAt = clock();
         modes = findRankedModes(data);
         lookups = demoLookups;
-        session = { start: nowSec(), seen: clock(), fp: null, elos: baselines.elos, progs: baselines.progs, resolvedAll: true };
+        session = { start: nowSec(), seen: clock(), fp: null, elos: baselines.elos, progs: baselines.progs, recs: baselines.recs || {}, resolvedAll: true };
         // The demo's "Session" count shows the same +23 as its "Today".
         store.set(K.reset, { at: clock(), since: clock() - 3 * 60 * 60 * 1000,
-          elos: Object.assign({}, baselines.elos), progs: Object.assign({}, baselines.progs) });
+          elos: Object.assign({}, baselines.elos), progs: Object.assign({}, baselines.progs),
+          recs: Object.assign({}, baselines.recs || {}) });
         finalize();
         firstDone = Promise.resolve();
       }
@@ -1843,11 +1995,17 @@
    * ---------------------------------------------------------------- */
 
   function demoData(nowMs) {
-    var overall = function (wins, matches, kills) {
-      return { both: { overall: { wins: wins, matches_played: matches, kills: kills } } };
-    };
-    // A few hours of games, for the Record design's wins and losses.
     var nowS = Math.floor((typeof nowMs === 'number' ? nowMs : Date.now()) / 1000);
+    // A season-totals bucket in the shape OliTracker sends it, all duos.
+    var bucket = function (wins, matches, kills, top1, top2) {
+      var n = { wins: wins, matches_played: matches, kills: kills, top_3_5_10: top1, top_6_12_25: top2, last_modified: nowS };
+      return { both: { overall: n, duos: n } };
+    };
+    // The same bucket as a count, for the Record's baseline.
+    var count = function (wins, matches, kills, top1, top2) {
+      return { w: wins, m: matches, k: kills, t1: top1, t2: top2, sz: { duos: matches }, last: 'duos', lm: nowS };
+    };
+    // Boxfights has no totals of its own, so its record comes from history.
     var games = function (rid, playlist, wins, matches, kills, top1, top2, minsAgo) {
       return { matches: matches, wins: wins, kills: kills, top_3_5_10: top1, top_6_12_25: top2,
         playlist_id: playlist, last_modified: nowS - minsAgo * 60, ranked_data: { ranking_id: rid } };
@@ -1857,9 +2015,9 @@
         user_id: 'demo',
         stats: {
           seasonal: {
-            all: overall(52, 410, 980),
-            ranked: overall(37, 130, 318),
-            reload: overall(21, 96, 288)
+            all: { both: { overall: { wins: 52, matches_played: 410, kills: 980 } } },
+            ranked: bucket(37, 130, 318, 30, 36),
+            reload: bucket(21, 96, 288, 18, 24)
           },
           lifetime: {}
         },
@@ -1869,17 +2027,18 @@
           'ranked-squareclub': { division: 8, promotion_progression: 72, current_unreal_placement: null, elo: null }
         },
         match_history: [{ date: 'today', elo: {}, matches: [
-          games('ranked-br-combined', 'playlist_habanero_duo', 6, 10, 21, 8, 9, 150),
-          games('ranked-br-combined', 'playlist_habanero_duo', 5, 8, 15, 6, 7, 75),
-          games('ranked-br-combined', 'playlist_habanero_duo', 4, 7, 12, 5, 6, 10),
-          games('ranked_blastberry_build', 'playlist_blastberry_squads', 5, 12, 30, 7, 9, 40),
           games('ranked-squareclub', 'playlist_squareclub', 13, 20, 41, 0, 0, 20)
         ] }]
       },
       lookups: { 'ranked-br-combined': { elo: 1542, next_pos: 65, gap: 14, at: 0, sig: '' } },
       baselines: {
         elos: { 'ranked-br-combined': 1519 },
-        progs: { 'ranked_blastberry_build': 13 * 100 + 41, 'ranked-squareclub': 8 * 100 + 72 }
+        progs: { 'ranked_blastberry_build': 13 * 100 + 41, 'ranked-squareclub': 8 * 100 + 72 },
+        // 15 wins and 10 losses so far today in BR, 5 and 7 in Reload.
+        recs: {
+          'ranked-br-combined': count(22, 105, 270, 11, 14),
+          'ranked_blastberry_build': count(16, 84, 258, 11, 15)
+        }
       }
     };
   }

@@ -306,6 +306,101 @@ async function websiteChecks() {
     check('no games: labels follow the last one', top(await text(`?${id}&elo=session`, placed)), [0, 0, 'TOP 5', 'TOP 12']);
     check('no history: solo labels', top(await text(`?${id}&elo=session`, bare)), [0, 0, 'TOP 10', 'TOP 25']);
 
+    // The Record counts the change in the season totals (OliTracker's match
+    // history trails behind or misses games, so here it never hears of them).
+    {
+      const T = 60 * 1000;
+      const ago = (ms) => Math.floor((now - ms) / 1000);
+      const base = () => {
+        const d = JSON.parse(JSON.stringify(raw));
+        d.match_history = [];
+        const part = (w, m, lm) => ({ wins: w, matches_played: m, kills: w * 8 + (m - w) * 2, top_3_5_10: w, top_6_12_25: m, last_modified: lm });
+        d.stats.seasonal.ranked = { both: { overall: part(100, 300, ago(7200 * 1000)), duos: part(60, 200, ago(7200 * 1000)), solo: part(40, 100, ago(9000 * 1000)) } };
+        return d;
+      };
+      const addGames = (d, size, wins, matches, atMs) => {
+        for (const p of [d.stats.seasonal.ranked.both.overall, d.stats.seasonal.ranked.both[size]]) {
+          p.wins += wins; p.matches_played += matches; p.kills += wins * 8 + (matches - wins) * 2;
+          p.top_3_5_10 += wins; p.top_6_12_25 += matches; p.last_modified = Math.floor(atMs / 1000);
+        }
+      };
+      const rig = (query, data0) => {
+        const st = { storage: memoryStorage(), clock: now, data: data0 || base() };
+        st.open = async () => {
+          const e = E.createEngine({ cfg: E.parseConfig(`?${id}&${query || 'elo=session'}`), store: E.makeStore(st.storage),
+            fetchText: async () => JSON.stringify(st.data), now: () => st.clock });
+          await e.init();
+          return e;
+        };
+        st.snap = async (e) => await (await e.fetchData('/data?window=session')).json();
+        st.rec = async (e) => { const d = await st.snap(e); return [d.record_wins, d.record_losses]; };
+        st.tick = async (e, ms) => { st.clock += ms; st.data.last_updated = new Date(st.clock).toISOString(); await e.refresh(true); return st.rec(e); };
+        return st;
+      };
+
+      let st = rig();
+      let e = await st.open();
+      check('totals: opens at 0-0', await st.rec(e), [0, 0]);
+      addGames(st.data, 'duos', 1, 1, st.clock + 2 * T);
+      check('totals: a win', await st.tick(e, 4 * T), [1, 0]);
+      let d = await st.snap(e);
+      check('totals: labels follow the team size', [d.record_top1_label, d.record_top2_label, d.record_top1, d.record_top2, d.record_kills], ['TOP 5', 'TOP 12', 1, 1, 8]);
+      addGames(st.data, 'duos', 0, 1, st.clock + 2 * T);
+      check('totals: a loss counts when matches go up and wins do not', await st.tick(e, 4 * T), [1, 1]);
+      addGames(st.data, 'solo', 2, 3, st.clock + 2 * T);
+      check('totals: several games at once', await st.tick(e, 4 * T), [3, 2]);
+      d = await st.snap(e);
+      check('totals: mixed team sizes', [d.record_top1_label, d.record_top2_label], ['TOP 10/5', 'TOP 25/12']);
+      check('totals: survives a restart', await st.rec(await st.open()), [3, 2]);
+      e.resetSession();
+      check('totals: reset clears it', await st.rec(e), [0, 0]);
+      addGames(st.data, 'duos', 0, 1, st.clock + 2 * T);
+      check('totals: counts from the reset', await st.tick(e, 4 * T), [0, 1]);
+
+      // A new season drops the totals: start over instead of going negative.
+      st.data.stats.seasonal.all.both.overall.matches_played = 1;
+      st.data.stats.seasonal.ranked.both.overall.matches_played = 4;
+      st.data.stats.seasonal.ranked.both.overall.wins = 1;
+      st.data.stats.seasonal.ranked.both.duos.matches_played = 4;
+      check('totals: new season starts over', await st.tick(e, 4 * T), [0, 0]);
+      addGames(st.data, 'duos', 1, 2, st.clock + 2 * T);
+      check('totals: and counts again', await st.tick(e, 4 * T), [1, 1]);
+
+      // 12h / 24h: games before the overlay opened come from match history,
+      // games after from the totals (the history hasn't caught up with them).
+      st = rig('elo=12h');
+      const grp = (ms, w, m) => ({ matches: m, wins: w, kills: 5, top_3_5_10: w, top_6_12_25: m, playlist_id: 'playlist_nobuildbr_habanero_duo',
+        last_modified: Math.floor((now + ms) / 1000), ranked_data: { ranking_id: 'ranked-br-combined' } });
+      st.data.match_history = [{ date: 'x', elo: {}, matches: [grp(-3 * 3600 * 1000, 1, 3), grp(-20 * 3600 * 1000, 5, 5)] }];
+      e = await st.open();
+      check('12h: before opening, from history', await st.rec(e), [1, 2]);
+      addGames(st.data, 'duos', 1, 1, st.clock + 2 * T);
+      check('12h: plus games since from the totals', await st.tick(e, 4 * T), [2, 2]);
+      st.data.match_history[0].matches.push(grp(2 * T, 1, 1));   // history catches up later: not counted twice
+      check('12h: history catching up does not double count', await st.tick(e, 4 * T), [2, 2]);
+
+      // Session starts over by itself after 6 quiet hours, and games played
+      // while the overlay was closed count when they come after a long gap.
+      const H = 60 * 60 * 1000;
+      st = rig();
+      e = await st.open();
+      addGames(st.data, 'duos', 1, 2, st.clock + 2 * T);
+      check('6h: a stream', await st.tick(e, 4 * T), [1, 1]);
+      check('6h: quiet for 5h keeps it', await st.tick(e, 5 * H), [1, 1]);
+      check('6h: quiet for 6h starts over', await st.tick(e, 1 * H + T), [0, 0]);
+      addGames(st.data, 'duos', 1, 1, st.clock + 2 * T);
+      check('6h: counts the next stream', await st.tick(e, 4 * T), [1, 0]);
+
+      st = rig();
+      e = await st.open();
+      addGames(st.data, 'duos', 1, 2, st.clock + 2 * T);
+      await st.tick(e, 4 * T);
+      st.clock += 10 * H;
+      addGames(st.data, 'duos', 2, 3, st.clock - 2 * H);   // played while the overlay was closed
+      st.data.last_updated = new Date(st.clock).toISOString();
+      check('6h: games while closed count, the old stream does not', await st.rec(await st.open()), [2, 1]);
+    }
+
     // Reload: ranked_stats says ranked_blastberry_build, match_history says
     // ranked-blastberry-combined. Its games must still count.
     const reload = JSON.parse(JSON.stringify(raw));
