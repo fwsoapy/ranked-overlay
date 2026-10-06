@@ -2101,6 +2101,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         .rec-line .rw { color: #4ade80; }
         .rec-line .rl { color: #f87171; }
         .rec-line .rs { color: rgba(255, 255, 255, 0.45); }
+        .rec-line { text-align: center; }
+        .rec-line { margin-top: 2px; padding-top: 9px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 
         .error-text {
             font-size: 11px;

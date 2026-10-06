@@ -1,444 +1,252 @@
-# 🏆 Fortnite Ranked Overlay for OBS
+# Fortnite Ranked Overlay for OBS
 
-A free, live Fortnite ranked overlay and ELO tracker for streamers. Pulls real-time **ELO**, **rank**, and **season stats** from [OliTracker](https://olitracker.com) and displays them as an OBS browser source, so your Fortnite stream overlay always shows your current rank without you touching a thing.
+A free, live Fortnite ranked overlay for streamers. It shows your **rank**, **ELO**, how much you've gained today, your **wins and losses**, and your season stats, and it updates on its own while you play. Stats come from [OliTracker](https://olitracker.com).
 
-✨ **9 designs** to choose from, any accent color you want, each one self-contained in its own folder, just grab the one you like.
+It runs as a website. There's nothing to download, install or run on your PC, so no antivirus warnings and nothing to keep updated.
+
+### 👉 [Open Ranked Overlay](https://fwsoapy.github.io/ranked-overlay/)
 
 ![Fortnite ranked overlay demo showing live ELO and rank tracking in OBS](demo.gif)
 
 ---
 
-## 📺 Watch: full setup walkthrough
+## Contents
 
-A start-to-finish video showing how to download, set up, and use the overlay:
-
-<video src="https://github.com/fwsoapy/ranked-overlay/releases/download/v1/how-to-use.mp4" controls width="100%"></video>
-
-> ▶️ Not playing here? [Click to watch or download the setup video](https://github.com/fwsoapy/ranked-overlay/releases/download/v1/how-to-use.mp4) (it's also attached to the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest)).
-
----
-
-## 🌐 No download: use the website
-
-**👉 [Open Ranked Overlay](https://fwsoapy.github.io/ranked-overlay/)**
-
-Type your Epic name, pick a design and a color, copy the link, and paste it into an OBS Browser Source (leave Height at the default `600`, then hold **Alt** and drag the bottom edge up to crop it to the card, so the buttons under it stay off stream). That's the whole setup. Nothing runs on your PC, so there's no Python, no `.bat` files, no antivirus or SmartScreen warnings, and nothing to update. It's always the newest version.
-
-It's the same 9 designs and the same numbers as the download version below, with every option the download has (accent color, stats or creator code, starting mode, update speed, leaderboard lookups) plus a choice of what the ELO change counts: Session (the default), which shows as "+23 ELO TODAY" and starts over by itself once your ELO hasn't moved for 3 hours, so each stream opens on +0 (to start over sooner, right-click the source in OBS > **Interact** and press **Reset ELO gain** under the card), or the last 12 or 24 hours. There's also a checkbox to add a small "3 WINS, 1 LOSS" line under any design (it counts the same stretch as the ELO change). The download version still works exactly as before if you prefer it, and understands the same thing: add `?rec=1` to its overlay link (for example `http://localhost:8888/overlay?rec=1`) to show the wins and losses line.
+- [Set it up](#set-it-up)
+- [Designs](#designs)
+- [Options](#options)
+- [Using it in OBS](#using-it-in-obs)
+- [Wins and losses](#wins-and-losses)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [How it works](#how-it-works)
+- [Working on the code](#working-on-the-code)
 
 ---
 
-## 📋 Table of contents
+## Set it up
 
-- [No download: use the website](#-no-download-use-the-website)
-- [Watch: full setup walkthrough](#-watch-full-setup-walkthrough)
-- [Quick start](#-quick-start)
-- [Setup wizard (the easy way)](#-setup-wizard-the-easy-way)
-- [Features](#-features)
-- [Designs](#-designs)
-- [Requirements](#-requirements)
-- [Setup](#-setup)
-- [Switching game modes](#-switching-game-modes)
-- [Switching between stats and creator code](#-switching-between-stats-and-creator-code)
-- [Auto updates](#-auto-updates)
-- [Troubleshooting](#-troubleshooting)
-- [Changing the accent color](#-changing-the-accent-color)
-- [FAQ](#-faq)
-- [How it works](#-how-it-works)
-- [Working on the overlay](#-working-on-the-overlay)
-- [License](#-license)
+1. Open the [website](https://fwsoapy.github.io/ranked-overlay/) and type your Epic name. It finds your account ID for you. You can also paste an account ID or an OliTracker link.
+2. Pick a design and an accent color. The preview shows demo numbers until you add your account, then your real ones.
+3. Click **Copy OBS link**.
+4. In OBS, add a **Browser** source, paste the link into **URL**, keep the size at the default **800 x 600**, and click OK.
+5. Hold **Alt** and drag the bottom edge of the source up until it sits just under the card. That crops the mode buttons out of your stream.
+
+That's it. The overlay keeps itself up to date. If you change something later, copy the link again and paste it over the old one.
 
 ---
 
-## 🚀 Quick start
+## Designs
 
-> 🌐 **Don't want to download anything? [Use the website](https://fwsoapy.github.io/ranked-overlay/)**, it's one link to paste into OBS.
->
-> 🧙 **The fastest way is the [setup wizard](#-setup-wizard-the-easy-way)** it does every step below for you (design, color, Account ID lookup, and launch). Prefer to set it up by hand? Here's the manual way:
-
-1. Click **Code > Download ZIP** above, unzip it, and open the folder for the design you want (see the gallery below). Or run `setup.bat` and it'll ask which design you want and copy it to your Desktop.
-2. Double-click `overlay.bat`. Pick **3** to look up your Epic Account ID, then **4** to paste it into your settings and save.
-3. Pick **1** to start it. Add a Browser Source in OBS pointed at `http://localhost:8888/overlay`.
-
-That's it, you're live. Full details for each step are below if you get stuck anywhere. 👇
-
----
-
-## 🧙 Setup wizard (the easy way)
-
-Don't want to edit any files by hand? Download **`FortniteOverlaySetup.zip`** from the [latest release](https://github.com/fwsoapy/ranked-overlay/releases/latest), unzip it, and run `FortniteOverlaySetup.exe` inside the extracted folder instead of the manual steps above.
-
-It walks you through everything in a console window: pick a design from a preview window, set an accent color (by name or hex code), choose whether to show stats or a creator code, and it looks up your Epic Account ID for you. Then it builds a ready-to-run folder next to the `.exe` and offers to start it and open it in your browser. If an overlay is already running on port 8888 it stops that one first. Nothing to edit, nothing to look up separately.
-
-> 💡 The wizard is just a shortcut. It builds the exact same three files described below. Use whichever way you prefer.
-
-> ⚠️ It ships as a zip (rather than a single `.exe`) because standalone PyInstaller executables are commonly flagged as false positives by antivirus heuristics, distributing it as an extracted folder instead of a self-extracting single file avoids that. Windows SmartScreen may still warn the first time you run it since it's an unsigned indie tool, click **More info > Run anyway**, same as the `.bat` files.
-
----
-
-## ✨ Features
-
-- **Live rank, ELO, and leaderboard position**, pulled every 30 seconds
-- **Session ELO delta**: tracks how much you've gained or lost since you started the overlay. Close it and reopen it and the count starts fresh
-- **Unreal leaderboard tracking**: shows ELO to next rank (`NEXT 14 ELO to #66`)
-- **Works down to placement #10,000**: OliTracker only publishes ELO for the top 10,000 of each mode's leaderboard, so the ELO row shows automatically once you're inside it and hides again if you drop out, no restart needed
-- **Non-Unreal progress tracking**: shows promotion progress % and percent gained this session (`53% TO GOLD III`)
-- **Mode switcher** for BR, Reload, and Boxfights, each with its own independent stats, and your last selected mode is remembered the next time the overlay loads
-- **Live stats / creator code toggle**, right in the browser, no restart needed, see [below](#-switching-between-stats-and-creator-code)
-- **Season stats** (K/D, Win%, Kills, Wins), accurate per game mode
-- **Keeps itself current**: checks this repo for a newer version on startup and once a day after, and asks before installing it. Your account ID, creator code, accent color and port all carry across untouched. If an update ever fails to start, it puts the old one back on its own, see [below](#-auto-updates)
-- **Survives new seasons**: season stats reset with the season, a ranked playlist added in a future season turns up as its own button with its own stats and ELO, and the ELO counter re-baselines on rollover instead of reading as a huge loss
-- **9 overlay designs**, any accent color you want
-- **Built-in error messages**: if something goes wrong (bad account ID, OliTracker is down, etc.) a small message shows under the card instead of the overlay just sitting there blank
-
----
-
-## 🎨 Designs
-
-Click a design's name to open its folder. Every design can show either **season stats** or a **creator code**, switchable live with the on-overlay toggle, so each one gets two previews below.
+There are 9 designs. Every one can show season stats or a creator code, and any accent color works on all of them.
 
 <table>
 <tr>
 <th>Design</th>
-<th>Stats mode</th>
-<th>Creator code mode</th>
+<th>Stats</th>
+<th>Creator code</th>
 </tr>
 <tr>
-<td width="20%"><a href="Minimal"><b>Minimal</b></a><br>Clean single-row card with rank and ELO side-by-side and a bold colored left border.</td>
-<td align="center" width="40%"><img src="Minimal/preview-stats.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Minimal/preview-code.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Minimal</b><br>Clean single-row card with rank and ELO side by side and a bold colored left border.</td>
+<td align="center" width="40%"><img src="Minimal/preview-stats.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Minimal/preview-code.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Classic"><b>Classic</b></a><br>A timeless dark card with a thin top accent line and subtle dividers between sections.</td>
-<td align="center" width="40%"><img src="Classic/preview-stats.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Classic/preview-code.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Classic</b><br>A dark card with a thin top accent line and subtle dividers between sections.</td>
+<td align="center" width="40%"><img src="Classic/preview-stats.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Classic/preview-code.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Sharp"><b>Sharp</b></a><br>Stacked sections with a strong accent color and clipped corners. Feels structured and aggressive.</td>
-<td align="center" width="40%"><img src="Sharp/preview-stats.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Sharp/preview-code.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Sharp</b><br>Big stacked text and clipped corners. Structured and aggressive.</td>
+<td align="center" width="40%"><img src="Sharp/preview-stats.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Sharp/preview-code.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Wide"><b>Wide</b></a><br>Spread out horizontally with a glowing accent bar on the left. Great for wider stream layouts.</td>
-<td align="center" width="40%"><img src="Wide/preview-stats.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Wide/preview-code.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Wide</b><br>Spread out sideways with a glowing bar on the left. Good for wide layouts.</td>
+<td align="center" width="40%"><img src="Wide/preview-stats.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Wide/preview-code.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Slash"><b>Slash</b></a><br>A diagonal cut splits the rank and ELO into two panels. Stands out on any stream.</td>
-<td align="center" width="40%"><img src="Slash/preview-stats.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Slash/preview-code.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Slash</b><br>A diagonal cut splits rank and ELO into two panels.</td>
+<td align="center" width="40%"><img src="Slash/preview-stats.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Slash/preview-code.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Rainbow"><b>Rainbow</b></a><br>Animated rainbow rank text and a shimmering ELO value. High energy.</td>
-<td align="center" width="40%"><img src="Rainbow/preview-stats.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Rainbow/preview-code.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Rainbow</b><br>Animated rainbow rank text and a shimmering ELO value. High energy.</td>
+<td align="center" width="40%"><img src="Rainbow/preview-stats.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Rainbow/preview-code.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Modern"><b>Modern</b></a><br>Sleek card with a soft radial glow accent and a bold colored left border.</td>
-<td align="center" width="40%"><img src="Modern/preview-stats.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Modern/preview-code.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Modern</b><br>A sleek card with a soft glow and a bold colored left border.</td>
+<td align="center" width="40%"><img src="Modern/preview-stats.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Modern/preview-code.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Pulse"><b>Pulse</b></a><br>Green terminal HUD with a radial progress gauge and monospace readout. Built for a clean, tactical look.</td>
-<td align="center" width="40%"><img src="Pulse/preview-stats.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Pulse/preview-code.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Pulse</b><br>Green terminal HUD with a radial gauge and a monospace readout.</td>
+<td align="center" width="40%"><img src="Pulse/preview-stats.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Pulse/preview-code.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><a href="Record"><b>Record</b></a><br>A simple win/loss record: wins in green, losses in red, with matches, kills and K/D under it, or your win % and top placements (top 5 / top 12 in duos, top 10 / top 25 in solos, the tiers Fortnite tracks). On the website it counts the same stretch as the ELO change (Session, 12h or 24h), in the download it counts since the overlay started. It's worked out from your season totals (every extra match is a game, and a game that didn't add a win is a loss), which OliTracker updates a few minutes after each game.</td>
-<td align="center" width="40%"><img src="Record/preview-stats.png" width="300" alt="Record Fortnite ranked win/loss overlay design for OBS, stats mode"></td>
-<td align="center" width="40%"><img src="Record/preview-code.png" width="300" alt="Record Fortnite ranked win/loss overlay design for OBS, creator code mode"></td>
+<td width="20%"><b>Record</b><br>Just your record: wins in green, losses in red, with matches, kills and K/D, or your win % and top placements, under it. See <a href="#wins-and-losses">Wins and losses</a>.</td>
+<td align="center" width="40%"><img src="Record/preview-stats.png" width="300" alt="Record Fortnite ranked win and loss overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="Record/preview-code.png" width="300" alt="Record Fortnite ranked win and loss overlay design for OBS, creator code"></td>
 </tr>
 </table>
 
 ---
 
-## ✅ Requirements
+## Options
 
-- **Python 3 or later.** Download it from [python.org/downloads](https://www.python.org/downloads/) if you don't have it. During setup, tick **Add python.exe to PATH**, the overlay won't start without it.
-- **Windows.** `overlay.bat` is Windows only. On Mac/Linux run `python server.py` from a terminal and look your Account ID up at [olitracker.com](https://olitracker.com).
-- **OBS Studio** with a Browser Source.
-- **Your Epic Account ID** (`overlay.bat` looks this up for you, see Setup below).
+Everything is on the setup page, and the link it gives you remembers all of it.
 
----
+| Option | What it does |
+| --- | --- |
+| **Account** | Your Epic name, account ID or OliTracker link. |
+| **Design** | One of the 9 above. |
+| **Accent color** | A swatch or any custom color. The header, labels and creator code all follow it. |
+| **Below your rank** | Season stats (K/D, win %, kills, wins) or your creator code. You can flip between them live in OBS. |
+| **Wins and losses** | Adds a small "3 WINS, 1 LOSS" line under the card of any design. See below. |
+| **Mode** | Auto, BR, Reload or Boxfights, the mode the overlay starts on. Modes your account hasn't played are greyed out. |
+| **ELO change** | What "+23 ELO TODAY" counts. **Session** (the default) counts from when you press **Reset ELO gain** in OBS, and starts over by itself after 3 hours with no ELO change, so each stream opens on +0. Or pick **Last 12h** or **Last 24h**. |
+| **Update speed** | Auto checks right after OliTracker refreshes your profile (about every 3 minutes). You can slow it to every 5 or 10 minutes. |
+| **Leaderboard** | Shows your ELO and the gap to the next spot ("14 ELO TO #65"). Turn it off to hide ELO when OliTracker doesn't include it. |
+| **Background** | Only changes the setup page preview (transparent, gameplay or green screen). Your stream sees a transparent overlay. |
+| **Edit a link you made before** | Paste an old link under *More options* to load all its settings back. |
 
-## 🛠️ Setup
-
-> 💡 Every design folder (`Minimal/`, `Classic/`, `Sharp/`, `Wide/`, `Slash/`, `Rainbow/`, `Modern/`, `Pulse/`, `Record/`) holds three files and nothing else:
->
-> | | |
-> |---|---|
-> | `overlay.bat` | start, stop, look up your Account ID, edit your settings |
-> | `config.json` | your settings, the only file you ever edit |
-> | `server.py` | the overlay itself, replaced whole by updates |
->
-> You only need the one folder for the design you picked. Don't edit `server.py` by hand, the next update overwrites it. `config.json` is never touched.
-
-### 1️⃣ Download the files
-
-Click **Code > Download ZIP** at the top of this page, then unzip it anywhere on your PC. Your Desktop works fine. The ZIP includes all 9 designs, so open the folder for the one you picked from the gallery above, everything you need is in there.
-
-If you'd rather not dig through folders, run `setup.bat` in the unzipped repo. It asks which design you want and copies just that one to your Desktop in a clean folder by itself.
-
-> ⚠️ Windows may show a SmartScreen warning ("Windows protected your PC") the first time you run any of the `.bat` files, since they were downloaded from the internet. Click **More info > Run anyway**. This is normal for any downloaded script, the files only run Python and a console window, nothing else.
-
-### 2️⃣ Find your Epic Account ID
-
-Double-click `overlay.bat` and pick **3**. Type your Epic display name and it prints your account ID and copies it to your clipboard.
-
-If it can't find you, search your name at [olitracker.com](https://olitracker.com), open your profile, and grab the account ID out of the page URL.
-
-### 3️⃣ Add your account ID
-
-Back in `overlay.bat`, pick **4**. That opens `config.json` in Notepad:
-
-```json
-{
-  "epic_username": "YourUsername",
-  "epic_account_id": "your-account-id-here",
-  "creator_code": "",
-  "auto_update": "prompt",
-  "port": 8888
-}
-```
-
-Fill in the first two, save, close Notepad. Done.
-
-> ℹ️ `config.json` is the only file you edit. Updates replace `server.py` completely and never open `config.json`, so an update can't wipe your account ID or your colour. Upgrading from an older version that kept settings inside `server.py`? Those get copied across for you the first time the new version runs.
-
-### 4️⃣ Start the overlay
-
-In `overlay.bat`, pick **1**. It starts in the background and opens a preview in your browser so you can see it's working. Close that tab whenever, the overlay keeps running.
-
-- The menu shows whether it's running or stopped, so you can always check.
-- To stop it, pick **2**.
-- On some setups (depends how Python was installed) a window titled **"Fortnite Overlay Server"** stays open. That's normal, minimise it. Closing it stops the overlay.
-- Want **two designs running at once** to compare them? They both default to port `8888`, so set `"port": 8889` in the second one's `config.json` and point its OBS source at that.
-
-### 5️⃣ Add it to OBS
-
-1. In OBS, click the **+** button under Sources
-2. Select **Browser**
-3. Set the URL to `http://localhost:8888/overlay`
-4. Set Width to `600` and Height to `300` (adjust to taste)
-5. Click OK
-
-🎉 The overlay will appear and start showing your live stats within a few seconds of your first game.
+Below Unreal there's no ELO, so the overlay shows your promotion progress instead, like "53% TO DIAMOND III", and how much of it you gained today.
 
 ---
 
-## 🎮 Switching game modes
+## Using it in OBS
 
-The overlay shows mode buttons (**BR**, **Reload**, **Boxfights**) below the widget. Click a button to switch, and the rank, ELO, and stats all update for that mode. Your choice is remembered the next time you open the overlay. In OBS you can interact with browser sources by right-clicking the source and selecting **Interact**.
+Right-click the Browser source and pick **Interact**. The buttons under the card only show there, because the crop hides them from your viewers:
 
-> ℹ️ You'll only see buttons for modes you actually have ranked stats in. If you've never queued Reload, no Reload button shows up, that's expected, not a bug.
+- the mode buttons (BR, Reload, Boxfights)
+- **Stats** and **Creator Code**, to switch what's under your rank, and a box to type a different code
+- **Reset ELO gain**, to start the Session count over (it only shows when ELO change is set to Session)
 
----
+Can't see all the buttons? Raise the **Height** in the source's properties. The crop keeps them hidden from viewers either way.
 
-## 🔁 Switching between stats and creator code
-
-Below the mode buttons there are two more buttons, **Stats** and **Creator Code**. Click between them to switch what shows on the card, live, with no server restart needed. Pick **Creator Code** and a text box appears where you can type your own code directly in the browser, it updates the overlay instantly as you type. Switching between the two never changes the size of the overlay, so nothing else in your OBS scene shifts around.
-
-Your choice and the code you typed are remembered per design the next time the overlay loads, the same way the BR/Reload/Boxfights choice is remembered. The `creator_code` value in `config.json` (or whatever you picked in the wizard) sets the starting default: that's what shows the first time, and if you later change it there and restart, the new setting takes over again.
+Your last choices are remembered, so the overlay comes back the way you left it.
 
 ---
 
-## 🔄 Auto updates
+## Wins and losses
 
-Fortnite seasons come and go and OliTracker changes shape with them, so the overlay keeps itself current instead of slowly drifting out of date.
+You can show your record two ways:
 
-On startup, and once a day after that, it reads [`update.json`](update.json) in this repo. If there's a newer build, you get a pop-up:
+- tick **Wins and losses** on the setup page to add a small line like "3 WINS, 1 LOSS" under any design, or
+- pick the **Record** design to make the record the whole overlay.
 
-> **Update available**
-> Fortnite Ranked Overlay 2.3.0 is available. You are on 2.2.0.
-> Your settings, colour and account ID all carry over.
-> **[ Update now ]  [ Not now ]**
+It counts the same stretch as your ELO change (Session, Last 12h or Last 24h).
 
-Say yes and it downloads that version of your design, restarts itself, and carries on. Say no and it won't ask again for that particular version.
+The count comes from your season totals on OliTracker. Every extra match played is a game, and a game that didn't add a win is a loss. OliTracker updates those totals **a few minutes after each game**, so a win or loss won't show up the second a match ends. The overlay picks it up as soon as OliTracker publishes it.
 
-Occasionally a release will be one that older versions genuinely can't work without, usually because OliTracker changed something. Those are marked in `update.json`, and instead you'll get:
-
-> **Update required**
-> Fortnite Ranked Overlay 3.0.0 is out, and your version (2.2.0) no longer works.
-> **[ Update now ]  [ Close overlay ]**
-
-If you close it there, the overlay still starts, but the OBS source shows an "update required" notice instead of your rank, so you find out on the desktop rather than mid-stream.
-
-**What carries over:** everything. Your account ID, creator code, accent colour, port and mode preference all live in `config.json`, which updates never open. The version it replaced is kept in `%LOCALAPPDATA%\FortniteRankOverlay` in case you want it back.
-
-**If an update goes wrong:** the overlay waits to see the new version actually start serving. If it doesn't, the old one is put back automatically and that version is never offered again. You don't have to do anything.
-
-**What it does and doesn't do:** it only ever reads from this repo over HTTPS, and nothing about you is uploaded anywhere. A download that is unreachable, incomplete, or doesn't parse as a working overlay is thrown away. If GitHub is unreachable it just carries on quietly, it will never block you from streaming because it couldn't check.
-
-To change how it behaves, set `auto_update` in `config.json`:
-
-```json
-{ "auto_update": "prompt" }
-```
-
-| Setting | What happens |
-|---|---|
-| `"prompt"` | Asks first, installs if you say yes. **Default.** |
-| `"silent"` | Installs newer versions without asking. |
-| `"off"` | Never checks, never updates. |
-
-You can check what you're running at any time at `http://localhost:8888/version`.
-
-> ℹ️ Coming from a version before 2.0? You'll need to download once by hand. Those builds have no updater in them to do it for you.
+Boxfights has no season totals on OliTracker, so its record comes from the match list instead.
 
 ---
 
-## 🩹 Troubleshooting
+## Troubleshooting
 
-**Overlay shows "starting up" for a long time**
-OliTracker may be slow to respond. Wait 30 seconds, and if it still doesn't load, check that your `epic_account_id` in `config.json` is correct.
+**The preview shows the same numbers every time**
+That's the demo, which shows until you add an account.
 
-**A small orange message shows up under the overlay**
-That's the actual error from the server. For example, `HTTP 404 from OliTracker` usually means the account ID is wrong, and `no ranked data found` usually means the account has no ranked games played yet. Fix what it says and it clears on the next poll.
+**A small orange message appears under the overlay**
+It's the actual problem, and it clears on its own once it's fixed.
+- *HTTP 404 from OliTracker*: the account ID is wrong. Check it on the setup page.
+- *no ranked data found*: the account hasn't played ranked yet.
+- *no ranked Boxfights games yet, showing BR*: the link asks for a mode the account hasn't played, so it shows another one.
+- *request failed: couldn't reach the proxy*: a network hiccup. It retries by itself.
+- *proxy is busy, trying again shortly*: the shared service hit its daily limit or a busy moment. It retries shortly.
 
-**Port already in use error**
-Something else is using port 8888. Pick **2** in `overlay.bat` to stop it, then **1** to start again. If it keeps happening, set `"port": 8889` in `config.json` and use that port in OBS. `overlay.bat` reads the port from `config.json`, so it follows along on its own.
+**It says "no Epic account ID in the link"**
+The link was made without an account. Add yours on the setup page and copy the link again.
 
-**Stats look wrong after switching modes**
-Give it one poll cycle (about 30 seconds) after clicking a mode button. The server fetches fresh data on each cycle.
+**My win or loss isn't showing**
+OliTracker takes a few minutes to update. See [Wins and losses](#wins-and-losses).
 
-**OBS shows a black box instead of the overlay**
-Make sure the overlay is actually running, the browser source needs it. Open `overlay.bat` and check the status line at the top. Also double check the URL in OBS is exactly `http://localhost:8888/overlay`.
+**It looks frozen while I'm not streaming**
+To save requests, it only checks every 10 minutes while OBS is open but not streaming, recording or running the virtual camera, and not at all while the source is hidden. It catches up when you go live or show the source.
 
-**Windows says the file is unsafe / SmartScreen popup**
-That's expected for any `.bat` file downloaded from the internet. Click **More info > Run anyway**.
+**The colors look wrong in my browser**
+Browser night modes and dark-mode extensions (Brave's night mode, Dark Reader) can recolor the preview. They don't affect what OBS shows.
 
-**I want to see exactly what the server is doing**
-While the overlay is running, open `http://localhost:8888/debug` in a browser for a full status dump (current rank, ELO, detected modes, last error), or `http://localhost:8888/raw` for the raw OliTracker response. Both are handy if something looks wrong and the on-overlay error message isn't enough to go on.
-
----
-
-## 🌈 Changing the accent color
-
-Two ways to do this:
-
-**🔍 Quick preview, no editing**
-Add `?color=` followed by a hex code to the overlay URL, both in your regular browser and in the OBS Browser Source. For example: `http://localhost:8888/overlay?color=ff7a00`. This overrides the accent color at runtime, useful for trying out a color before committing to it. *(On the Rainbow design, the rank text always stays an animated rainbow, the override only changes the highlight colors around it.)*
-
-**💾 Permanent change**
-Add an `accent` to `config.json` and restart the overlay:
-
-```json
-{ "accent": "ff7a00" }
-```
-
-Six hex digits, no `#`. That's applied on top of whatever the design ships with, so it survives updates. Use [coolors.co](https://coolors.co) to pick one. *(Tip: the `?color=` trick above is easier still and needs no editing at all.)*
+**Everything is blank in OBS**
+Check the URL in the source is the full link from the setup page, then right-click the source and pick **Refresh cache of current page**.
 
 ---
 
-## ❓ FAQ
+## FAQ
 
-**Does this work on Mac or Linux?**
-Yes. Run `python server.py` from a terminal and look your Account ID up at [olitracker.com](https://olitracker.com). Everything else is the same.
+**Do I need to download anything?**
+No. Everything runs in the page.
 
-**Can I run two designs at the same time to compare them?**
-Yes, see the port note under Setup above. Change the port in one of them so they don't collide.
+**Does it cost anything?**
+No, it's free.
 
-**Does this slow down Fortnite or use a lot of resources?**
-Nope. It's a tiny local web server that polls OliTracker every 30 seconds. CPU and memory use are both negligible.
+**Can I run two overlays at once?**
+Yes. Overlays on the same PC share their data, so it doesn't use extra requests.
 
-**Can I resize or reposition the overlay?**
-Yes, it's a normal OBS Browser Source. Resize, move, and add filters to it exactly like any other source.
+**Can I move or resize it?**
+Yes, it's a normal OBS Browser source. Move it, scale it and add filters like any other source.
 
-**Will this break if Epic or OliTracker changes something?**
-It depends on OliTracker's API staying in the same shape. If stats suddenly stop updating, check `/debug` first (see Troubleshooting), and check that [olitracker.com](https://olitracker.com) itself is loading your stats correctly in a normal browser.
+**Does it slow down Fortnite?**
+No. It only checks for new numbers every few minutes.
 
-**Is any of my data sent anywhere besides OliTracker?**
-No. The server only talks to the OliTracker API to pull your stats, and serves the overlay page to your own browser/OBS on your own PC. Nothing else.
+**What's saved about me?**
+Nothing on a server. Your account ID and options live in the link, and a small cache lives in your own browser. The overlay asks OliTracker for your public stats through a small proxy, and that's all.
 
----
-
-## ⚙️ How it works
-
-This Fortnite rank tracker is a small Python web server that runs locally on your PC. It polls the OliTracker API every 30 seconds, parses your ranked stats, and serves a single HTML page at `localhost:8888/overlay`. OBS loads that page as a browser source and auto-refreshes the displayed data, turning it into a live Fortnite stream overlay with zero manual updates. No data ever leaves your machine other than the API request to OliTracker.
-
-The [website version](https://fwsoapy.github.io/ranked-overlay/) does the same thing inside the page itself: the overlay's JavaScript reads OliTracker through a small Cloudflare Worker (OliTracker doesn't allow web pages to read it directly) and works out exactly what the Python server would. OliTracker refreshes a profile about every 3 minutes, so the website asks right after each refresh and never more often than that. It also stops asking while the overlay isn't on screen and slows down when OBS is open but you're not live.
+**Will it break if OliTracker changes something?**
+It depends on OliTracker's data staying in the same shape. If stats stop updating, check that [olitracker.com](https://olitracker.com) loads your stats in a normal browser.
 
 ---
 
-## 🔧 Working on the overlay
+## How it works
 
-Only needed if you're changing the code. If you just want to use the overlay, you can stop reading here.
+The overlay is a web page that does its own work. It reads your stats from OliTracker, works out your rank, ELO, ELO change and record, and draws the card.
 
-### The repo layout
+OliTracker doesn't allow web pages to read it directly, so the requests go through a small Cloudflare Worker that only passes along the three things the overlay needs. OliTracker refreshes a profile about every 3 minutes, so the overlay asks right after each refresh and never more than once a minute. It stops asking while the source is hidden and slows down when OBS isn't live, which keeps it well inside the free daily limit.
 
-All 9 designs share the same server. `src/` is the only place anything is written by hand:
+---
+
+## Working on the code
+
+You only need this if you're changing the overlay.
+
+All 9 designs share one engine. `src/` is the only place anything is written by hand:
 
 ```
-src/core_head.py      the server, everything above the overlay markup
 src/designs/*.html    one file per design, just the markup
-src/core_tail.py      the server, everything below it
-src/launcher/*.bat    start / stop / account-id, one copy each
-src/web/engine.js     the website's version of the server, in JavaScript
-src/web/index.html    the website's setup page
+src/web/engine.js     the engine: rank, ELO, record, caching, requests
+src/web/index.html    the setup page
+web/worker.js         the Cloudflare Worker the page talks to
 ```
 
-Everything in `Minimal/`, `Classic/`, ... and `wizard/templates/` is **generated** from those, and so is the website in `docs/` (GitHub Pages serves that folder). The website uses the very same `src/designs/*.html`, so a design change shows up in both. After changing anything in `src/`:
+The website in `docs/` (served by GitHub Pages) is **generated** from those. After changing anything in `src/`:
 
 ```bash
-python tools/build.py
+python tools/build.py          # rebuild docs/
+python tools/build.py --check  # what CI runs: fails if docs/ is out of date
 ```
 
-CI runs `python tools/build.py --check` on every push, so a generated file edited by hand fails the build rather than silently getting overwritten at the next release.
+To try it locally, run `python -m http.server` inside `docs/` and open `http://localhost:8000`.
 
-### The website
-
-`src/web/engine.js` is a line-by-line port of the Python logic, so the two must agree. CI runs the real Python server and the JavaScript engine on the same OliTracker responses and compares every field they hand the designs, and checks the website stays within its request budget:
+Tests (they need Node.js and Python) run the same scenarios through the engine and through the original Python version, and check that every number matches, plus the request budget and the session and record logic:
 
 ```bash
-python tests/web/test_engine.py     # needs Node.js
+python tests/web/test_engine.py
 ```
 
-If you change how `src/core_head.py` works out a number, make the same change in `src/web/engine.js`.
+`web/README.md` covers deploying the Worker.
 
-The Cloudflare Worker the website talks to is `web/worker.js`; `web/README.md` covers deploying it. To try the site locally, run `python -m http.server` inside `docs/` and open `http://localhost:8000`.
-
-### Cutting a release
-
-```bash
-python tools/release.py 2.3.0 --notes "Fixes ELO after the season reset"
-```
-
-That stamps the version into `src/`, rebuilds all 18 design folders, and rewrites [`update.json`](update.json). Then commit and push **the tag along with the commit**:
-
-```bash
-git add -A && git commit -m "v2.3.0: fixes ELO after the season reset"
-git tag v2.3.0
-git push origin main --tags
-```
-
-Installed overlays download from the tag named in `update.json`, not from `main`, so `update.json` must never land on `main` before the tag it points at exists. Everyone gets the update prompt within a day, or immediately if they restart.
-
-### Making an old version stop working
-
-`min_supported` in `update.json` is the lever. Anything below it gets a prompt that can't be postponed.
-
-```bash
-python tools/release.py 3.0.0 --min-supported 3.0.0 --notes "OliTracker changed its API"
-```
-
-Use it sparingly. It locks people out mid-stream, so it's only for when an old build genuinely can't show correct data any more. An ordinary release should leave it alone.
-
-### Safety rails already in place
-
-- A manifest that can't be read, or that's malformed, is ignored entirely. A GitHub outage or a typo in `update.json` can never take everyone's overlay down.
-- A `min_supported` newer than `latest` is ignored, since it would block everyone with nothing to update to.
-- Downloads are parsed and sanity-checked before anything is written.
-- After installing, the old process waits to see the new one actually serve. If it doesn't, the backup is restored and that version is added to a local blocklist so it's never offered again.
-- `config.json` is never read or written by the update path.
+The old Windows download version (the design folders like `Minimal/`, the setup wizard and `setup.bat`) isn't maintained any more and isn't needed for the website. Those files are still in the repo so installs that already exist keep working, and the tests use the Python server as the reference for the engine's numbers. New setups should use the website.
 
 ---
 
-## 📄 License
+## License
 
-MIT, see [LICENSE](LICENSE). Use it, edit it, ship it, just don't blame us if Fortnite changes their API.
+MIT, see [LICENSE](LICENSE). Use it, edit it, ship it, just don't blame us if Fortnite changes things.
 
----
-
-## 💬 Credits
+## Credits
 
 Built by **fwsoapy** on Discord. Stats powered by [OliTracker](https://olitracker.com).

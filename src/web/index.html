@@ -892,7 +892,7 @@
         function fitPreview() {
           var d = BY_ID[state.design];
           // The wins and losses line makes the card a little taller.
-          var h = d.h + (state.rec && state.design !== 'record' ? 32 : 0);
+          var h = d.h + (state.rec && state.design !== 'record' ? (state.design === 'wide' ? 52 : 32) : 0);
           var avail = stage.clientWidth - 32;
           var k = Math.min(1, avail / d.w);
           frameBox.style.width = Math.round(d.w * k) + 'px';
