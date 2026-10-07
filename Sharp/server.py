@@ -2185,6 +2185,12 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         }
         /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
         .elo-na { display: none !important; }
+    
+        /* Compact overlay (?compact=1): only the important rows. */
+        html.compact #statsRow,
+        html.compact #creatorRow,
+        html.compact #creatorRowText { display: none !important; }
+        html.compact .bottom-slot { display: none; }
     </style>
 </head>
 <body>

@@ -720,7 +720,12 @@
               <span>Custom accent</span>
               <div class="color-input" data-color="color"></div>
             </div>
-            <div class="field">
+            <div class="field" id="compact-field">
+              <span>Size</span>
+              <label class="check-line"><input id="compact-line" type="checkbox" /> Compact overlay</label>
+              <span class="field-hint">Only the important parts: rank, progress, your ELO change and how far to the next rank. Drops the season stats and creator code, and makes the card smaller.</span>
+            </div>
+            <div class="field" id="show-field">
               <span id="show-label">Below your rank</span>
               <div class="seg" data-seg="show">
                 <button type="button" data-val="stats" id="show-stats">Season stats</button>
@@ -837,7 +842,7 @@
           customColor: '#ff7a00',
           labelCustom: false, labelColor: '#ffffff',
           show: 'stats', code: '',
-          mode: '', elo: 'session', refresh: '60', next: true, rec: false,
+          mode: '', elo: 'session', refresh: '60', next: true, rec: false, compact: false,
           previewBg: 'checker',
         };
 
@@ -886,6 +891,7 @@
           var code = cleanCode(state.code);
           if (state.show === 'code' && code) p.set('code', code);
           if (state.rec && state.design !== 'record') p.set('rec', '1');
+          if (state.compact && state.design !== 'record') p.set('compact', '1');
           if (state.show === 'pct' && state.design === 'record') p.set('show', 'pct');
           if (state.mode) p.set('mode', state.mode);
           // Always written: a link with no elo= counts from midnight Central,
@@ -923,16 +929,19 @@
           // Some modes make a card taller than the others (Reload and Boxfights
           // have a progress bar row), so also take the real card's size from
           // the page showing, with the same margin below it as above it.
+          var isCompact = state.compact && state.design !== 'record';
+          if (isCompact) h = 0;
           if (current) {
             try {
               var cd = current.contentDocument;
               var cardEl = cd && (cd.querySelector('.card') || cd.querySelector('.overlay-container'));
               if (cardEl) {
                 var cr = cardEl.getBoundingClientRect();
-                h = Math.max(h, Math.ceil(cr.bottom + cr.top));
+                h = isCompact ? Math.ceil(cr.bottom + cr.top) : Math.max(h, Math.ceil(cr.bottom + cr.top));
               }
             } catch (e) { /* not readable yet */ }
           }
+          if (!h) h = Math.round(d.h * 0.8);
           var avail = stage.clientWidth - 32;
           var k = Math.min(1, avail / d.w);
           frameBox.style.width = Math.round(d.w * k) + 'px';
@@ -1242,6 +1251,10 @@
           state.next = e.target.checked;
           changed();
         });
+        $('compact-line').addEventListener('change', function (e) {
+          state.compact = e.target.checked;
+          changed();
+        });
         $('rec-line').addEventListener('change', function (e) {
           state.rec = e.target.checked;
           changed();
@@ -1276,6 +1289,7 @@
           state.refresh = String([300, 600].indexOf(r) >= 0 ? r : 60);
           state.next = q.get('next') !== '0';
           state.rec = q.get('rec') === '1';
+          state.compact = q.get('compact') === '1';
           return true;
         }
 
@@ -1409,12 +1423,18 @@
           // The Record design is the wins and losses, so it has nothing to add.
           $('rec-line').checked = !!state.rec;
           $('rec-field').hidden = isRecord;
+          $('compact-line').checked = !!state.compact;
+          $('compact-field').hidden = isRecord;
+          // Compact drops the season stats and the creator code, so there is
+          // nothing to pick for them.
+          var compactOn = !!state.compact && !isRecord;
+          $('show-field').hidden = compactOn;
           document.querySelectorAll('[data-show-design]').forEach(function (el) {
             el.hidden = el.getAttribute('data-show-design') !== state.design;
           });
           document.querySelectorAll('[data-show-val]').forEach(function (el) {
             var p = el.getAttribute('data-show-val').split('=');
-            el.hidden = String(state[p[0]]) !== p[1];
+            el.hidden = String(state[p[0]]) !== p[1] || (compactOn && p[0] === 'show');
           });
           $('obs-link').value = hasAccount() ? overlayUrl(false) : 'Add your account to get your link';
           $('copy').disabled = false;

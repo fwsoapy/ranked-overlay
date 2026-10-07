@@ -862,6 +862,7 @@
       color: hex(q.get('color')),
       labelColor: hex(q.get('label')),
       demo: q.get('demo') === '1',
+      compact: q.get('compact') === '1',
       proxy: proxy
     };
   }
@@ -2049,6 +2050,8 @@
 
   function startOverlay(search) {
     var cfg = parseConfig(search);
+    // The compact layout is a class the designs style themselves.
+    if (cfg.compact) document.documentElement.classList.add('compact');
     var storage = null;
     try { storage = window.localStorage; } catch (e) { storage = null; }
     var store = makeStore(storage);
