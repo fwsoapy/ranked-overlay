@@ -918,8 +918,21 @@
           var d = BY_ID[state.design];
           // The wins and losses footer makes the card taller, by a different
           // amount in each design.
-          var REC_EXTRA = { minimal: 10, classic: 20, sharp: 10, wide: 14, slash: 32, rainbow: 10, modern: 40, pulse: 28 };
+          var REC_EXTRA = { minimal: 10, classic: 20, sharp: 26, wide: 20, slash: 32, rainbow: 10, modern: 40, pulse: 28 };
           var h = d.h + (state.rec && REC_EXTRA[state.design] ? REC_EXTRA[state.design] : 0);
+          // Some modes make a card taller than the others (Reload and Boxfights
+          // have a progress bar row), so also take the real card's size from
+          // the page showing, with the same margin below it as above it.
+          if (current) {
+            try {
+              var cd = current.contentDocument;
+              var cardEl = cd && (cd.querySelector('.card') || cd.querySelector('.overlay-container'));
+              if (cardEl) {
+                var cr = cardEl.getBoundingClientRect();
+                h = Math.max(h, Math.ceil(cr.bottom + cr.top));
+              }
+            } catch (e) { /* not readable yet */ }
+          }
           var avail = stage.clientWidth - 32;
           var k = Math.min(1, avail / d.w);
           frameBox.style.width = Math.round(d.w * k) + 'px';
@@ -950,6 +963,7 @@
             if (current && current !== next) current.remove();
             next.classList.remove('pending');
             current = next;
+            fitPreview();
             readModes(next);
           }
           // Swap as soon as the new overlay has its numbers. Waiting for the
@@ -984,6 +998,9 @@
           // Drop any older frame that was still loading.
           frameBox.querySelectorAll('iframe.pending').forEach(function (f) { if (f !== next) f.remove(); });
         }
+
+        // Fonts and data change the card's size a moment after it appears.
+        setInterval(fitPreview, 1500);
 
         function schedulePreview() {
           clearTimeout(previewTimer);
