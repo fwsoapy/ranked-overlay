@@ -9,11 +9,36 @@
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <meta
       name="description"
-      content="Free live Fortnite ranked overlay for OBS. Shows your rank, ELO and season stats from OliTracker. Pick a design, copy one link, paste it into OBS. Nothing to install."
+      content="Free live Fortnite ranked overlay for OBS. Shows your rank, ELO, ELO gain and wins and losses from OliTracker. 9 designs, pick one, copy one link, paste it into OBS. Nothing to install."
     />
     <meta name="author" content="fwsoapy" />
-    <meta name="theme-color" content="#f4f6f9" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#10141a" media="(prefers-color-scheme: dark)" />
+    <!-- One blue for the browser bar and for the colored edge of link previews
+         (Discord reads the first theme-color it finds). -->
+    <meta name="theme-color" content="#3b82f6" />
+
+    <!-- How a link to this page looks when it's pasted into Discord, X, Slack
+         and the like: a big picture of the Classic overlay. The image address
+         has to be absolute, or the preview won't find it. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ranked Overlay" />
+    <meta property="og:title" content="Ranked Overlay - by fwsoapy" />
+    <meta
+      property="og:description"
+      content="Free live Fortnite ranked overlay for OBS. Shows your rank, ELO and season stats from OliTracker. Pick a design, copy one link, paste it into OBS. Nothing to install."
+    />
+    <meta property="og:url" content="https://fwsoapy.github.io/ranked-overlay/" />
+    <meta property="og:image" content="https://fwsoapy.github.io/ranked-overlay/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The Classic Ranked Overlay showing #66 Unreal, 1542 ELO and +23 ELO today" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Ranked Overlay - by fwsoapy" />
+    <meta
+      name="twitter:description"
+      content="Free live Fortnite ranked overlay for OBS. Pick a design, copy one link, paste it into OBS. Nothing to install."
+    />
+    <meta name="twitter:image" content="https://fwsoapy.github.io/ranked-overlay/og.png" />
 
     <script>
       /* Applies a stored theme before first paint so the other palette never
