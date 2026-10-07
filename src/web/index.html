@@ -918,7 +918,7 @@
           var d = BY_ID[state.design];
           // The wins and losses footer makes the card taller, by a different
           // amount in each design.
-          var REC_EXTRA = { minimal: 10, classic: 20, sharp: 10, wide: 14, slash: 32, rainbow: 10, modern: 40, pulse: 18 };
+          var REC_EXTRA = { minimal: 10, classic: 20, sharp: 10, wide: 14, slash: 32, rainbow: 10, modern: 40, pulse: 28 };
           var h = d.h + (state.rec && REC_EXTRA[state.design] ? REC_EXTRA[state.design] : 0);
           var avail = stage.clientWidth - 32;
           var k = Math.min(1, avail / d.w);

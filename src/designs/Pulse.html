@@ -252,6 +252,11 @@
         .rec-line .rl { color: #f87171; }
         .rec-line .rs { color: rgba(255, 255, 255, 0.45); }
         .rec-line { margin-bottom: -23px; }
+        /* With the footer on, the stats (or the creator code) sit evenly between
+           the divider above them and the footer's divider below: no extra space
+           under the cell, and a slightly taller cell. */
+        .has-rec .stats-grid, .has-rec .creator-row { height: 62px; }
+        .has-rec .rec-line { margin-top: -12px; }
 
         .error-text {
             font-size: 11px;
@@ -402,8 +407,10 @@
             if (!el) return;
             if (!SHOW_REC || d.record_wins === undefined || d.record_wins === null) {
                 el.style.display = 'none';
+                document.documentElement.classList.remove('has-rec');
                 return;
             }
+            document.documentElement.classList.add('has-rec');
             var w = Number(d.record_wins) || 0, l = Number(d.record_losses) || 0;
             el.innerHTML = '<span class="rec-in"><span class="rw">' + w + ' ' + (w === 1 ? 'WIN' : 'WINS') + '</span>'
                 + '<span class="rs">,</span> '
