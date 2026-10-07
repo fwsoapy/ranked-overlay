@@ -2177,6 +2177,7 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         html.compact #statsRow,
         html.compact #creatorRow,
         html.compact #creatorRowText { display: none !important; }
+        html.compact body { zoom: 0.8; }
         html.compact .divider-mid { display: none; }
     </style>
 </head>
