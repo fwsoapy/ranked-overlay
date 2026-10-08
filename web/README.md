@@ -11,8 +11,13 @@ It only forwards the three things the overlay needs, and only answers pages on t
 | Route | Forwards to |
 | --- | --- |
 | `/stats/<account id>` | `olitracker.com/api/stats/<account id>` |
-| `/ranked/<slug>?page=<n>` | `olitracker.com/ranked/<slug>` (raw HTML, parsed in the page) |
+| `/ranked/<slug>?page=<n>` | `olitracker.com/api/ranked/<slug>?page=<n>` (JSON leaderboard, 100 players a page) |
 | `/lookup?name=<display name>` | api-fortnite.com account lookup, returns `{ "accountId": "..." }` |
+
+OliTracker's leaderboard web pages now sit behind a Cloudflare check, so the Worker reads its JSON leaderboard
+(`/api/ranked/<slug>`) instead. It only goes 10 pages deep (the top 1,000), so below that the overlay takes ELO
+from the player's profile or recent matches. A Worker deployed before this change can't read the leaderboard any
+more: paste the current `worker.js` in again (steps below).
 
 ## Deploying or updating it
 
@@ -20,7 +25,8 @@ It only forwards the three things the overlay needs, and only answers pages on t
    Worker (or create one with **Create application > Start with Hello World!**).
 2. Click **Edit code**, replace everything with the contents of `worker.js`, and click **Deploy**.
 3. For the name lookup: **Settings > Variables and Secrets > Add**, type **Secret**, name `FORTNITE_API_KEY`,
-   value your api-fortnite.com key.
+   value your api-fortnite.com key. Without it, names are looked up through OliTracker's player search instead
+   (exact name matches only).
 
 If you fork the repo, add your own GitHub Pages address to `ALLOWED_ORIGINS` in `worker.js`, and point
 `DEFAULT_PROXY` in `src/web/engine.js` at your Worker (then run `python tools/build.py`).

@@ -285,7 +285,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=bb653585e2"></script>
+    <script src="../engine.js?v=18e3604cf7"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -427,7 +427,9 @@
             var losses = num(d.record_losses);
             var played = wins + losses;
 
-            $('#headText').textContent   = 'RECORD ' + (d.record_label || 'TODAY');
+            // A private profile, or one with no ranked games, says so up top.
+            var empty = d.rank_display === 'STATS PRIVATE' || d.rank_display === 'NO RANKED YET';
+            $('#headText').textContent   = empty ? d.rank_display : 'RECORD ' + (d.record_label || 'TODAY');
             $('#winsNum').textContent    = wins;
             $('#winsWord').textContent   = wins === 1 ? 'WIN' : 'WINS';
             $('#lossesNum').textContent  = losses;

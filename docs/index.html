@@ -790,7 +790,7 @@
       Also check out <a href="https://fwsoapy.github.io/code-overlay/" target="_blank" rel="noreferrer noopener">Code Overlay</a>.
     </footer>
 
-    <script src="./engine.js?v=bb653585e2"></script>
+    <script src="./engine.js?v=18e3604cf7"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>
       (function () {
@@ -965,6 +965,7 @@
           next.src = src;
           frameBox.appendChild(next);
           fitPreview();
+          renderDataNote();
           var swapped = false;
           function swap() {
             if (swapped || next.parentNode !== frameBox) return;
@@ -974,6 +975,7 @@
             current = next;
             fitPreview();
             readModes(next);
+            renderDataNote();
           }
           // Swap as soon as the new overlay has its numbers. Waiting for the
           // iframe's load event would also wait on its web fonts. If the page
@@ -1045,6 +1047,10 @@
           var note = $('data-note');
           if (!hasAccount()) {
             note.textContent = 'Showing demo numbers. Add your account to see your own.';
+          } else if (typeof frameBox !== 'undefined' && (frameBox.querySelector('iframe.pending') || !current || /[?&]demo=1/.test(current.src))) {
+            // The preview swaps over once the real numbers arrive. OliTracker can
+            // take a while on a profile it hasn't looked at lately.
+            note.textContent = 'Loading your stats from OliTracker. The first load can take up to a minute.';
           } else {
             note.textContent = 'Showing your live stats' + (state.accountName ? ' for ' + state.accountName : '') + '.';
           }

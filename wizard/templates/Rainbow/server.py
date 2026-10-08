@@ -274,7 +274,7 @@ MODE_STAT_PATH = {
 # with rows or it does not, so if a future season publishes a deeper board the
 # overlay picks the extra ELO up on its own.
 LEADERBOARD_PAGE_SIZE     = 100
-LEADERBOARD_PAGE_LIMIT    = 100000  # sanity stop, not a real ceiling
+LEADERBOARD_PAGE_LIMIT    = 10      # OliTracker's JSON leaderboard stops at page 10 (top 1000)
 LEADERBOARD_TTL           = 60      # seconds; keeps pace with POLL_SECONDS
 LEADERBOARD_PAGES_BACK    = 4       # pages to walk up through an ELO tie
 
@@ -823,7 +823,37 @@ def _int(text):
         return None
 
 
+def _parse_leaderboard_json(text):
+    """OliTracker's JSON leaderboard: [{user_id, username, rank, division, elo}, ...].
+    Returns None when the text isn't that, so the HTML parser can try it."""
+    s = str(text).lstrip()
+    if not s.startswith("["):
+        return None
+    try:
+        data = json.loads(s)
+    except ValueError:
+        return None
+    if not isinstance(data, list):
+        return None
+    rows = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        placement = _int(item.get("rank"))
+        elo_value = _int(item.get("elo"))
+        if placement is None or elo_value is None:
+            continue
+        acct = item.get("user_id")
+        acct = str(acct).lower() if isinstance(acct, str) and re.fullmatch(r"[0-9a-fA-F]{16,}", acct) else None
+        rows.append({"placement": placement, "elo": elo_value, "account_id": acct})
+    rows.sort(key=lambda r: r["placement"])
+    return rows
+
+
 def _parse_leaderboard_rows(html):
+    from_json = _parse_leaderboard_json(html)
+    if from_json is not None:
+        return from_json
     rows = []
     for chunk in _LB_ROW.findall(html):
         rank = _LB_RANK.search(chunk)
@@ -867,7 +897,9 @@ def _leaderboard_page(slug, page):
         if hit and now - hit[0] < LEADERBOARD_TTL:
             return hit[1]
 
-    url = f"https://olitracker.com/ranked/{slug}"
+    # The leaderboard web pages are behind a Cloudflare check now; the JSON
+    # leaderboard has the same rows.
+    url = f"https://olitracker.com/api/ranked/{slug}"
     if page > 1:
         url += f"?page={page}"
     try:
@@ -972,7 +1004,10 @@ def lookup_leaderboard_elo(mode_path, placement, account_id=EPIC_ACCOUNT_ID):
 
     if target is None:
         return my_elo, None, None
-    return my_elo, target["placement"], target["elo"] - my_elo
+    # The board can lag the profile by a few minutes, so the row above may
+    # carry the player's own new placement: aim one spot higher.
+    pos = min(target["placement"], placement - 1) if placement > 1 else target["placement"]
+    return my_elo, pos, target["elo"] - my_elo
 
 
 def _season_fingerprint(data):
@@ -1062,6 +1097,24 @@ def _elo_series(data, ranking_id):
     return points
 
 
+def _latest_history_elo(data, ranking_id):
+    """The ELO after the player's most recent ranked match in the history, for
+    when neither the profile nor the leaderboard has it (Unreal players below
+    the top 1000). Falls back to the newest day's end-of-day ELO."""
+    points = _elo_series(data, ranking_id)
+    if points:
+        return points[-1][1]
+    want = _normalize_mode_key(ranking_id) if ranking_id else None
+    for day in ((data or {}).get("match_history") or []):
+        for key, value in (day.get("elo") or {}).items():
+            if want and not _same_mode(key, want):
+                continue
+            end = _num((value or {}).get("end"))
+            if end is not None:
+                return end
+    return None
+
+
 def _earliest_day_start_elo(data, ranking_id):
     want = _normalize_mode_key(ranking_id) if ranking_id else None
     for day in reversed((data or {}).get("match_history") or []):
@@ -1086,17 +1139,50 @@ def windowed_elo_delta(data, window, current_elo, ranking_id=None):
     points = _elo_series(data, rid)
     if not points:
         return None
-    baseline = None
+    baseline, baseline_ts = None, cutoff
     for ts, elo in points:
         if ts <= cutoff:
-            baseline = elo
+            baseline, baseline_ts = elo, ts
         else:
             break
     if baseline is None:
         baseline = _earliest_day_start_elo(data, rid)
         if baseline is None:
             baseline = points[0][1]
+    # A rank reset inside the window (Unreal one day, back below it the next,
+    # as when a ranked season restarts) makes the old ELO meaningless: count
+    # from the first ELO after the reset instead.
+    reset = _rank_reset_at(data, rid)
+    if reset is not None and reset > baseline_ts:
+        after = [elo for ts, elo in points if ts >= reset]
+        baseline = after[0] if after else current_elo
     return current_elo - baseline
+
+
+def _rank_reset_at(data, ranking_id):
+    """When this mode last dropped from Unreal back below it (a season reset),
+    as a timestamp, or None."""
+    want = _normalize_mode_key(ranking_id) if ranking_id else None
+    seq = []
+    for day in ((data or {}).get("match_history") or []):
+        for grp in (day.get("matches") or []):
+            rd = grp.get("ranked_data") or {}
+            if want and not _same_mode(rd.get("ranking_id"), want):
+                continue
+            ts = grp.get("last_modified")
+            div = _num(rd.get("division"))
+            if not ts or div is None:
+                continue
+            unreal = _num(rd.get("unreal_placement")) is not None or _num(rd.get("elo")) is not None
+            seq.append((int(ts), unreal))
+    seq.sort()
+    reset = None
+    was_unreal = False
+    for ts, unreal in seq:
+        if was_unreal and not unreal:
+            reset = ts
+        was_unreal = unreal
+    return reset
 
 
 def mode_view(path, mode_obj):
@@ -1156,7 +1242,7 @@ def refresh_once():
     _last_modes = modes
 
     if not modes:
-        _set_error("no ranked data found")
+        _set_error(_empty_reason(data, long=True))
         return
 
     _roll_season_if_needed(data)
@@ -1173,7 +1259,7 @@ def refresh_once():
             lb_elo, next_pos, gap = lookup_leaderboard_elo(mpath, placement)
         with _lock:
             _elo_lookup[mkey] = {
-                "elo":      api_elo if api_elo is not None else lb_elo,
+                "elo":      api_elo if api_elo is not None else lb_elo if lb_elo is not None else _latest_history_elo(data, mkey),
                 "next_pos": next_pos,
                 "gap":      gap,
             }
@@ -1700,6 +1786,17 @@ def poll_loop():
         refresh_once()
 
 
+def _empty_reason(data, long=False):
+    """Why a profile has nothing to show: OliTracker only gets stats for
+    profiles whose Epic stats are public, and a public one with no ranked
+    entry simply hasn't played ranked this season (or OliTracker hasn't seen it)."""
+    if not isinstance(data, dict):
+        return None
+    if data.get("public") is False:
+        return "stats are private (turn on public stats in Fortnite)" if long else "STATS PRIVATE"
+    return "no ranked games on OliTracker yet this season" if long else "NO RANKED YET"
+
+
 def snapshot(window="session", mode_key=None):
     with _lock:
         s   = dict(STATE)
@@ -1755,6 +1852,8 @@ def snapshot(window="session", mode_key=None):
     s["progression_pct"] = progression if not is_unreal else None
     s["prog_delta"]      = prog_delta if not is_unreal else None
     s["rank_display"]    = f"#{placement} {label}".strip() if (is_unreal and placement) else (label or "-")
+    if mode is None and not label and _empty_reason(raw):
+        s["rank_display"] = _empty_reason(raw)
     s["elo_text"]        = f"{elo} ELO" if (is_unreal and elo is not None) else None
 
     s["season_kd"]    = f"{season_stats['kd']:.2f}"  if season_stats["kd"] is not None else "-"
@@ -2404,7 +2503,8 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                         }
                     }
 
-                    if (d.ok === false && !d.elo_text) return;
+                    var emptyReason = d.rank_display === 'STATS PRIVATE' || d.rank_display === 'NO RANKED YET';
+                    if (d.ok === false && !d.elo_text && !emptyReason) return;
 
                     renderRecordLine(d);
 

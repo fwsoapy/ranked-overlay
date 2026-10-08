@@ -420,7 +420,9 @@
             var losses = num(d.record_losses);
             var played = wins + losses;
 
-            $('#headText').textContent   = 'RECORD ' + (d.record_label || 'TODAY');
+            // A private profile, or one with no ranked games, says so up top.
+            var empty = d.rank_display === 'STATS PRIVATE' || d.rank_display === 'NO RANKED YET';
+            $('#headText').textContent   = empty ? d.rank_display : 'RECORD ' + (d.record_label || 'TODAY');
             $('#winsNum').textContent    = wins;
             $('#winsWord').textContent   = wins === 1 ? 'WIN' : 'WINS';
             $('#lossesNum').textContent  = losses;

@@ -7,8 +7,8 @@
 //
 // Routes:
 //   GET /stats/<32-hex account id>          -> olitracker.com/api/stats/<id>
-//   GET /ranked/<slug>?page=<n>             -> olitracker.com/ranked/<slug> (raw HTML)
-//   GET /lookup?name=<epic display name>    -> { "accountId": "..." }
+//   GET /ranked/<slug>?page=<n>             -> olitracker.com/api/ranked/<slug>?page=<n> (JSON)
+//   GET /lookup?name=<epic display name>    -> { "accountId": "..." } (api-fortnite.com, then OliTracker search)
 //
 // The lookup route reads its key from the FORTNITE_API_KEY secret (Worker
 // settings > Variables and Secrets), never from this file.
@@ -76,21 +76,37 @@ function error(status, message) {
   return reply(JSON.stringify({ error: message }), status, "application/json", 0);
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// OliTracker often fails the first request for a profile it hasn't looked at
+// in a while (it fetches it from Epic, which can take 30+ seconds and then
+// time out), and answers the next one straight away. So a server error or a
+// dropped connection is tried again, twice, before giving up.
+const RETRY_DELAYS = [1500, 4000];
+
 async function forward(url, accept, type, maxAge) {
-  let r;
-  try {
-    r = await fetch(url, { headers: { ...BROWSER_HEADERS, Accept: accept } });
-  } catch (e) {
-    return error(502, "Couldn't reach OliTracker");
+  let status = 502;
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+    if (attempt > 0) await sleep(RETRY_DELAYS[attempt - 1]);
+    let r;
+    try {
+      r = await fetch(url, { headers: { ...BROWSER_HEADERS, Accept: accept } });
+    } catch (e) {
+      status = 502;
+      continue;
+    }
+    if (r.ok) return reply(r.body, 200, type, maxAge);
+    status = r.status;
+    // 4xx (bad id, not found) won't change by asking again.
+    if (status < 500 && status !== 429) break;
   }
-  if (!r.ok) return error(r.status, `OliTracker returned ${r.status}`);
-  return reply(r.body, 200, type, maxAge);
+  if (status === 502) return error(502, "Couldn't reach OliTracker");
+  return error(status, `OliTracker returned ${status}`);
 }
 
 async function lookup(name, env) {
-  if (!env.FORTNITE_API_KEY) return error(500, "FORTNITE_API_KEY secret isn't set on the Worker");
   const q = encodeURIComponent(name);
-  const urls = [
+  const urls = !env.FORTNITE_API_KEY ? [] : [
     `https://prod.api-fortnite.com/api/v1/account/displayName/${q}`,
     `https://prod.api-fortnite.com/api/v1/profile/progress?displayName=${q}`,
     `https://prod.api-fortnite.com/api/v1/profile/stats?displayName=${q}`,
@@ -111,6 +127,25 @@ async function lookup(name, env) {
     } catch (e) {
       // try the next endpoint
     }
+  }
+  // OliTracker's own player search, for when the key isn't set or the
+  // lookup above came up empty. Only an exact name match (ignoring case)
+  // counts, so a near miss never picks someone else's account.
+  try {
+    const r = await fetch(`${OLI}/api/search?name=${q}`, {
+      headers: { ...BROWSER_HEADERS, Accept: "application/json" },
+    });
+    if (r.ok) {
+      const list = await r.json();
+      const want = name.toLowerCase();
+      const hit = Array.isArray(list) &&
+        list.find((p) => p && typeof p.username === "string" && p.username.toLowerCase() === want);
+      if (hit && ACCOUNT_ID.test(String(hit.id))) {
+        return reply(JSON.stringify({ accountId: String(hit.id).toLowerCase() }), 200, "application/json", MAX_AGE.lookup);
+      }
+    }
+  } catch (e) {
+    // fall through to "not found"
   }
   return error(404, "No account found with that name");
 }
@@ -134,9 +169,12 @@ export default {
     if (parts[0] === "ranked" && parts.length === 2 && SLUGS.has(parts[1])) {
       const page = parseInt(url.searchParams.get("page") || "1", 10);
       if (!(page >= 1 && page <= 100000)) return error(400, "Bad page number");
-      const target = `${OLI}/ranked/${parts[1]}` + (page > 1 ? `?page=${page}` : "");
-      return forward(target, "text/html,application/xhtml+xml,*/*",
-        "text/html; charset=utf-8", MAX_AGE.ranked);
+      // The leaderboard web pages sit behind a Cloudflare check now, so this
+      // reads OliTracker's JSON leaderboard instead: 100 players a page, each
+      // { user_id, username, rank, division, elo }.
+      const target = `${OLI}/api/ranked/${parts[1]}` + (page > 1 ? `?page=${page}` : "");
+      return forward(target, "application/json, text/plain, */*",
+        "application/json", MAX_AGE.ranked);
     }
 
     if (parts[0] === "lookup" && parts.length === 1) {

@@ -59,9 +59,16 @@ async function run(proxy, id) {
 
   try {
     const r = await fetch(`${proxy}/ranked/battle-royale`);
-    const html = await r.text();
+    const text = await r.text();
     if (!r.ok) throw new Error(r.status);
-    line(true, `Leaderboard page loaded (${Math.round(html.length / 1024)} KB of HTML)`);
+    let rows = null;
+    try { rows = JSON.parse(text); } catch (e) { /* the old HTML version of the Worker */ }
+    if (Array.isArray(rows)) {
+      if (!rows.length || typeof rows[0].elo !== "number") throw new Error("leaderboard came back empty");
+      line(true, `Leaderboard loaded (${rows.length} players, #1 is on ${rows[0].elo} ELO)`);
+    } else {
+      throw new Error("still the old Worker (HTML leaderboard, which OliTracker now blocks). Paste in the new worker.js");
+    }
   } catch (e) {
     line(false, `Leaderboard: ${e.message}`);
   }

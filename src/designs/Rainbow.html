@@ -502,7 +502,8 @@
                         }
                     }
 
-                    if (d.ok === false && !d.elo_text) return;
+                    var emptyReason = d.rank_display === 'STATS PRIVATE' || d.rank_display === 'NO RANKED YET';
+                    if (d.ok === false && !d.elo_text && !emptyReason) return;
 
                     renderRecordLine(d);
 

@@ -115,6 +115,70 @@ async function websiteChecks() {
   const check = (name, got, want) => checks.push([name, JSON.stringify(got) === JSON.stringify(want), got, want]);
   const C = E._core;
 
+  // OliTracker's JSON leaderboard (the web pages are behind a Cloudflare
+  // check now) must read the same as the HTML pages did.
+  for (const f of fs.readdirSync(FX).filter((n) => /^lb-.*\.html$/.test(n))) {
+    const fromHtml = C.parseLeaderboardRows(fs.readFileSync(path.join(FX, f), 'utf8'));
+    const asJson = JSON.stringify(fromHtml.map((r) => ({ user_id: r.account_id, username: 'x', rank: r.placement, division: null, elo: r.elo })));
+    check('JSON leaderboard matches HTML: ' + f, C.parseLeaderboardRows(asJson), fromHtml);
+  }
+  check('JSON leaderboard: sorted, bad rows dropped',
+    C.parseLeaderboardRows(' [{"user_id":"ABCDEF0123456789ABCDEF0123456789","rank":2,"elo":900},{"user_id":"x","rank":1,"elo":"1,000"},{"rank":null,"elo":5},{"rank":3,"elo":null},7]'),
+    [{ placement: 1, elo: 1000, account_id: null }, { placement: 2, elo: 900, account_id: 'abcdef0123456789abcdef0123456789' }]);
+  check('JSON leaderboard: error object is not rows', C.parseLeaderboardRows('{"error":"invalid ranking type"}'), []);
+
+  // A ranked season reset inside the window (Unreal #661 on 27849 ELO
+  // yesterday, back below Unreal today, now Unreal again near 3000) counts
+  // from the first ELO after the reset, not from the old season's number.
+  {
+    const reset = JSON.parse(fs.readFileSync(path.join(FX, 'stats-reset.json'), 'utf8'));
+    const pts = [];
+    reset.match_history.forEach((day) => (day.matches || []).forEach((g) => {
+      const rd = g.ranked_data || {};
+      if (/blastberry/.test(rd.ranking_id || '') && typeof rd.elo === 'number') pts.push([g.last_modified, rd.elo]);
+    }));
+    pts.sort((a, b) => a[0] - b[0]);
+    const firstNew = pts.find((p) => p[1] < 10000);
+    const last = pts[pts.length - 1];
+    const cur = last[1] + 50;
+    const midnight = Math.floor(C.centralMidnight(last[0] * 1000) / 1000);
+    check('season reset: since midnight counts from the new season', C.eloDeltaSince(reset, midnight, cur, 'ranked-blastberry-combined', ''), cur - firstNew[1]);
+    check('season reset: past 24h too', C.eloDeltaSince(reset, last[0] - 86400, cur, 'ranked-blastberry-combined', ''), cur - firstNew[1]);
+    check('season reset: no reset in BR, normal', C.eloDeltaSince(reset, midnight, 100, 'ranked-br-combined', ''), null);
+  }
+
+  // The leaderboard can lag the profile: never aim at the player's own spot.
+  {
+    const rows = [{ placement: 15, elo: 3322, account_id: 'b' }, { placement: 16, elo: 3300, account_id: 'c' }, { placement: 17, elo: 3266, account_id: 'me' }];
+    const got = await C.lookupLeaderboardElo(['ranked_stats', 'ranked_blastberry_build'], 16, 'me', true, async () => rows);
+    check('next target is above the player even when the board lags', got, [3266, 15, 34]);
+  }
+
+  // A failed first load retries in seconds, not minutes.
+  {
+    let t = 1.79e12, calls = 0;
+    const eng = E.createEngine({ cfg: E.parseConfig('?id=0123456789abcdef0123456789abcdef'), store: E.makeStore(memoryStorage()),
+      fetchText: async () => { calls++; const e = new Error('HTTP 500'); e.status = 500; throw e; }, now: () => t });
+    await eng.init();
+    const first = eng.nextDelay();
+    t += first; await eng.refresh(false);
+    check('first-load retries come quickly', [first, eng.nextDelay(), calls], [5000, 10000, 2]);
+  }
+
+  // A profile with nothing to show says why instead of a dash.
+  const emptySnap = async (profile) => {
+    const eng = E.createEngine({ cfg: E.parseConfig('?id=0123456789abcdef0123456789abcdef'), store: E.makeStore(memoryStorage()),
+      fetchText: async () => JSON.stringify(profile), now: () => 1.79e12 });
+    await eng.init();
+    const d = await (await eng.fetchData('/data?window=session')).json();
+    return [d.rank_display, d.error];
+  };
+  check('private profile', await emptySnap({ user_id: 'a', public: false, stats: {}, ranked_stats: {}, match_history: [] }),
+    ['STATS PRIVATE', 'stats are private (turn on public stats in Fortnite)']);
+  check('public profile with no ranked', await emptySnap({ user_id: 'a', public: true, stats: {}, ranked_stats: {}, match_history: [] }),
+    ['NO RANKED YET', 'no ranked games on OliTracker yet this season']);
+
+
   // Midnight Central Time, standard time, daylight time, and both switch days.
   const iso = (ms) => new Date(ms).toISOString();
   check('CT midnight in winter (CST)', iso(C.centralMidnight(Date.parse('2026-01-15T20:00:00Z'))), '2026-01-15T06:00:00.000Z');

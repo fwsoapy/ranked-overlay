@@ -54,12 +54,17 @@
   var HOT_WINDOW_MS = 5 * 60 * 1000;     // how long "right after a match" lasts
   var EMPTY_PAGE_TTL_MS = 30 * 60 * 1000; // pages past the end of the board
   var SESSION_GAP_MS = 60 * 60 * 1000;   // a gap this long starts a new session
-  var FETCH_TIMEOUT_MS = 15 * 1000;
+  // The Worker retries OliTracker itself (a cold profile can take 30+ seconds
+  // to come back), so give it time to finish before giving up on it.
+  var FETCH_TIMEOUT_MS = 50 * 1000;
+  // Nothing on screen yet and the first try failed: try again soon, not in
+  // three minutes.
+  var FIRST_LOAD_RETRY_MS = [5000, 10000, 20000, 30000, 60000];
   var LOOKUP_WAIT_MS = 6 * 1000;         // how long a mode switch waits for ELO
 
   // LEADERBOARD_* in core_head.py
   var LEADERBOARD_PAGE_SIZE = 100;
-  var LEADERBOARD_PAGE_LIMIT = 100000;
+  var LEADERBOARD_PAGE_LIMIT = 10;     // OliTracker's JSON leaderboard stops at page 10 (top 1000)
   var LEADERBOARD_PAGES_BACK = 4;
   // Only used to order the mode buttons before a mode's leaderboard has been
   // read. The real lookup never assumes this depth.
@@ -593,7 +598,40 @@
     return /^[-+]?\d+$/.test(s) ? parseInt(s, 10) : null;
   }
 
+  // _empty_reason(): why a profile has nothing to show. OliTracker only gets
+  // stats for profiles whose Epic stats are public, and a public one with no
+  // ranked entry hasn't played ranked this season (or OliTracker hasn't seen it).
+  function emptyReason(data, long) {
+    if (!isDict(data)) return null;
+    if (data['public'] === false) return long ? 'stats are private (turn on public stats in Fortnite)' : 'STATS PRIVATE';
+    return long ? 'no ranked games on OliTracker yet this season' : 'NO RANKED YET';
+  }
+
+  // _parse_leaderboard_json(): OliTracker's JSON leaderboard,
+  // [{user_id, username, rank, division, elo}, ...]. null when the text isn't
+  // that, so the HTML parser can have a go.
+  function parseLeaderboardJson(text) {
+    var s = String(text).replace(/^\s+/, '');
+    if (s.charAt(0) !== '[') return null;
+    var data;
+    try { data = JSON.parse(s); } catch (e) { return null; }
+    if (!Array.isArray(data)) return null;
+    var rows = [];
+    data.forEach(function (item) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+      var placement = item.rank === null || item.rank === undefined ? null : parseIntLoose(item.rank);
+      var eloValue = item.elo === null || item.elo === undefined ? null : parseIntLoose(item.elo);
+      if (placement === null || eloValue === null) return;
+      var acct = typeof item.user_id === 'string' && /^[0-9a-fA-F]{16,}$/.test(item.user_id) ? item.user_id.toLowerCase() : null;
+      rows.push({ placement: placement, elo: eloValue, account_id: acct });
+    });
+    rows.sort(function (a, b) { return a.placement - b.placement; });
+    return rows;
+  }
+
   function parseLeaderboardRows(html) {
+    var fromJson = parseLeaderboardJson(html);
+    if (fromJson !== null) return fromJson;
     var rows = [];
     var chunks = String(html).match(LB_ROW) || [];
     chunks.forEach(function (chunk) {
@@ -657,7 +695,10 @@
         var above = rows.filter(function (r) { return r.placement < myPlace && r.elo > myElo; });
         if (above.length) {
           var target = maxBy(above, function (r) { return [r.placement]; });
-          return Promise.resolve([myElo, target.placement, target.elo - myElo]);
+          // The board can lag the profile by a few minutes, so the row above
+          // may carry the player's own new placement: aim one spot higher.
+          var pos = placement > 1 ? Math.min(target.placement, placement - 1) : target.placement;
+          return Promise.resolve([myElo, pos, target.elo - myElo]);
         }
         if (page - 1 < 1 || i === LEADERBOARD_PAGES_BACK - 1) return Promise.resolve([myElo, null, null]);
         page -= 1;
@@ -704,6 +745,28 @@
     return points;
   }
 
+  // _latest_history_elo(): the ELO after the most recent ranked match in the
+  // history, for when neither the profile nor the leaderboard has it.
+  // Falls back to the newest day's end-of-day ELO.
+  function latestHistoryElo(data, rankingId) {
+    var points = eloSeries(data, rankingId);
+    if (points.length) return points[points.length - 1][1];
+    var want = rankingId ? normalizeModeKey(rankingId) : null;
+    var days = iter(isDict(data) ? data.match_history : null);
+    for (var i = 0; i < days.length; i++) {
+      var elo = dget(days[i], 'elo');
+      elo = truthy(elo) ? elo : {};
+      var keys = Object.keys(elo);
+      for (var j = 0; j < keys.length; j++) {
+        if (want && !sameMode(keys[j], want)) continue;
+        var value = elo[keys[j]];
+        var end = num(dget(truthy(value) ? value : {}, 'end'));
+        if (end !== null) return end;
+      }
+    }
+    return null;
+  }
+
   function earliestDayStartElo(data, rankingId) {
     var want = rankingId ? normalizeModeKey(rankingId) : null;
     var days = iter(isDict(data) ? data.match_history : null).slice().reverse();
@@ -735,16 +798,52 @@
     var rid = rankingId || detectRankingId(data, null, override);
     var points = eloSeries(data, rid);
     if (!points.length) return null;
-    var baseline = null;
+    var baseline = null, baselineTs = cutoff;
     for (var i = 0; i < points.length; i++) {
-      if (points[i][0] <= cutoff) baseline = points[i][1];
+      if (points[i][0] <= cutoff) { baseline = points[i][1]; baselineTs = points[i][0]; }
       else break;
     }
     if (baseline === null) {
       baseline = earliestDayStartElo(data, rid);
       if (baseline === null) baseline = points[0][1];
     }
+    // A rank reset inside the window (Unreal one day, back below it the next,
+    // as when a ranked season restarts) makes the old ELO meaningless: count
+    // from the first ELO after the reset instead.
+    var reset = rankResetAt(data, rid);
+    if (reset !== null && reset > baselineTs) {
+      baseline = currentElo;
+      for (var j = 0; j < points.length; j++) {
+        if (points[j][0] >= reset) { baseline = points[j][1]; break; }
+      }
+    }
     return currentElo - baseline;
+  }
+
+  // _rank_reset_at(): when this mode last dropped from Unreal back below it
+  // (a season reset), as a timestamp, or null.
+  function rankResetAt(data, rankingId) {
+    var want = rankingId ? normalizeModeKey(rankingId) : null;
+    var seq = [];
+    iter(isDict(data) ? data.match_history : null).forEach(function (day) {
+      iter(dget(day, 'matches')).forEach(function (grp) {
+        var rd = dget(grp, 'ranked_data');
+        rd = truthy(rd) ? rd : {};
+        if (want && !sameMode(dget(rd, 'ranking_id'), want)) return;
+        var ts = dget(grp, 'last_modified');
+        var div = num(dget(rd, 'division'));
+        if (!truthy(ts) || div === null) return;
+        var unreal = num(dget(rd, 'unreal_placement')) !== null || num(dget(rd, 'elo')) !== null;
+        seq.push([Math.trunc(Number(ts)), unreal]);
+      });
+    });
+    seq.sort(function (a, b) { return a[0] - b[0] || (a[1] ? 1 : 0) - (b[1] ? 1 : 0); });
+    var reset = null, wasUnreal = false;
+    seq.forEach(function (e) {
+      if (wasUnreal && !e[1]) reset = e[0];
+      wasUnreal = e[1];
+    });
+    return reset;
   }
 
   // The same idea below Unreal, where progress is division * 100 + the
@@ -1461,7 +1560,7 @@
       var apiElo = extractElo(obj);
       var placement = unrealPlacement(obj);
       if (!needsNetworkLookup(path, obj)) {
-        lookups[key] = { elo: apiElo, next_pos: null, gap: null, at: clock(), sig: matchSignature(key, obj) };
+        lookups[key] = { elo: apiElo !== null ? apiElo : latestHistoryElo(raw, key), next_pos: null, gap: null, at: clock(), sig: matchSignature(key, obj) };
         return Promise.resolve();
       }
       if (lookupFresh(key, obj)) return Promise.resolve();
@@ -1487,7 +1586,7 @@
         var settled = before !== null && res[0] !== null && res[0] !== before;
         var stillHot = !settled && hotUntil > clock();
         lookups[key] = {
-          elo: apiElo !== null ? apiElo : res[0],
+          elo: apiElo !== null ? apiElo : res[0] !== null ? res[0] : latestHistoryElo(raw, key),
           next_pos: res[1],
           gap: res[2],
           at: clock(),
@@ -1562,7 +1661,7 @@
       rawAt = at;
       modes = findRankedModes(data);
       if (!modes.length) {
-        setError('no ranked data found');
+        setError(emptyReason(data, true));
         return Promise.resolve();
       }
       rollSeasonIfNeeded(data);
@@ -1693,6 +1792,10 @@
     // When the next refresh is due, in ms from now.
     function nextDelay() {
       var t = clock();
+      if (failures > 0 && raw === null) {
+        var quick = FIRST_LOAD_RETRY_MS[Math.min(failures, FIRST_LOAD_RETRY_MS.length) - 1];
+        return Math.max(1000, lastAttempt + quick - t);
+      }
       if (failures > 0) {
         var back = Math.min(BACKOFF_MAX_MS, Math.max(OLI_CACHE_MS, cfg.refreshMs) * Math.pow(2, failures - 1));
         return Math.max(1000, lastAttempt + back - t);
@@ -1753,6 +1856,7 @@
       s.progression_pct = !isUnreal ? progression : null;
       s.prog_delta = !isUnreal ? progDelta : null;
       s.rank_display = isUnreal && placement ? ('#' + placement + ' ' + label).trim() : (label || '-');
+      if (mode === null && !label && emptyReason(raw)) s.rank_display = emptyReason(raw);
       s.elo_text = isUnreal && elo !== null ? elo + ' ELO' : null;
 
       s.season_kd = season.kd !== null ? season.kd.toFixed(2) : '-';
@@ -2170,10 +2274,45 @@
       });
     });
 
+    // A private profile, or one with no ranked games, shows only the reason.
+    // Everything in the card that isn't on the way to the rank text is hidden,
+    // which works for every design without each one knowing about it.
+    var hideCss = null;
+    function showOnlyReason(on) {
+      // Each design names its rank text differently; Wide splits it in two.
+      var rank = document.getElementById('rankText') || document.getElementById('rankValue')
+        || (document.getElementById('rankLabel') && document.getElementById('rankLabel').parentElement);
+      if (!rank) return;
+      var card = document.body;
+      if (!hideCss) {
+        hideCss = document.createElement('style');
+        hideCss.textContent = '.ro-empty-hide{display:none!important}';
+        document.head.appendChild(hideCss);
+      }
+      Array.prototype.forEach.call(card.querySelectorAll('.ro-empty-hide'), function (el) { el.classList.remove('ro-empty-hide'); });
+      if (!on) return;
+      for (var el = rank; el && el !== card; el = el.parentElement) {
+        Array.prototype.forEach.call(el.parentElement ? el.parentElement.children : [], function (sib) {
+          if (sib !== el && sib.tagName !== 'STYLE' && sib.tagName !== 'SCRIPT') sib.classList.add('ro-empty-hide');
+        });
+      }
+    }
+
+    function fetchDataShown(url) {
+      return engine.fetchData(url).then(function (r) {
+        return r.json().then(function (d) {
+          var empty = !!d && (d.rank_display === emptyReason({ 'public': false }) || d.rank_display === emptyReason({}));
+          // After the design has drawn this answer.
+          setTimeout(function () { showOnlyReason(empty); }, 0);
+          return r;
+        }, function () { return r; });
+      });
+    }
+
     return {
       version: VERSION,
       config: cfg,
-      fetchData: engine.fetchData,
+      fetchData: fetchDataShown,
       onUpdate: engine.onUpdate,
       requestCount: engine.requestCount,
       resetSession: function () { engine.resetSession(); engine.emit(); },
