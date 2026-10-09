@@ -2220,6 +2220,10 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         #codeInput.mode-btn::placeholder {
             color: rgba(220, 220, 220, 0.35);
         }
+    
+        /* Nothing below the record (?show=none): just the wins and losses. */
+        html.bare .rule,
+        html.bare .bottom { display: none !important; }
     </style>
 </head>
 <body>

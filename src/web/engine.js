@@ -961,7 +961,9 @@
       color: hex(q.get('color')),
       labelColor: hex(q.get('label')),
       demo: q.get('demo') === '1',
-      compact: q.get('compact') === '1',
+      // show=none: nothing below the rank (no stats, no creator code).
+      // compact=1 was the old name for it.
+      bare: q.get('show') === 'none' || q.get('compact') === '1',
       proxy: proxy
     };
   }
@@ -2154,8 +2156,8 @@
 
   function startOverlay(search) {
     var cfg = parseConfig(search);
-    // The compact layout is a class the designs style themselves.
-    if (cfg.compact) document.documentElement.classList.add('compact');
+    // Nothing below the rank: a class each design lays itself out for.
+    if (cfg.bare) document.documentElement.classList.add('bare');
     var storage = null;
     try { storage = window.localStorage; } catch (e) { storage = null; }
     var store = makeStore(storage);
@@ -2361,7 +2363,10 @@
       '#displayToggleBar,#sessionBar{margin-top:10px!important}' +
       '.mode-bar>.mode-btn{flex:1 1 120px!important;width:auto!important;min-width:0!important;' +
         'box-sizing:border-box!important;padding:10px 12px!important;white-space:nowrap}' +
-      '#codeInput{flex-basis:100%!important}';
+      '#codeInput{flex-basis:100%!important}' +
+      // No stats or code to switch between when the link says show=none.
+      'html.bare #displayToggleBar{display:none!important}' +
+      'html.bare #statsRow,html.bare #creatorRow,html.bare #creatorRowText,html.bare #pctRow{display:none!important}';
     (document.head || document.documentElement).appendChild(css);
   }
 

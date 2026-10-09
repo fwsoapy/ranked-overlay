@@ -720,17 +720,13 @@
               <span>Custom accent</span>
               <div class="color-input" data-color="color"></div>
             </div>
-            <div class="field" id="compact-field">
-              <span>Size</span>
-              <label class="check-line"><input id="compact-line" type="checkbox" /> Compact overlay</label>
-              <span class="field-hint">Only the important parts: rank, progress, your ELO change and how far to the next rank. Drops the season stats and creator code, and makes the card smaller.</span>
-            </div>
             <div class="field" id="show-field">
               <span id="show-label">Below your rank</span>
               <div class="seg" data-seg="show">
                 <button type="button" data-val="stats" id="show-stats">Season stats</button>
                 <button type="button" data-val="pct" data-show-design="record">Win %</button>
                 <button type="button" data-val="code">Creator code</button>
+                <button type="button" data-val="none">Nothing</button>
               </div>
             </div>
             <div class="field" id="rec-field">
@@ -790,7 +786,7 @@
       Also check out <a href="https://fwsoapy.github.io/code-overlay/" target="_blank" rel="noreferrer noopener">Code Overlay</a>.
     </footer>
 
-    <script src="./engine.js?v=18e3604cf7"></script>
+    <script src="./engine.js?v=cea82f05e5"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>
       (function () {
@@ -842,7 +838,7 @@
           customColor: '#ff7a00',
           labelCustom: false, labelColor: '#ffffff',
           show: 'stats', code: '',
-          mode: '', elo: 'session', refresh: '60', next: true, rec: false, compact: false,
+          mode: '', elo: 'session', refresh: '60', next: true, rec: false,
           previewBg: 'checker',
         };
 
@@ -867,6 +863,10 @@
         if (['60', '300', '600'].indexOf(String(state.refresh)) < 0) state.refresh = '60';
         // "Today" (since midnight) isn't offered any more; Session took its place.
         if (['session', '12h', '24h'].indexOf(state.elo) < 0) state.elo = 'session';
+        // The Compact checkbox became "Nothing" under Below your rank.
+        if (state.compact) { if (state.show !== 'code') state.show = 'none'; }
+        delete state.compact;
+        if (['stats', 'pct', 'code', 'none'].indexOf(state.show) < 0) state.show = 'stats';
 
         function $(id) { return document.getElementById(id); }
 
@@ -891,7 +891,7 @@
           var code = cleanCode(state.code);
           if (state.show === 'code' && code) p.set('code', code);
           if (state.rec && state.design !== 'record') p.set('rec', '1');
-          if (state.compact && state.design !== 'record') p.set('compact', '1');
+          if (state.show === 'none') p.set('show', 'none');
           if (state.show === 'pct' && state.design === 'record') p.set('show', 'pct');
           if (state.mode) p.set('mode', state.mode);
           // Always written: a link with no elo= counts from midnight Central,
@@ -929,15 +929,17 @@
           // Some modes make a card taller than the others (Reload and Boxfights
           // have a progress bar row), so also take the real card's size from
           // the page showing, with the same margin below it as above it.
-          var isCompact = state.compact && state.design !== 'record';
-          if (isCompact) h = 0;
+          // With nothing below the rank the card is shorter than the usual
+          // size, so the preview follows the real card instead.
+          var isBare = state.show === 'none';
+          if (isBare) h = 0;
           if (current) {
             try {
               var cd = current.contentDocument;
               var cardEl = cd && (cd.querySelector('.card') || cd.querySelector('.overlay-container'));
               if (cardEl) {
                 var cr = cardEl.getBoundingClientRect();
-                h = isCompact ? Math.ceil(cr.bottom + cr.top) : Math.max(h, Math.ceil(cr.bottom + cr.top));
+                h = isBare ? Math.ceil(cr.bottom + cr.top) : Math.max(h, Math.ceil(cr.bottom + cr.top));
               }
             } catch (e) { /* not readable yet */ }
           }
@@ -1257,10 +1259,6 @@
           state.next = e.target.checked;
           changed();
         });
-        $('compact-line').addEventListener('change', function (e) {
-          state.compact = e.target.checked;
-          changed();
-        });
         $('rec-line').addEventListener('change', function (e) {
           state.rec = e.target.checked;
           changed();
@@ -1287,7 +1285,8 @@
           state.labelCustom = !!hex(q.get('label'));
           if (state.labelCustom) state.labelColor = hex(q.get('label'));
           state.code = q.get('code') || '';
-          state.show = state.code ? 'code' : (q.get('show') === 'pct' ? 'pct' : 'stats');
+          // compact=1 was the old "only the important parts" option.
+          state.show = state.code ? 'code' : (q.get('show') === 'pct' ? 'pct' : (q.get('show') === 'none' || q.get('compact') === '1' ? 'none' : 'stats'));
           state.mode = q.get('mode') || '';
           var elo = q.get('elo') || 'session';
           state.elo = ['session', '12h', '24h'].indexOf(elo) >= 0 ? elo : 'session';
@@ -1295,7 +1294,6 @@
           state.refresh = String([300, 600].indexOf(r) >= 0 ? r : 60);
           state.next = q.get('next') !== '0';
           state.rec = q.get('rec') === '1';
-          state.compact = q.get('compact') === '1';
           return true;
         }
 
@@ -1429,18 +1427,12 @@
           // The Record design is the wins and losses, so it has nothing to add.
           $('rec-line').checked = !!state.rec;
           $('rec-field').hidden = isRecord;
-          $('compact-line').checked = !!state.compact;
-          $('compact-field').hidden = isRecord;
-          // Compact drops the season stats and the creator code, so there is
-          // nothing to pick for them.
-          var compactOn = !!state.compact && !isRecord;
-          $('show-field').hidden = compactOn;
           document.querySelectorAll('[data-show-design]').forEach(function (el) {
             el.hidden = el.getAttribute('data-show-design') !== state.design;
           });
           document.querySelectorAll('[data-show-val]').forEach(function (el) {
             var p = el.getAttribute('data-show-val').split('=');
-            el.hidden = String(state[p[0]]) !== p[1] || (compactOn && p[0] === 'show');
+            el.hidden = String(state[p[0]]) !== p[1];
           });
           $('obs-link').value = hasAccount() ? overlayUrl(false) : 'Add your account to get your link';
           $('copy').disabled = false;

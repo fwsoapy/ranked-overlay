@@ -38,7 +38,7 @@ That's it. The overlay keeps itself up to date. If you change something later, c
 
 ## Designs
 
-There are 9 designs. Every one can show season stats or a creator code, and any accent color works on all of them.
+There are 9 designs. Every one can show season stats, a creator code or nothing at all below the rank (a smaller card), and any accent color works on all of them. On Rainbow, a picked color replaces the rainbow with shades of that color.
 
 <table>
 <tr>

@@ -2272,12 +2272,11 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
         .elo-na { display: none !important; }
     
-        /* Compact overlay (?compact=1): only the important rows. */
-        html.compact #statsRow,
-        html.compact #creatorRow,
-        html.compact #creatorRowText { display: none !important; }
-        html.compact body { zoom: 0.8; }
-        html.compact .divider-mid { display: none; }
+        /* Nothing below the rank (?show=none): no stats, no creator code. */
+        html.bare #statsRow,
+        html.bare #creatorRow,
+        html.bare #creatorRowText { display: none !important; }
+        html.bare .divider-mid { display: none; }
     </style>
 </head>
 <body>

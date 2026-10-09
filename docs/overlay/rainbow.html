@@ -58,29 +58,46 @@
             text-transform: uppercase; white-space: nowrap;
         }
 
-        /* Slow rainbow for rank label: red, orange, yellow, green, blue,
-           indigo, violet and back to red, sweeping across the text. Each
-           character runs the same colour loop a little further along than
-           the one before it (see setRainbowText), so the colours slide
-           across the word. It is done with text colour rather than a
-           gradient clipped to the text because browsers' "dark mode for
-           websites" darkens bright backgrounds, which turned the yellows
-           brown. It leaves text alone when the colour is bright enough
-           (0.299R + 0.587G + 0.114B of about 150 or more), so every stop
-           here, and every blend between two of them, is at least that. */
-        .unreal-rainbow { color: #ff6e5a; }
-        .unreal-rainbow .rb { animation: rainbowSweep 45s linear infinite; }
-        @keyframes rainbowSweep {
-            0%      { color: #ff6e5a; }
-            11.11%  { color: #ff8a1f; }
-            22.22%  { color: #ffe31a; }
-            33.33%  { color: #3ee06a; }
-            44.44%  { color: #22d6f2; }
-            55.56%  { color: #5aa5ff; }
-            66.67%  { color: #9188ff; }
-            77.78%  { color: #c070ff; }
-            88.89%  { color: #ff70b0; }
-            100%    { color: #ff6e5a; }
+        /* Slow rainbow for the rank text, flowing diagonally from the top left
+           to the bottom right. One repeating gradient clipped to the text,
+           moved along by exactly one repeat per loop so it never jumps:
+           shifting it by (d, d) moves the 135deg bands by d * sqrt(2), so a
+           1200px repeat needs a shift of 848.53px (and the 440px one 311.13px). Every colour stays bright
+           (0.299R + 0.587G + 0.114B of about 150 or more) so a browser's
+           "dark mode for websites" leaves it alone.
+           With a colour picked on the setup page (?color=), the rank flows
+           through light and dark shades of that colour instead. */
+        .unreal-rainbow {
+            display: inline-block;
+            color: #ff6e5a;
+            background-image: repeating-linear-gradient(135deg,
+                #ff6e5a 0px, #ff8a1f 133px, #ffe31a 267px, #3ee06a 400px, #22d6f2 533px,
+                #5aa5ff 667px, #9188ff 800px, #c070ff 933px, #ff70b0 1067px, #ff6e5a 1200px);
+            /* One tile far bigger than the text, so the moving pattern never
+               shows a tile edge inside it. */
+            background-size: 3000px 3000px;
+            background-repeat: no-repeat;
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: rankFlow 45s linear infinite;
+        }
+        html.custom-accent .unreal-rainbow {
+            color: var(--accent);
+            background-image: repeating-linear-gradient(135deg,
+                var(--accent) 0px,
+                color-mix(in srgb, var(--accent) 40%, white) 110px,
+                var(--accent) 220px,
+                color-mix(in srgb, var(--accent) 75%, black) 330px,
+                var(--accent) 440px);
+            animation: accentFlow 9s linear infinite;
+        }
+        @keyframes rankFlow {
+            from { background-position: -1200px -1200px; }
+            to   { background-position: -351.47px -351.47px; }
+        }
+        @keyframes accentFlow {
+            from { background-position: -1200px -1200px; }
+            to   { background-position: -888.87px -888.87px; }
         }
 
         /* Shimmer for ELO number - thin purple line sweeps across white */
@@ -90,16 +107,17 @@
         .elo-container::after {
             content: attr(data-text);
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(90deg,
+            background: linear-gradient(135deg,
                 transparent 40%,var(--accent) 47%,color-mix(in srgb, var(--accent) 80%, black) 50%,var(--accent) 53%,transparent 60%)
                 no-repeat;
-            background-size: 400% 100%; background-position: 100% 0%;
+            background-size: 400% 400%; background-position: 100% 100%;
             -webkit-background-clip: text; background-clip: text;
             -webkit-text-fill-color: transparent;
             animation: shimmer 10s ease-in-out infinite;
         }
+        /* The sweep runs from the top left to the bottom right. */
         @keyframes shimmer {
-            0%   { background-position: 100% 0%; }
+            0%   { background-position: 100% 100%; }
             40%  { background-position: 0% 0%; }
             100% { background-position: 0% 0%; }
         }
@@ -111,16 +129,16 @@
         .next-shimmer::after {
             content: attr(data-text);
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(90deg,
+            background: linear-gradient(135deg,
                 transparent 43%,var(--accent) 48%,color-mix(in srgb, var(--accent) 85%, white) 50%,var(--accent) 52%,transparent 57%)
                 no-repeat;
-            background-size: 500% 100%; background-position: 100% 0%;
+            background-size: 500% 500%; background-position: 100% 100%;
             -webkit-background-clip: text; background-clip: text;
             -webkit-text-fill-color: transparent;
             animation: shimmerNext 14s ease-in-out infinite;
         }
         @keyframes shimmerNext {
-            0%   { background-position: 100% 0%; }
+            0%   { background-position: 100% 100%; }
             35%  { background-position: 0% 0%; }
             100% { background-position: 0% 0%; }
         }
@@ -285,11 +303,10 @@
         /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
         .elo-na { display: none !important; }
     
-        /* Compact overlay (?compact=1): only the important rows. */
-        html.compact #statsRow,
-        html.compact #creatorRow,
-        html.compact #creatorRowText { display: none !important; }
-        html.compact body { zoom: 0.8; }
+        /* Nothing below the rank (?show=none): no stats, no creator code. */
+        html.bare #statsRow,
+        html.bare #creatorRow,
+        html.bare #creatorRowText { display: none !important; }
     </style>
 </head>
 <body>
@@ -338,7 +355,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=18e3604cf7"></script>
+    <script src="../engine.js?v=cea82f05e5"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -353,6 +370,8 @@
                     document.documentElement.style.setProperty('--accent', '#' + c);
                     document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
                     document.documentElement.style.setProperty('--stat-label-color', '#' + c);
+                    // A colour was picked: the rank flows in its shades, not a rainbow.
+                    document.documentElement.classList.add('custom-accent');
                 }
             }
         })();
@@ -383,23 +402,15 @@
             while (fs > 11 && inner.offsetWidth > el.clientWidth) { fs -= 1; el.style.fontSize = fs + 'px'; }
         }
 
-        // The rank text, one span per character, each starting the colour
-        // loop RAINBOW_STEP seconds further along than the last, so the
-        // rainbow sweeps across it. Rebuilt only when the text changes, and
-        // offset by the clock so a new rank carries on the same sweep.
-        var RAINBOW_CYCLE = 45, RAINBOW_STEP = 0.5;
+        // The rank text. The flowing colour is a CSS gradient on the element;
+        // the animation is started part way through by the clock, so a new
+        // rank (or a reload) carries on the same flow instead of restarting.
         function setRainbowText(el, text) {
             if (el.getAttribute('data-text') === text) return;
             el.setAttribute('data-text', text);
-            var phase = (performance.now() / 1000) % RAINBOW_CYCLE;
-            el.textContent = '';
-            for (var i = 0; i < text.length; i++) {
-                var ch = document.createElement('span');
-                ch.className = 'rb';
-                ch.textContent = text.charAt(i);
-                ch.style.animationDelay = -(phase + i * RAINBOW_STEP) + 's';
-                el.appendChild(ch);
-            }
+            el.textContent = text;
+            var cycle = document.documentElement.classList.contains('custom-accent') ? 9 : 45;
+            el.style.animationDelay = -((Date.now() / 1000) % cycle) + 's';
         }
         setRainbowText($('#rankText'), $('#rankText').textContent);
 

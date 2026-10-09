@@ -2344,11 +2344,18 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
         /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
         .elo-na { display: none !important; }
     
-        /* Compact overlay (?compact=1): only the important rows. */
-        html.compact #statsRow,
-        html.compact #creatorRow,
-        html.compact #creatorRowText { display: none !important; }
-        html.compact body { zoom: 0.8; }
+        /* Nothing below the rank (?show=none): no stats, no creator code. */
+        html.bare #statsRow,
+        html.bare #creatorRow,
+        html.bare #creatorRowText { display: none !important; }
+        /* The ELO change moved down a row, so the ELO (or progress) sits right
+           after the divider instead of being pushed to the far edge. */
+        html.bare .elo-group,
+        html.bare .prog-group { margin-left: 0; }
+        /* ...and the card shrinks to fit, so there's no empty space top right
+           and the ELO change lines up under the end of the top row. */
+        html.bare .overlay-container { min-width: 0; }
+        html.bare .mid-row { gap: 28px; }
     </style>
 </head>
 <body>
@@ -2619,6 +2626,16 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
                 } else {
                     nextRow.classList.add('hidden');
                 }
+            }
+
+            // Nothing below the rank (show=none): the ELO change moves down into
+            // the row the stats used, so the top row is just rank and ELO.
+            if (document.documentElement.classList.contains('bare')) {
+                var mid = document.querySelector('.mid-row');
+                var s1 = $('#sessionText'), s2 = $('#sessionText2');
+                [s1, s2].forEach(function(el) { if (el.parentElement !== mid) mid.appendChild(el); });
+                s1.style.display = d.is_unreal ? '' : 'none';
+                s2.style.display = d.is_unreal ? 'none' : '';
             }
 
             $('#seasonKd').textContent    = d.season_kd    != null ? d.season_kd    : '-';
