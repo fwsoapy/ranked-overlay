@@ -2325,9 +2325,18 @@ OVERLAY_HTML = r"""<!DOCTYPE html>
            and the ELO change on its own line under the next-rank line
            instead of after a "|". */
         html.bare .rank-big { font-size: 34px; }
-        html.bare .next-row { flex-wrap: wrap; row-gap: 8px; font-size: 20px; }
+        /* Plain text flow rather than a wrapping flex row: a wrapping row is
+           sized as if everything sat on one line, which kept the card wide. */
+        html.bare .next-row { display: block; font-size: 20px; }
         html.bare .next-row > .br:not([id]) { display: none; }
-        html.bare .next-row #sessionText { flex-basis: 100%; }
+        html.bare .next-row #sessionText { display: block; margin-top: 8px; }
+        /* ...and the card hugs its content instead of keeping the stats row's
+           width, with the same room on the right as on the left. */
+        html.bare .overlay-container { min-width: 0; padding-right: 34px; align-self: flex-start; }
+        html.bare .info-col { flex: 0 0 auto; }
+        /* The footer may be the widest thing now: let it widen the card
+           rather than shrink or clip. */
+        html.bare .rec-line { width: auto; }
         html.bare.has-rec .rec-line { margin-top: 10px; }
     </style>
 </head>
