@@ -321,16 +321,15 @@
       }
       .swatch:hover { border-color: var(--line-hover); transform: translateY(-1px); }
       .swatch.on { outline: 2px solid var(--accent); outline-offset: 2px; }
-      .swatch.default::after {
-        content: "D";
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        font-size: 12px;
+      /* The design's own colour: a wider button that says so. */
+      .swatch.default {
+        width: auto;
+        padding: 0 14px;
+        font: inherit;
+        font-size: 13px;
         font-weight: 700;
         color: #fff;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
       }
 
       /* --- design tiles ------------------------------------------------ */
@@ -1193,6 +1192,11 @@
           return b;
         }
         var defaultSwatch = swatchButton('Design default', '', true);
+        defaultSwatch.textContent = 'Default';
+        // Rainbow's own look is the rainbow, so its Default shows diagonal
+        // stripes: red in the top left, then orange, yellow, green, blue, purple.
+        var RAINBOW_STRIPES = 'linear-gradient(135deg, #ff4d4d 0 16.6%, #ff9a1f 16.6% 33.3%, #ffe31a 33.3% 50%, ' +
+          '#3ee06a 50% 66.6%, #3b8bff 66.6% 83.3%, #a64dff 83.3% 100%)';
         SWATCHES.forEach(function (s) { swatchButton(s[0], s[1]).style.background = s[1]; });
 
         // Swatch + hex box kept in step, same as Code Overlay.
@@ -1400,8 +1404,8 @@
           document.querySelectorAll('[data-design]').forEach(function (b) {
             b.classList.toggle('on', b.getAttribute('data-design') === state.design);
           });
-          defaultSwatch.style.background = d.accent;
-          defaultSwatch.title = 'Design default (' + d.accent + ')';
+          defaultSwatch.style.background = state.design === 'rainbow' ? RAINBOW_STRIPES : d.accent;
+          defaultSwatch.title = state.design === 'rainbow' ? 'Design default (rainbow)' : 'Design default (' + d.accent + ')';
           swatchBox.querySelectorAll('.swatch').forEach(function (b) {
             b.classList.toggle('on', b.getAttribute('data-val') === state.color);
           });

@@ -324,6 +324,13 @@
         html.bare #statsRow,
         html.bare #creatorRow,
         html.bare #creatorRowText { display: none !important; }
+        /* With nothing below the rank there's room to breathe: bigger text,
+           and the ELO change on its own line under the next-rank line
+           instead of after a "|". */
+        html.bare .rank-big { font-size: 34px; }
+        html.bare .next-row { flex-wrap: wrap; row-gap: 8px; font-size: 20px; }
+        html.bare .next-row > .br:not([id]) { display: none; }
+        html.bare .next-row #sessionText { flex-basis: 100%; }
         html.bare.has-rec .rec-line { margin-top: 10px; }
     </style>
 </head>
