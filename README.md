@@ -6,7 +6,7 @@ It runs as a website. There's nothing to download, install or run on your PC, so
 
 ### 👉 [Open Ranked Overlay](https://fwsoapy.github.io/ranked-overlay/)
 
-![Fortnite ranked overlay demo showing live ELO and rank tracking in OBS](demo.gif)
+![Fortnite ranked overlay demo showing live ELO and rank tracking in OBS](images/demo.gif)
 
 ---
 
@@ -48,48 +48,48 @@ There are 9 designs. Every one can show season stats, a creator code or nothing 
 </tr>
 <tr>
 <td width="20%"><b>Minimal</b><br>Clean single-row card with rank and ELO side by side and a bold colored left border.</td>
-<td align="center" width="40%"><img src="Minimal/preview-stats.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Minimal/preview-code.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/minimal-stats.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/minimal-code.png" width="300" alt="Minimal Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Classic</b><br>A dark card with a thin top accent line and subtle dividers between sections.</td>
-<td align="center" width="40%"><img src="Classic/preview-stats.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Classic/preview-code.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/classic-stats.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/classic-code.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Sharp</b><br>Big stacked text and clipped corners. Structured and aggressive.</td>
-<td align="center" width="40%"><img src="Sharp/preview-stats.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Sharp/preview-code.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/sharp-stats.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/sharp-code.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Wide</b><br>Spread out sideways with a glowing bar on the left. Good for wide layouts.</td>
-<td align="center" width="40%"><img src="Wide/preview-stats.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Wide/preview-code.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/wide-stats.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/wide-code.png" width="300" alt="Wide Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Slash</b><br>A diagonal cut splits rank and ELO into two panels.</td>
-<td align="center" width="40%"><img src="Slash/preview-stats.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Slash/preview-code.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/slash-stats.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/slash-code.png" width="300" alt="Slash Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Rainbow</b><br>Animated rainbow rank text and a shimmering ELO value. High energy.</td>
-<td align="center" width="40%"><img src="Rainbow/preview-stats.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Rainbow/preview-code.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/rainbow-stats.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/rainbow-code.png" width="300" alt="Rainbow Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Modern</b><br>A sleek card with a soft glow and a bold colored left border.</td>
-<td align="center" width="40%"><img src="Modern/preview-stats.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Modern/preview-code.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/modern-stats.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/modern-code.png" width="300" alt="Modern Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Pulse</b><br>Green terminal HUD with a radial gauge and a monospace readout.</td>
-<td align="center" width="40%"><img src="Pulse/preview-stats.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Pulse/preview-code.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/pulse-stats.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/pulse-code.png" width="300" alt="Pulse Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Record</b><br>Just your record: wins in green, losses in red, with matches, kills and K/D, or your win % and top placements, under it. See <a href="#wins-and-losses">Wins and losses</a>.</td>
-<td align="center" width="40%"><img src="Record/preview-stats.png" width="300" alt="Record Fortnite ranked win and loss overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="Record/preview-code.png" width="300" alt="Record Fortnite ranked win and loss overlay design for OBS, creator code"></td>
+<td align="center" width="40%"><img src="images/record-stats.png" width="300" alt="Record Fortnite ranked win and loss overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/record-code.png" width="300" alt="Record Fortnite ranked win and loss overlay design for OBS, creator code"></td>
 </tr>
 </table>
 
@@ -239,7 +239,7 @@ python tests/web/test_engine.py
 
 `web/README.md` covers deploying the Worker.
 
-The old Windows download version (the design folders like `Minimal/`, the setup wizard and `setup.bat`) isn't maintained any more and isn't needed for the website. Those files are still in the repo so installs that already exist keep working, and the tests use the Python server as the reference for the engine's numbers. New setups should use the website.
+The old Windows download version (the design folders, the setup wizard and `setup.bat`) lives in [`archive/`](archive/). It isn't maintained any more and isn't needed for the website; the tests still use its Python server as the reference for the engine's numbers. New setups should use the website.
 
 ---
 

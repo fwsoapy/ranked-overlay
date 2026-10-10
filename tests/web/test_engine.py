@@ -152,7 +152,7 @@ def leaderboard_file(url):
 
 def load_server(account_id):
     folder = tempfile.mkdtemp()
-    shutil.copy(os.path.join(ROOT, "Classic", "server.py"), folder)
+    shutil.copy(os.path.join(ROOT, "archive", "desktop", "Classic", "server.py"), folder)
     with open(os.path.join(folder, "config.json"), "w") as f:
         json.dump({"epic_account_id": account_id, "epic_username": "tester", "auto_update": "off"}, f)
     spec = importlib.util.spec_from_file_location("server_" + account_id, os.path.join(folder, "server.py"))

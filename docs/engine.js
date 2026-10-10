@@ -2,8 +2,8 @@
  * Fortnite Ranked Overlay - browser engine.
  *
  * The hosted version of the overlay runs entirely in the page. This file is the
- * JavaScript twin of src/core_head.py: it reads the same OliTracker data, makes
- * the same decisions, and hands the designs exactly the same /data answer the
+ * JavaScript twin of archive/src/core_head.py (the old Windows app): it reads
+ * the same OliTracker data, makes the same decisions, and hands the designs exactly the same /data answer the
  * Python server does, so the eight designs work unchanged.
  *
  * Every request goes through a Cloudflare Worker (web/worker.js) because

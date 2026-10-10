@@ -28,7 +28,7 @@ const ALLOWED_ORIGINS = [
 ];
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-// Same list as _slug_for_mode() in src/core_head.py.
+// Same list as _slug_for_mode() in archive/src/core_head.py.
 const SLUGS = new Set(["battle-royale", "zero-build", "reload", "reload-zb", "og", "rocket-racing"]);
 
 const ACCOUNT_ID = /^[0-9a-f]{32}$/i;

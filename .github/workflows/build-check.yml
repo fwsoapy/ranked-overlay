@@ -1,9 +1,8 @@
 name: Build check
 
-# The design folders are generated from src/. If someone edits a generated
-# server.py directly, the next release quietly overwrites it -- so the only
-# way to catch that is to check on every push that the folders in the repo are
-# still exactly what src/ produces.
+# docs/ (the website) is generated from src/ by tools/build.py. If someone
+# edits a file in docs/ directly, the next build quietly overwrites it, so
+# check on every push that docs/ is still exactly what src/ produces.
 
 on:
   push:
@@ -20,25 +19,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Generated folders match src/
+      - name: docs/ matches src/
         run: python tools/build.py --check
-
-      - name: Every design compiles
-        run: |
-          for design in Minimal Classic Sharp Wide Slash Rainbow Modern Pulse Record; do
-            python -m py_compile "$design/server.py"
-            python -m py_compile "wizard/templates/$design/server.py"
-          done
-          python -m py_compile wizard/wizard.py
-
-      - name: update.json is valid and consistent
-        run: python tools/check_manifest.py
 
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # The website (docs/) runs src/web/engine.js instead of the Python
-      # server. Same data in, same numbers out, and inside its request budget.
-      - name: Website engine matches the Python server
+      # src/web/engine.js is checked against the old Python server it was
+      # ported from (archive/), on real OliTracker responses, and against its
+      # request budget.
+      - name: Website engine checks
         run: python tests/web/test_engine.py

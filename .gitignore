@@ -3,8 +3,8 @@ __pycache__/
 *.pyc
 
 # PyInstaller build output (the wizard exe is attached to releases, not committed)
-wizard/build/
-wizard/dist/
+archive/wizard/build/
+archive/wizard/dist/
 *.spec
 
 # Each design folder ships a config.json with placeholders in it, so those are
