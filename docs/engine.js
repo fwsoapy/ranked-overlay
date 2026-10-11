@@ -52,7 +52,8 @@
   var LOOKUP_TTL_MS = 10 * 60 * 1000;    // leaderboard re-read when nothing changed
   var LOOKUP_HOT_MS = 60 * 1000;         // ...and right after a match
   var HOT_WINDOW_MS = 5 * 60 * 1000;     // how long "right after a match" lasts
-  var EMPTY_PAGE_TTL_MS = 30 * 60 * 1000; // pages past the end of the board
+  var NO_ELO_RETRY_MS = 10 * 60 * 1000;  // a lookup that found no ELO
+  var EMPTY_PAGE_TTL_MS = 10 * 60 * 1000; // a leaderboard page that came back empty
   var SESSION_GAP_MS = 60 * 60 * 1000;   // a gap this long starts a new session
   // The Worker retries OliTracker itself (a cold profile can take 30+ seconds
   // to come back), so give it time to finish before giving up on it.
@@ -1082,7 +1083,9 @@
     var id = cfg.accountId;
     var K = {
       stats: 'ro1:stats:' + id,
-      lookup: 'ro1:lookup:' + id,
+      // ro2: leaderboard answers saved before the Worker could read past #1000
+      // said "no ELO"; a new name means none of those are trusted again.
+      lookup: 'ro2:lookup:' + id,
       session: 'ro1:session:' + id,
       reset: 'ro1:reset:' + id,
       busy: 'ro1:busy:' + id
@@ -1090,6 +1093,7 @@
 
     var requests = 0;
     var listeners = [];
+    var startedAt = clock();   // when this overlay was loaded (a refresh in OBS starts it again)
     var raw = null, rawAt = 0, modes = [];
     var lookups = {};          // mode key -> {elo, next_pos, gap, at, sig, hotUntil}
     var inflight = {};         // mode key -> Promise
@@ -1474,7 +1478,7 @@
       return fetchText(url);
     }
 
-    function pageKey(slug, page) { return 'ro1:lb:' + slug + ':' + page; }
+    function pageKey(slug, page) { return 'ro2:lb:' + slug + ':' + page; }
 
     var BUSY_MS = FETCH_TIMEOUT_MS + 2000;
 
@@ -1520,12 +1524,14 @@
     function pruneLeaderboardCache() {
       var cutoff = clock() - 2 * 60 * 60 * 1000;
       store.keys().forEach(function (k) {
-        if (k.indexOf('ro1:lbbusy:') === 0) {
+        // Leftovers from before ro2: never read again, so just clear them.
+        if (k.indexOf('ro1:lb') === 0 || k.indexOf('ro1:lookup:') === 0) { store.remove(k); return; }
+        if (k.indexOf('ro2:lbbusy:') === 0) {
           var b = store.get(k);
           if (!isDict(b) || clock() - b.at > 60 * 1000) store.remove(k);
           return;
         }
-        if (k.indexOf('ro1:lb:') !== 0) return;
+        if (k.indexOf('ro2:lb:') !== 0) return;
         var v = store.get(k);
         if (!isDict(v) || typeof v.at !== 'number' || v.at < cutoff) store.remove(k);
       });
@@ -1539,16 +1545,21 @@
         return (h.rows || []).map(function (r) { return { placement: r[0], elo: r[1], account_id: r[2] }; });
       };
       if (isDict(hit) && Array.isArray(hit.rows)) {
-        var ttl = hit.rows.length ? maxAge : Math.max(maxAge, EMPTY_PAGE_TTL_MS);
+        // An empty answer (an error, a Cloudflare check, a page past the
+        // end) is only trusted briefly, so a hiccup can't hide the ELO for long.
+        // A refresh asks again for empty pages saved before it.
+        var ttl = hit.rows.length ? maxAge : hit.at >= startedAt ? Math.min(maxAge, EMPTY_PAGE_TTL_MS) : 0;
         if (clock() - hit.at < ttl) return Promise.resolve(rowsOf(hit));
       }
       if (pageInflight[key]) return pageInflight[key];
       var url = cfg.proxy + '/ranked/' + slug + (page > 1 ? '?page=' + page : '');
-      var lock = 'ro1:lbbusy:' + slug + ':' + page;
+      var lock = 'ro2:lbbusy:' + slug + ':' + page;
       var asked = clock();
       var fetchIt = function () {
         return get(url).then(function (html) {
           var rows = parseLeaderboardRows(html);
+          // No rows: keep a stale copy if there is one rather than blanking it.
+          if (!rows.length && isDict(hit) && Array.isArray(hit.rows) && hit.rows.length) return rowsOf(hit);
           store.set(key, {
             at: clock(),
             rows: rows.map(function (r) { return [r.placement, r.elo, r.account_id]; })
@@ -1578,7 +1589,12 @@
       var entry = lookups[key];
       if (!isDict(entry)) return false;
       var t = clock();
-      var maxAge = (entry.hotUntil || 0) > t ? LOOKUP_HOT_MS : lookupTtl();
+      // A lookup that found no ELO is asked again sooner (a hiccup, or a
+      // Worker that couldn't read that deep yet), but not every minute.
+      var noElo = entry.elo === null || entry.elo === undefined;
+      // ...and a refresh looks again straight away.
+      if (noElo && entry.at < startedAt) return false;
+      var maxAge = (entry.hotUntil || 0) > t ? LOOKUP_HOT_MS : noElo ? Math.min(lookupTtl(), NO_ELO_RETRY_MS) : lookupTtl();
       // A new placement is re-read from the cached page (free) so the row it
       // points at is the right one; only a page we don't have costs a request.
       return entry.sig === matchSignature(key, obj) && entry.placement === unrealPlacement(obj)

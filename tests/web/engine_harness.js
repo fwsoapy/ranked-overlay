@@ -207,6 +207,27 @@ async function websiteChecks() {
     check('with ELO there is no spots text', d.spots_text, null);
   }
 
+  // A leaderboard page that came back empty (an error, the old Worker's
+  // "pages 1-10 only") must not hide the ELO after a refresh.
+  {
+    const store = E.makeStore(memoryStorage());
+    const prof = JSON.stringify({ user_id: 'a', public: true, stats: {}, match_history: [],
+      ranked_stats: { 'ranked-br-combined': { division: 21, promotion_progression: 50, current_unreal_placement: 1053, elo: null } } });
+    const row = (i, elo) => '<tr class="leaderboard-player-row"><td class="leaderboard-rank-cell ">#' + i + '</td><td><a href="/stats/' +
+      (i === 1053 ? '448e4dc2677c4617a7daf8f1f5459825' : String(i).padStart(32, '0')) + '">p</a></td><td class="leaderboard-wins-cell"><p>' + elo + '</p></td></tr>';
+    const page11 = '<table>' + row(1052, 4606) + row(1053, 4604) + '</table>';
+    let t = 1.79e12, workerOld = true;
+    const make = () => E.createEngine({ cfg: E.parseConfig('?id=448e4dc2677c4617a7daf8f1f5459825&elo=session'), store, now: () => t,
+      fetchText: async (u) => (u.includes('/stats/') ? prof : workerOld ? '{"error":"only pages 1-10 are valid"}' : page11) });
+    let eng = make(); await eng.init();
+    let d = await (await eng.fetchData('/data?window=session')).json();
+    check('old Worker: no ELO yet', d.elo_text, null);
+    workerOld = false; t += 60 * 1000;
+    eng = make(); await eng.init();          // a refresh in OBS
+    d = await (await eng.fetchData('/data?window=session')).json();
+    check('after a refresh the ELO shows', [d.elo_text, d.next_gap, d.next_pos], ['4604 ELO', '2', '1052']);
+  }
+
   // A failed first load retries in seconds, not minutes.
   {
     let t = 1.79e12, calls = 0;
