@@ -37,7 +37,7 @@ STEP_SECS = 400          # time between refreshes in a scenario
 WINDOWS = ["session", "season"]
 # Fields only the website's engine has (the Python server never did), so
 # they're left out of the comparison and checked in engine_harness.js.
-WEB_ONLY = {"spots_text", "spots_sign", "spots_to_top", "spots_target"}
+WEB_ONLY = {"spots_text", "spots_sign"}
 
 
 def stats(name):

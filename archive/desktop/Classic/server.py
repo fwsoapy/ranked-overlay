@@ -274,7 +274,7 @@ MODE_STAT_PATH = {
 # with rows or it does not, so if a future season publishes a deeper board the
 # overlay picks the extra ELO up on its own.
 LEADERBOARD_PAGE_SIZE     = 100
-LEADERBOARD_PAGE_LIMIT    = 10      # OliTracker's JSON leaderboard stops at page 10 (top 1000)
+LEADERBOARD_PAGE_LIMIT    = 100000  # sanity stop (the website's Worker reads deep pages from the web page)
 LEADERBOARD_TTL           = 60      # seconds; keeps pace with POLL_SECONDS
 LEADERBOARD_PAGES_BACK    = 4       # pages to walk up through an ELO tie
 

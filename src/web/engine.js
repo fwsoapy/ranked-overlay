@@ -64,7 +64,7 @@
 
   // LEADERBOARD_* in core_head.py
   var LEADERBOARD_PAGE_SIZE = 100;
-  var LEADERBOARD_PAGE_LIMIT = 10;     // OliTracker's JSON leaderboard stops at page 10 (top 1000)
+  var LEADERBOARD_PAGE_LIMIT = 100000; // sanity stop: the Worker reads past the API's 10 pages from the web page
   var LEADERBOARD_PAGES_BACK = 4;
   // Only used to order the mode buttons before a mode's leaderboard has been
   // read. The real lookup never assumes this depth.
@@ -1965,21 +1965,13 @@
         s.session_sign = signOf(pd);
       }
 
-      // Unreal outside the top 1000: OliTracker (and Epic's public board)
-      // only publish ELO for the top 1000, so there is no ELO to show. The
-      // placement still updates, so these say how it moved over the same
-      // stretch as the ELO change, and how far it is to the top 1000, where
-      // the ELO comes back. Website only; the designs show them in the ELO
-      // change and next-position slots.
+      // Unreal with no ELO at all (the profile has none and the leaderboard
+      // couldn't be read): the placement still updates, so say how it moved
+      // over the same stretch as the ELO change instead of leaving the slot
+      // empty. Website only; the designs show it in the ELO change slot.
       s.spots_text = null;
       s.spots_sign = 'zero';
-      s.spots_to_top = null;
-      s.spots_target = null;
       if (isUnreal && elo === null && placement) {
-        if (placement > LEADERBOARD_PAGE_LIMIT * LEADERBOARD_PAGE_SIZE) {
-          s.spots_target = LEADERBOARD_PAGE_LIMIT * LEADERBOARD_PAGE_SIZE;
-          s.spots_to_top = placement - s.spots_target;
-        }
         if (window === 'season') {
           var peak = mode !== null ? num(mode.peak_unreal_placement) : null;
           s.spots_text = peak ? 'PEAK #' + peak : null;
@@ -2372,19 +2364,12 @@
     function fetchDataShown(url) {
       return engine.fetchData(url).then(function (r) {
         return r.json().then(function (d) {
-          // No ELO past the top 1000: the designs' ELO change slot and
-          // "X ELO TO #Y" line carry the spots instead (see spots_text).
+          // No ELO to be had (see spots_text): the designs' ELO change slot
+          // shows how the placement moved instead, and the gap line goes.
           if (d && d.elo_unavailable && d.spots_text) {
             d.session_text = d.spots_text;
             d.session_sign = d.spots_sign;
-            if (d.spots_to_top) {
-              d.next_gap = String(d.spots_to_top);
-              d.next_pos = String(d.spots_target);
-              d.next_unit = d.spots_to_top === 1 ? ' SPOT' : ' SPOTS';
-              d.gap_unavailable = false;
-            } else {
-              d.gap_unavailable = true;
-            }
+            d.gap_unavailable = true;
           }
           var empty = !!d && (d.rank_display === emptyReason({ 'public': false }) || d.rank_display === emptyReason({}));
           // After the design has drawn this answer.

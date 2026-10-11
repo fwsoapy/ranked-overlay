@@ -11,13 +11,13 @@ It only forwards the three things the overlay needs, and only answers pages on t
 | Route | Forwards to |
 | --- | --- |
 | `/stats/<account id>` | `olitracker.com/api/stats/<account id>` |
-| `/ranked/<slug>?page=<n>` | `olitracker.com/api/ranked/<slug>?page=<n>` (JSON leaderboard, 100 players a page) |
+| `/ranked/<slug>?page=<n>` | `olitracker.com/api/ranked/<slug>?page=<n>` (JSON, pages 1-10) or `olitracker.com/ranked/<slug>?page=<n>` (HTML, any page), 100 players a page |
 | `/lookup?name=<display name>` | api-fortnite.com account lookup, returns `{ "accountId": "..." }` |
 
-OliTracker's leaderboard web pages now sit behind a Cloudflare check, so the Worker reads its JSON leaderboard
-(`/api/ranked/<slug>`) instead. It only goes 10 pages deep (the top 1,000), so below that the overlay takes ELO
-from the player's profile or recent matches. A Worker deployed before this change can't read the leaderboard any
-more: paste the current `worker.js` in again (steps below).
+The leaderboard comes from two places: OliTracker's JSON API (`/api/ranked/<slug>`) for the top 1000 (pages
+1-10, all it serves), and OliTracker's leaderboard web page for anything deeper, so players past #1000 still get
+their ELO and the gap to the next spot. Each one backs the other up where it can. A Worker deployed before this
+can't read past #1000: paste the current `worker.js` in again (steps below).
 
 ## Deploying or updating it
 

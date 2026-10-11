@@ -7,7 +7,8 @@
 //
 // Routes:
 //   GET /stats/<32-hex account id>          -> olitracker.com/api/stats/<id>
-//   GET /ranked/<slug>?page=<n>             -> olitracker.com/api/ranked/<slug>?page=<n> (JSON)
+//   GET /ranked/<slug>?page=<n>             -> olitracker.com/api/ranked/<slug>?page=<n> (JSON, pages 1-10)
+//                                              or olitracker.com/ranked/<slug>?page=<n> (HTML, any page)
 //   GET /lookup?name=<epic display name>    -> { "accountId": "..." } (api-fortnite.com, then OliTracker search)
 //
 // The lookup route reads its key from the FORTNITE_API_KEY secret (Worker
@@ -104,6 +105,50 @@ async function forward(url, accept, type, maxAge) {
   return error(status, `OliTracker returned ${status}`);
 }
 
+// The leaderboard, 100 players a page. OliTracker's JSON API only serves
+// pages 1-10 (the top 1000); its web page goes all the way down. So pages
+// 1-10 come from the API with the web page as a backup, and deeper pages
+// from the web page. The overlay reads either. A source only counts if the
+// answer really is leaderboard rows (the API answers a bad page with a 200
+// and an error object, and a Cloudflare check is a page with no rows).
+const API_PAGES = 10;
+
+async function leaderboard(slug, page) {
+  const api = {
+    url: `${OLI}/api/ranked/${slug}` + (page > 1 ? `?page=${page}` : ""),
+    accept: "application/json, text/plain, */*",
+    type: "application/json",
+    good: (text) => text.trimStart().startsWith("["),
+  };
+  const web = {
+    url: `${OLI}/ranked/${slug}` + (page > 1 ? `?page=${page}` : ""),
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    type: "text/html; charset=utf-8",
+    good: (text) => text.includes("leaderboard-player-row"),
+  };
+  const sources = page <= API_PAGES ? [api, web] : [web];
+  let status = 502;
+  for (const src of sources) {
+    for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+      if (attempt > 0) await sleep(RETRY_DELAYS[attempt - 1]);
+      let r, text;
+      try {
+        r = await fetch(src.url, { headers: { ...BROWSER_HEADERS, Accept: src.accept } });
+        text = await r.text();
+      } catch (e) {
+        status = 502;
+        continue;
+      }
+      if (r.ok && src.good(text)) return reply(text, 200, src.type, MAX_AGE.ranked);
+      status = r.ok ? 404 : r.status;
+      // A page that doesn't exist (or a Cloudflare check) won't change by
+      // asking again straight away: move on to the next source.
+      if (r.ok || (r.status < 500 && r.status !== 429)) break;
+    }
+  }
+  return error(status, status === 404 ? "No leaderboard rows on that page" : `OliTracker returned ${status}`);
+}
+
 async function lookup(name, env) {
   const q = encodeURIComponent(name);
   const urls = !env.FORTNITE_API_KEY ? [] : [
@@ -169,12 +214,7 @@ export default {
     if (parts[0] === "ranked" && parts.length === 2 && SLUGS.has(parts[1])) {
       const page = parseInt(url.searchParams.get("page") || "1", 10);
       if (!(page >= 1 && page <= 100000)) return error(400, "Bad page number");
-      // The leaderboard web pages sit behind a Cloudflare check now, so this
-      // reads OliTracker's JSON leaderboard instead: 100 players a page, each
-      // { user_id, username, rank, division, elo }.
-      const target = `${OLI}/api/ranked/${parts[1]}` + (page > 1 ? `?page=${page}` : "");
-      return forward(target, "application/json, text/plain, */*",
-        "application/json", MAX_AGE.ranked);
+      return leaderboard(parts[1], page);
     }
 
     if (parts[0] === "lookup" && parts.length === 1) {

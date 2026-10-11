@@ -154,8 +154,8 @@ async function websiteChecks() {
     check('next target is above the player even when the board lags', got, [3266, 15, 34]);
   }
 
-  // Unreal outside the top 1000 has no ELO anywhere public: the spots
-  // fields say how the placement moved and how far it is to the top 1000.
+  // Unreal with no ELO anywhere (profile has none, leaderboard unreadable):
+  // the placement change fills the ELO change slot.
   {
     let t = 1.79e12;
     const prof = (place) => ({ user_id: 'a', public: true, last_updated: new Date(t).toISOString(),
@@ -164,29 +164,47 @@ async function websiteChecks() {
       match_history: [] });
     let current = prof(1059);
     const eng = E.createEngine({ cfg: E.parseConfig('?id=0123456789abcdef0123456789abcdef&elo=session'), store: E.makeStore(memoryStorage()),
-      fetchText: async (u) => (u.includes('/stats/') ? JSON.stringify(current) : '{"error":"only pages 1-10 are valid"}'), now: () => t });
+      fetchText: async (u) => { if (u.includes('/stats/')) return JSON.stringify(current); const e = new Error('HTTP 404'); e.status = 404; throw e; }, now: () => t });
     await eng.init();
-    const pick = (d) => [d.elo_unavailable, d.spots_text, d.spots_sign, d.spots_to_top, d.spots_target];
+    const pick = (d) => [d.elo_unavailable, d.spots_text, d.spots_sign];
     let d = await (await eng.fetchData('/data?window=session')).json();
-    check('no ELO past #1000: spots at the start', pick(d), [true, '+0 SPOTS TODAY', 'zero', 59, 1000]);
+    check('no ELO anywhere: spots at the start', pick(d), [true, '+0 SPOTS TODAY', 'zero']);
     t += 10 * 60 * 1000; current = prof(1040); await eng.refresh(true);
     d = await (await eng.fetchData('/data?window=session')).json();
-    check('no ELO past #1000: climbed 19 spots', pick(d), [true, '+19 SPOTS TODAY', 'pos', 40, 1000]);
+    check('no ELO anywhere: climbed 19 spots', pick(d), [true, '+19 SPOTS TODAY', 'pos']);
     t += 10 * 60 * 1000; current = prof(1041); await eng.refresh(true);
     d = await (await eng.fetchData('/data?window=session')).json();
     check('slipping back a spot counts too', d.spots_text, '+18 SPOTS TODAY');
-    t += 10 * 60 * 1000; current = prof(990); await eng.refresh(true);
-    d = await (await eng.fetchData('/data?window=session')).json();
-    check('inside the top 1000 without ELO: no spots-to-top line', [d.spots_to_top, d.spots_target, d.spots_text], [null, null, '+69 SPOTS TODAY']);
     d = await (await eng.fetchData('/data?window=season')).json();
     check('season window shows the peak', d.spots_text, 'PEAK #717');
+  }
+  // Past the top 1000 the ELO and the gap come from the deep leaderboard
+  // pages (HTML from the Worker): #1053 on page 11, next higher ELO at #1052.
+  {
+    const rows = [];
+    for (let i = 1001; i <= 1100; i++) rows.push('<tr class="leaderboard-player-row"><td class="leaderboard-rank-cell ">#' + i +
+      '</td><td><a href="/stats/' + (i === 1053 ? '448e4dc2677c4617a7daf8f1f5459825' : String(i).padStart(32, '0')) + '">p</a></td>' +
+      '<td class="leaderboard-wins-cell"><p>' + (i <= 1052 ? 4606 + (1052 - i) : i === 1053 ? 4604 : 4600) + '</p></td></tr>');
+    const html = '<table>' + rows.join('') + '</table>';
+    let asked = [];
+    const eng = E.createEngine({ cfg: E.parseConfig('?id=448e4dc2677c4617a7daf8f1f5459825&elo=session'), store: E.makeStore(memoryStorage()),
+      fetchText: async (u) => {
+        asked.push(u.replace(/^.*\/ranked\//, ''));
+        if (u.includes('/stats/')) return JSON.stringify({ user_id: 'a', public: true, stats: {}, match_history: [],
+          ranked_stats: { 'ranked-br-combined': { division: 21, promotion_progression: 50, current_unreal_placement: 1053, elo: null } } });
+        return u.includes('page=11') ? html : '[]';
+      }, now: () => 1.79e12 });
+    await eng.init();
+    const d = await (await eng.fetchData('/data?window=session')).json();
+    check('#1053 gets its ELO and the gap from page 11', [d.elo_text, d.next_gap, d.next_pos, d.elo_unavailable, d.spots_text], ['4604 ELO', '2', '1052', false, null]);
+    check('...and only asked for page 11', asked.filter((u) => !u.includes('/stats/')), ['battle-royale?page=11']);
   }
   {
     const eng = E.createEngine({ cfg: E.parseConfig('?id=0123456789abcdef0123456789abcdef'), store: E.makeStore(memoryStorage()),
       fetchText: async () => JSON.stringify({ user_id: 'a', public: true, stats: {}, ranked_stats: { 'ranked-br-combined': { division: 21, promotion_progression: 50, current_unreal_placement: 5, elo: 10710 } }, match_history: [] }), now: () => 1.79e12 });
     await eng.init();
     const d = await (await eng.fetchData('/data?window=session')).json();
-    check('with ELO there are no spots fields', [d.spots_text, d.spots_to_top], [null, null]);
+    check('with ELO there is no spots text', d.spots_text, null);
   }
 
   // A failed first load retries in seconds, not minutes.
