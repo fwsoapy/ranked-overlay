@@ -369,7 +369,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=5c6240d0bd"></script>
+    <script src="../engine.js?v=fde95dc3f6"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -539,7 +539,7 @@
 
             if (d.next_pos || d.session_text) {
                 if (d.is_unreal) {
-                    $('#nextGap').textContent = d.next_gap ? d.next_gap + ' ELO' : '-';
+                    $('#nextGap').textContent = d.next_gap ? d.next_gap + (d.next_unit || ' ELO') : '-';
                     $('#nextPos').textContent = d.next_pos ? '#' + d.next_pos : '#-';
                 } else {
                     $('#nextGap').textContent = d.next_gap || '-';
@@ -562,16 +562,20 @@
             // there is no ELO and no leaderboard row to measure a gap against,
             // so hide those widgets rather than render empty placeholders.
             var _eloNA = !!d.elo_unavailable;
-            ['#eloPill', '#midRow'].forEach(function(sel) {
-                var el = document.querySelector(sel);
-                if (el) el.classList.toggle('elo-na', _eloNA);
+            // Outside the top 1000 there's no ELO, but the placement change and the
+            // spots to the top 1000 take its place (spots_text): only the ELO
+            // number itself goes then. Without those, the rows go too.
+            var _spots = _eloNA && !!d.spots_text;
+            ['#eloPill'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) { el.classList.toggle('elo-na', _eloNA); });
             });
-            // No ELO means no gap either, so the gap row goes with it.
-            var _gapNA = _eloNA || !!d.gap_unavailable;
+            ['#midRow'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) { el.classList.toggle('elo-na', _eloNA && !_spots); });
+            });
+            // No gap to show (and no spots to the top 1000 either): the gap line goes.
+            var _gapNA = !!d.gap_unavailable || (_eloNA && !_spots);
             ['#midRow .next-target'].forEach(function(sel) {
-                document.querySelectorAll(sel).forEach(function(el) {
-                    el.classList.toggle('elo-na', _gapNA);
-                });
+                document.querySelectorAll(sel).forEach(function(el) { el.classList.toggle('elo-na', _gapNA); });
             });
 
             var modes = d.modes_available;

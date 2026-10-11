@@ -745,6 +745,25 @@
     return points;
   }
 
+  // Every (timestamp, Unreal placement) point in the match history for one
+  // mode. Website only: the spots change for players with no ELO.
+  function placementSeries(data, rankingId) {
+    var points = [];
+    var want = rankingId ? normalizeModeKey(rankingId) : null;
+    iter(isDict(data) ? data.match_history : null).forEach(function (day) {
+      iter(dget(day, 'matches')).forEach(function (grp) {
+        var rd = dget(grp, 'ranked_data');
+        rd = truthy(rd) ? rd : {};
+        if (want && !sameMode(dget(rd, 'ranking_id'), want)) return;
+        var p = num(dget(rd, 'unreal_placement'));
+        var ts = dget(grp, 'last_modified');
+        if (p !== null && p > 0 && truthy(ts)) points.push([Math.trunc(Number(ts)), p]);
+      });
+    });
+    points.sort(function (a, b) { return a[0] - b[0]; });
+    return points;
+  }
+
   // _latest_history_elo(): the ELO after the most recent ranked match in the
   // history, for when neither the profile nor the leaderboard has it.
   // Falls back to the newest day's end-of-day ELO.
@@ -1104,9 +1123,10 @@
       var s = store.get(K.session);
       var t = clock();
       if (!isDict(s) || typeof s.seen !== 'number' || t - s.seen > SESSION_GAP_MS || !isDict(s.elos)) {
-        s = { start: nowSec(), seen: t, fp: null, elos: {}, progs: {}, recs: {}, resolvedAll: false };
+        s = { start: nowSec(), seen: t, fp: null, elos: {}, progs: {}, recs: {}, places: {}, resolvedAll: false };
       }
       if (!isDict(s.recs)) s.recs = {};
+      if (!isDict(s.places)) s.places = {};
       s.seen = t;
       session = s;
       saveSession();
@@ -1127,6 +1147,10 @@
         session = fresh;
         if (!isDict(session.progs)) session.progs = {};
         if (!isDict(session.recs)) session.recs = {};
+        if (!isDict(session.places)) session.places = {};
+        Object.keys(mine.places || {}).forEach(function (k) {
+          if (!hasOwn.call(session.places, k)) session.places[k] = mine.places[k];
+        });
         Object.keys(mine.recs || {}).forEach(function (k) {
           if (!hasOwn.call(session.recs, k)) session.recs[k] = mine.recs[k];
         });
@@ -1177,6 +1201,7 @@
         session.elos = {};
         session.progs = {};
         session.recs = {};
+        session.places = {};
         store.remove(K.reset);
       }
     }
@@ -1243,6 +1268,7 @@
       }
       if (!isDict(r.last)) r.last = {};
       if (!isDict(r.recs)) r.recs = {};
+      if (!isDict(r.places)) r.places = {};
       var counts = {};
       views.forEach(function (v) {
         var c = modeCounts(raw, v.key);
@@ -1267,6 +1293,7 @@
         r.elos = {};
         r.progs = {};
         r.recs = {};
+        r.places = {};
         views.forEach(function (v) {
           var vals = pick(v);
           if (vals[0] !== null) r.elos[v.key] = vals[0];
@@ -1298,6 +1325,7 @@
         if (v.elo !== null && !hasOwn.call(r.elos, v.key)) r.elos[v.key] = v.elo;
         if (v.points !== null && !hasOwn.call(r.progs, v.key)) r.progs[v.key] = v.points;
         if (hasOwn.call(counts, v.key) && !hasOwn.call(r.recs, v.key)) r.recs[v.key] = counts[v.key];
+        if (v.is_unreal && v.elo === null && v.placement && !hasOwn.call(r.places, v.key)) r.places[v.key] = v.placement;
         var prev = Array.isArray(r.last[v.key]) ? r.last[v.key] : [null, null, null];
         r.last[v.key] = [v.elo !== null ? v.elo : prev[0], v.points !== null ? v.points : prev[1],
           hasOwn.call(counts, v.key) ? counts[v.key] : (isDict(prev[2]) ? prev[2] : null)];
@@ -1320,12 +1348,13 @@
     // the 3-hour start-over still works from real activity.
     function resetSession() {
       var old = loadReset();
-      var r = { at: clock(), since: clock(), elos: {}, progs: {}, recs: {}, last: {},
+      var r = { at: clock(), since: clock(), elos: {}, progs: {}, recs: {}, places: {}, last: {},
         activity: old && typeof old.activity === 'number' ? old.activity : clock() };
       modes.forEach(function (m) {
         var v = modeView(m[0], m[1]);
         if (v.elo !== null) r.elos[v.key] = v.elo;
         if (v.points !== null) r.progs[v.key] = v.points;
+        if (v.is_unreal && v.elo === null && v.placement) r.places[v.key] = v.placement;
         var c = modeCounts(raw, v.key);
         if (c !== null) r.recs[v.key] = c;
         r.last[v.key] = [v.elo, v.points, c];
@@ -1333,8 +1362,12 @@
       store.set(K.reset, r);
     }
 
-    function recordBaseline(key, elo, points) {
+    // place: the Unreal placement, recorded only when there's no ELO to
+    // count from (outside the top 1000), so the change can be told in spots.
+    function recordBaseline(key, elo, points, place) {
       var c = modeCounts(raw, key);
+      if (!isDict(session.places)) session.places = {};
+      if (elo === null && place && !hasOwn.call(session.places, key)) session.places[key] = place;
       if (c !== null && !hasOwn.call(session.recs, key)) session.recs[key] = c;
       if (elo !== null && !hasOwn.call(session.elos, key)) session.elos[key] = elo;
       if (points !== null && !hasOwn.call(session.progs, key)) session.progs[key] = points;
@@ -1628,7 +1661,7 @@
       // first time the overlay switches to it.
       modes.forEach(function (m) {
         var v = modeView(m[0], m[1]);
-        recordBaseline(v.key, v.elo, v.points);
+        recordBaseline(v.key, v.elo, v.points, v.is_unreal ? v.placement : null);
       });
       observeSession();
       var available = modes.slice().sort(function (a, b) {
@@ -1932,6 +1965,42 @@
         s.session_sign = signOf(pd);
       }
 
+      // Unreal outside the top 1000: OliTracker (and Epic's public board)
+      // only publish ELO for the top 1000, so there is no ELO to show. The
+      // placement still updates, so these say how it moved over the same
+      // stretch as the ELO change, and how far it is to the top 1000, where
+      // the ELO comes back. Website only; the designs show them in the ELO
+      // change and next-position slots.
+      s.spots_text = null;
+      s.spots_sign = 'zero';
+      s.spots_to_top = null;
+      s.spots_target = null;
+      if (isUnreal && elo === null && placement) {
+        if (placement > LEADERBOARD_PAGE_LIMIT * LEADERBOARD_PAGE_SIZE) {
+          s.spots_target = LEADERBOARD_PAGE_LIMIT * LEADERBOARD_PAGE_SIZE;
+          s.spots_to_top = placement - s.spots_target;
+        }
+        if (window === 'season') {
+          var peak = mode !== null ? num(mode.peak_unreal_placement) : null;
+          s.spots_text = peak ? 'PEAK #' + peak : null;
+        } else {
+          var basePlace = null;
+          if (window === 'reset') {
+            var rp = loadReset();
+            if (rp && isDict(rp.places) && hasOwn.call(rp.places, resolvedKey)) basePlace = rp.places[resolvedKey];
+          } else if (cutoff !== null) {
+            placementSeries(raw, resolvedKey || null).forEach(function (pt) { if (pt[0] <= cutoff) basePlace = pt[1]; });
+          }
+          if (basePlace === null && session && isDict(session.places) && hasOwn.call(session.places, resolvedKey)) {
+            basePlace = session.places[resolvedKey];
+          }
+          var moved = basePlace !== null ? basePlace - placement : 0;   // climbing = fewer spots = positive
+          s.spots_text = (moved >= 0 ? '+' : '') + moved + (Math.abs(moved) === 1 ? ' SPOT ' : ' SPOTS ')
+            + (cutoff !== null || window === 'reset' ? changeLabel : 'TODAY');
+          s.spots_sign = signOf(moved);
+        }
+      }
+
       // Wins and losses over the same stretch as the ELO change (the Record
       // design), counted as the change in OliTracker's season totals since
       // the count started: every extra match is a game, and one that added
@@ -2024,7 +2093,7 @@
             && !lookupFresh(pathStr(pm[0]), pm[1]) && needsNetworkLookup(pm[0], pm[1])) {
           return withTimeout(resolveMode(pm[0], pm[1]).then(function () {
             var v = modeView(pm[0], pm[1]);
-            recordBaseline(v.key, v.elo, v.points);
+            recordBaseline(v.key, v.elo, v.points, v.is_unreal ? v.placement : null);
             observeSession();
             saveSession();
           }), LOOKUP_WAIT_MS);
@@ -2303,6 +2372,20 @@
     function fetchDataShown(url) {
       return engine.fetchData(url).then(function (r) {
         return r.json().then(function (d) {
+          // No ELO past the top 1000: the designs' ELO change slot and
+          // "X ELO TO #Y" line carry the spots instead (see spots_text).
+          if (d && d.elo_unavailable && d.spots_text) {
+            d.session_text = d.spots_text;
+            d.session_sign = d.spots_sign;
+            if (d.spots_to_top) {
+              d.next_gap = String(d.spots_to_top);
+              d.next_pos = String(d.spots_target);
+              d.next_unit = d.spots_to_top === 1 ? ' SPOT' : ' SPOTS';
+              d.gap_unavailable = false;
+            } else {
+              d.gap_unavailable = true;
+            }
+          }
           var empty = !!d && (d.rank_display === emptyReason({ 'public': false }) || d.rank_display === emptyReason({}));
           // After the design has drawn this answer.
           setTimeout(function () { showOnlyReason(empty); }, 0);

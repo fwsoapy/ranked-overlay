@@ -154,6 +154,41 @@ async function websiteChecks() {
     check('next target is above the player even when the board lags', got, [3266, 15, 34]);
   }
 
+  // Unreal outside the top 1000 has no ELO anywhere public: the spots
+  // fields say how the placement moved and how far it is to the top 1000.
+  {
+    let t = 1.79e12;
+    const prof = (place) => ({ user_id: 'a', public: true, last_updated: new Date(t).toISOString(),
+      stats: { seasonal: { all: { both: { overall: { matches_played: 50 } } } } },
+      ranked_stats: { 'ranked-br-combined': { division: 21, promotion_progression: 50, current_unreal_placement: place, peak_unreal_placement: 717, elo: null } },
+      match_history: [] });
+    let current = prof(1059);
+    const eng = E.createEngine({ cfg: E.parseConfig('?id=0123456789abcdef0123456789abcdef&elo=session'), store: E.makeStore(memoryStorage()),
+      fetchText: async (u) => (u.includes('/stats/') ? JSON.stringify(current) : '{"error":"only pages 1-10 are valid"}'), now: () => t });
+    await eng.init();
+    const pick = (d) => [d.elo_unavailable, d.spots_text, d.spots_sign, d.spots_to_top, d.spots_target];
+    let d = await (await eng.fetchData('/data?window=session')).json();
+    check('no ELO past #1000: spots at the start', pick(d), [true, '+0 SPOTS TODAY', 'zero', 59, 1000]);
+    t += 10 * 60 * 1000; current = prof(1040); await eng.refresh(true);
+    d = await (await eng.fetchData('/data?window=session')).json();
+    check('no ELO past #1000: climbed 19 spots', pick(d), [true, '+19 SPOTS TODAY', 'pos', 40, 1000]);
+    t += 10 * 60 * 1000; current = prof(1041); await eng.refresh(true);
+    d = await (await eng.fetchData('/data?window=session')).json();
+    check('slipping back a spot counts too', d.spots_text, '+18 SPOTS TODAY');
+    t += 10 * 60 * 1000; current = prof(990); await eng.refresh(true);
+    d = await (await eng.fetchData('/data?window=session')).json();
+    check('inside the top 1000 without ELO: no spots-to-top line', [d.spots_to_top, d.spots_target, d.spots_text], [null, null, '+69 SPOTS TODAY']);
+    d = await (await eng.fetchData('/data?window=season')).json();
+    check('season window shows the peak', d.spots_text, 'PEAK #717');
+  }
+  {
+    const eng = E.createEngine({ cfg: E.parseConfig('?id=0123456789abcdef0123456789abcdef'), store: E.makeStore(memoryStorage()),
+      fetchText: async () => JSON.stringify({ user_id: 'a', public: true, stats: {}, ranked_stats: { 'ranked-br-combined': { division: 21, promotion_progression: 50, current_unreal_placement: 5, elo: 10710 } }, match_history: [] }), now: () => 1.79e12 });
+    await eng.init();
+    const d = await (await eng.fetchData('/data?window=session')).json();
+    check('with ELO there are no spots fields', [d.spots_text, d.spots_to_top], [null, null]);
+  }
+
   // A failed first load retries in seconds, not minutes.
   {
     let t = 1.79e12, calls = 0;

@@ -519,7 +519,7 @@
                 var gapEl  = $('#nextGap');
                 var posEl  = $('#nextPos');
                 if (d.next_gap && d.next_pos) {
-                    gapEl.textContent = d.next_gap + ' ELO';
+                    gapEl.textContent = d.next_gap + (d.next_unit || ' ELO');
                     posEl.textContent = '#' + d.next_pos;
                     nextLeft.style.visibility = 'visible';
                 } else {
@@ -567,16 +567,20 @@
             // there is no ELO and no leaderboard row to measure a gap against,
             // so hide those widgets rather than render empty placeholders.
             var _eloNA = !!d.elo_unavailable;
-            ['#rightSection', '#nextLeft'].forEach(function(sel) {
-                var el = document.querySelector(sel);
-                if (el) el.classList.toggle('elo-na', _eloNA);
+            // Outside the top 1000 there's no ELO, but the placement change and the
+            // spots to the top 1000 take its place (spots_text): only the ELO
+            // number itself goes then. Without those, the rows go too.
+            var _spots = _eloNA && !!d.spots_text;
+            ['#eloText', '#rightSection .sep'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) { el.classList.toggle('elo-na', _eloNA); });
             });
-            // No ELO means no gap either, so the gap row goes with it.
-            var _gapNA = _eloNA || !!d.gap_unavailable;
+            ['#rightSection'].forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el) { el.classList.toggle('elo-na', _eloNA && !_spots); });
+            });
+            // No gap to show (and no spots to the top 1000 either): the gap line goes.
+            var _gapNA = !!d.gap_unavailable || (_eloNA && !_spots);
             ['#nextLeft'].forEach(function(sel) {
-                document.querySelectorAll(sel).forEach(function(el) {
-                    el.classList.toggle('elo-na', _gapNA);
-                });
+                document.querySelectorAll(sel).forEach(function(el) { el.classList.toggle('elo-na', _gapNA); });
             });
 
             var modes = d.modes_available;

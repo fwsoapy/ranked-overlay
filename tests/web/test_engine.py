@@ -35,6 +35,9 @@ STEP_SECS = 400          # time between refreshes in a scenario
 # windows (today / 12h / 24h, from match history) are checked separately in
 # engine_harness.js, since the Python server has no equivalent.
 WINDOWS = ["session", "season"]
+# Fields only the website's engine has (the Python server never did), so
+# they're left out of the comparison and checked in engine_harness.js.
+WEB_ONLY = {"spots_text", "spots_sign", "spots_to_top", "spots_target"}
 
 
 def stats(name):
@@ -216,7 +219,7 @@ def main():
                 print(f"{name}: out of step at {want[:3]} vs {have[:3]}")
                 diffs += 1
                 continue
-            for key in sorted(set(want[3]) | set(have[3])):
+            for key in sorted((set(want[3]) | set(have[3])) - WEB_ONLY):
                 compared += 1
                 a, b = json.dumps(want[3].get(key)), json.dumps(have[3].get(key))
                 if a != b:
