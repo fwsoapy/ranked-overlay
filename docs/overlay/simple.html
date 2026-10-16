@@ -16,7 +16,8 @@
             --accent: #3d8bff;
             --accent-rgb: 61, 139, 255;
             --accent-light: color-mix(in srgb, var(--accent) 60%, white);
-            --gold: #ffcf5a;
+            /* Unreal Legend: the colours of its icon, cyan through purple to red-orange. */
+            --legend: linear-gradient(135deg, #63e6ff 0%, #6d8dff 28%, #b35cff 52%, #ff4f7a 76%, #ffad6b 100%);
         }
 
         body {
@@ -59,7 +60,7 @@
         }
         .rank-icon.hidden { visibility: hidden; }
         html.legend .rank-icon {
-            filter: drop-shadow(0 0 10px rgba(255, 196, 64, 0.70)) drop-shadow(0 0 3px rgba(255, 220, 120, 0.9));
+            filter: drop-shadow(0 0 10px rgba(179, 92, 255, 0.55)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
         }
 
         .info {
@@ -88,13 +89,15 @@
             color: var(--accent-light);
             margin-left: 8px;
         }
-        html.legend .rank-text .name {
-            background: linear-gradient(135deg, #fff1b8 0%, var(--gold) 45%, #f0a020 100%);
+        html.legend .rank-text .place { color: inherit; }
+        html.legend .rank-text,
+        html.legend .elo-text {
+            display: inline-block;
+            background: var(--legend);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
         }
-        html.legend .rank-text .place { color: var(--gold); }
 
         .today {
             font-weight: 700;
@@ -146,7 +149,6 @@
             letter-spacing: -0.01em;
             color: var(--accent-light);
         }
-        html.legend .elo-text { color: var(--gold); }
         .gap-text {
             font-weight: 600;
             font-size: 16px;
@@ -312,6 +314,7 @@
                     var b = parseInt(c.substr(4, 2), 16);
                     document.documentElement.style.setProperty('--accent', '#' + c);
                     document.documentElement.style.setProperty('--accent-rgb', r + ', ' + g + ', ' + b);
+                    window.ACCENT_FROM_LINK = true;
                 }
             }
         })();
@@ -402,13 +405,24 @@
         renderCreatorText();
         applyDisplayMode();
 
-        // Fortnite's rank icons, 0 (Bronze I) to 21 (Unreal), in ../ranks/.
+        // Fortnite's rank icons, 0 (Bronze I) to 21 (Unreal) and legend, in ../ranks/.
         var RANK_ORDER = ['BRONZE I', 'BRONZE II', 'BRONZE III', 'SILVER I', 'SILVER II', 'SILVER III',
             'GOLD I', 'GOLD II', 'GOLD III', 'PLATINUM I', 'PLATINUM II', 'PLATINUM III',
             'DIAMOND I', 'DIAMOND II', 'DIAMOND III', 'ELITE I', 'ELITE II', 'ELITE III',
             'CHAMPION I', 'CHAMPION II', 'CHAMPION III', 'UNREAL'];
         // The top 500 Unreal players get called Unreal Legend.
         var LEGEND_TOP = 500;
+        // Without a colour in the link, the card takes the rank's own colour.
+        var TIER_COLORS = { BRONZE: '#d08a4e', SILVER: '#9fb0d0', GOLD: '#f2b320', PLATINUM: '#2fc9c4',
+            DIAMOND: '#4c7dff', ELITE: '#d94fe0', CHAMPION: '#ff4a2a', UNREAL: '#9b5cff' };
+        function setTierColor(label) {
+            if (window.ACCENT_FROM_LINK) return;
+            var c = TIER_COLORS[String(label).split(' ')[0]];
+            if (!c) return;
+            var root = document.documentElement.style;
+            root.setProperty('--accent', c);
+            root.setProperty('--accent-rgb', parseInt(c.substr(1, 2), 16) + ', ' + parseInt(c.substr(3, 2), 16) + ', ' + parseInt(c.substr(5, 2), 16));
+        }
         var ROMAN = {'I':true,'II':true,'III':true,'IV':true,'V':true,'VI':true};
 
         function esc(s) {
@@ -491,8 +505,9 @@
             root.classList.toggle('legend', legend);
 
             var idx = d.is_unreal ? 21 : RANK_ORDER.indexOf(label);
+            if (idx >= 0) setTierColor(RANK_ORDER[idx]);
             if (idx >= 0) {
-                var src = '../ranks/' + idx + '.png';
+                var src = '../ranks/' + (legend ? 'legend' : idx) + '.png';
                 if (iconEl.getAttribute('src') !== src) iconEl.setAttribute('src', src);
                 iconEl.classList.remove('hidden');
                 iconEl.style.display = '';

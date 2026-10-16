@@ -61,6 +61,9 @@
 
     <h2>Made up <small>fake numbers</small></h2>
     <div class="grid" id="fake"></div>
+
+    <h2>Every rank's colour <small>fake numbers</small></h2>
+    <div class="grid" id="tiers"></div>
 </main>
 
 <script>
@@ -88,6 +91,23 @@
                progression_pct: 72, pct_to_next: 28, next_rank_name: 'CHAMPION I',
                session_text: '+18% TODAY', session_sign: 'pos' },
           stats: ['1.63', '4.1%', 512, 14] }
+    ];
+
+    function fakeRank(label, prog, next, change) {
+        return { who: label.charAt(0) + label.slice(1).toLowerCase().replace(/ i+$/, function (x) { return x.toUpperCase(); }), name: 'made up',
+            d: { rank_display: label, rank_label: label, rank_number: null, is_unreal: false,
+                 progression_pct: prog, pct_to_next: 100 - prog, next_rank_name: next,
+                 session_text: (change >= 0 ? '+' : '') + change + '% TODAY', session_sign: change > 0 ? 'pos' : (change < 0 ? 'neg' : 'zero') },
+            stats: ['1.10', '3.2%', 210, 6] };
+    }
+    var TIERS = [
+        fakeRank('BRONZE II', 35, 'BRONZE III', 12),
+        fakeRank('SILVER III', 80, 'GOLD I', 9),
+        fakeRank('GOLD I', 22, 'GOLD II', -4),
+        fakeRank('PLATINUM II', 51, 'PLATINUM III', 15),
+        fakeRank('DIAMOND I', 64, 'DIAMOND II', 16),
+        fakeRank('ELITE II', 40, 'ELITE III', 7),
+        fakeRank('CHAMPION III', 90, 'UNREAL', 21)
     ];
 
     var show = 'stats';
@@ -141,13 +161,16 @@
     setInterval(function () { document.querySelectorAll('iframe').forEach(fit); }, 500);
 
     function render() {
-        var real = document.getElementById('real'), fake = document.getElementById('fake');
-        real.innerHTML = fake.innerHTML = '';
+        var real = document.getElementById('real'), fake = document.getElementById('fake'), tiers = document.getElementById('tiers');
+        real.innerHTML = fake.innerHTML = tiers.innerHTML = '';
         REAL.forEach(function (p) {
             card(real, p, query('&id=' + p.id), function (f) { f.classList.remove('wait'); });
         });
         FAKE.forEach(function (p, i) {
             card(fake, p, query('&demo=1&fake=' + i), function (f) { inject(f, p); });
+        });
+        TIERS.forEach(function (p, i) {
+            card(tiers, p, query('&demo=1&tier=' + i), function (f) { inject(f, p); });
         });
     }
 

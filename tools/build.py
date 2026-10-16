@@ -158,7 +158,7 @@ def web_outputs():
     for design in UNLISTED:
         files[os.path.join(DOCS, "overlay", design.lower() + ".html")] = render_web_overlay(design, version)
 
-    # Fortnite's rank icons (0 is Bronze I, 21 Unreal), for designs that show them.
+    # Fortnite's rank icons (0 is Bronze I, 21 Unreal, then Unreal Legend), for designs that show them.
     ranks = os.path.join(WEB, "ranks")
     for name in sorted(os.listdir(ranks)):
         binaries[os.path.join(DOCS, "ranks", name)] = os.path.join(ranks, name)
