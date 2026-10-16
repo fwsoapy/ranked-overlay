@@ -426,6 +426,11 @@
         cursor: pointer;
       }
 
+      /* --- sliders ----------------------------------------------------- */
+
+      .range { width: 100%; margin: 6px 0 2px; accent-color: var(--accent); cursor: pointer; }
+      .range-val { color: var(--text); font-weight: 600; margin-left: 4px; }
+
       /* --- preview ----------------------------------------------------- */
 
       .stage {
@@ -744,6 +749,20 @@
               <div class="color-input" data-color="labelColor" id="label-color-wrap"></div>
               <span class="field-hint">Rainbow only. Off means it follows the accent.</span>
             </div>
+            <label class="field" data-show-design="simple">
+              <span>Corner rounding <b class="range-val" id="simple-round-val"></b></span>
+              <input id="simple-round" class="range" type="range" min="0" max="100" step="5" />
+            </label>
+            <label class="field" data-show-design="simple">
+              <span>Background <b class="range-val" id="simple-bg-val"></b></span>
+              <input id="simple-bg" class="range" type="range" min="0" max="100" step="1" />
+              <span class="field-hint">0% is see-through, with a shadow under the text.</span>
+            </label>
+            <div class="field" data-show-design="simple">
+              <span>Card</span>
+              <label class="check-line"><input id="simple-icon" type="checkbox" /> Show the rank icon</label>
+              <label class="check-line"><input id="simple-outline" type="checkbox" /> Outline in the rank's colour</label>
+            </div>
           </div>
 
           <details class="advanced" id="advanced">
@@ -838,6 +857,8 @@
           labelCustom: false, labelColor: '#ffffff',
           show: 'stats', code: '',
           mode: '', elo: 'session', refresh: '60', next: true, rec: false,
+          // Simple's card: corner rounding and background opacity in %.
+          simpleRound: 50, simpleBg: 84, simpleIcon: true, simpleOutline: false,
           previewBg: 'checker',
         };
 
@@ -866,6 +887,12 @@
         if (state.compact) { if (state.show !== 'code') state.show = 'none'; }
         delete state.compact;
         if (['stats', 'pct', 'code', 'none'].indexOf(state.show) < 0) state.show = 'stats';
+        function pct(v, fallback) {
+          v = parseInt(v, 10);
+          return isFinite(v) ? Math.max(0, Math.min(100, v)) : fallback;
+        }
+        state.simpleRound = pct(state.simpleRound, DEFAULTS.simpleRound);
+        state.simpleBg = pct(state.simpleBg, DEFAULTS.simpleBg);
 
         function $(id) { return document.getElementById(id); }
 
@@ -898,6 +925,12 @@
           p.set('elo', state.elo);
           if (String(state.refresh) !== '60') p.set('refresh', String(state.refresh));
           if (!state.next) p.set('next', '0');
+          if (state.design === 'simple') {
+            if (state.simpleRound !== DEFAULTS.simpleRound) p.set('round', String(state.simpleRound));
+            if (state.simpleBg !== DEFAULTS.simpleBg) p.set('bg', String(state.simpleBg));
+            if (!state.simpleIcon) p.set('icon', '0');
+            if (state.simpleOutline) p.set('outline', '1');
+          }
           return p;
         }
 
@@ -1267,6 +1300,22 @@
           state.rec = e.target.checked;
           changed();
         });
+        $('simple-round').addEventListener('input', function (e) {
+          state.simpleRound = pct(e.target.value, DEFAULTS.simpleRound);
+          changed();
+        });
+        $('simple-bg').addEventListener('input', function (e) {
+          state.simpleBg = pct(e.target.value, DEFAULTS.simpleBg);
+          changed();
+        });
+        $('simple-icon').addEventListener('change', function (e) {
+          state.simpleIcon = e.target.checked;
+          changed();
+        });
+        $('simple-outline').addEventListener('change', function (e) {
+          state.simpleOutline = e.target.checked;
+          changed();
+        });
 
         function importLink(text) {
           var url;
@@ -1298,6 +1347,10 @@
           state.refresh = String([300, 600].indexOf(r) >= 0 ? r : 60);
           state.next = q.get('next') !== '0';
           state.rec = q.get('rec') === '1';
+          state.simpleRound = pct(q.get('round'), DEFAULTS.simpleRound);
+          state.simpleBg = pct(q.get('bg'), DEFAULTS.simpleBg);
+          state.simpleIcon = q.get('icon') !== '0';
+          state.simpleOutline = q.get('outline') === '1';
           return true;
         }
 
@@ -1435,6 +1488,12 @@
           $('next-lookup').checked = !!state.next;
           // The Record design is the wins and losses, so it has nothing to add.
           $('rec-line').checked = !!state.rec;
+          $('simple-round').value = state.simpleRound;
+          $('simple-round-val').textContent = state.simpleRound + '%';
+          $('simple-bg').value = state.simpleBg;
+          $('simple-bg-val').textContent = state.simpleBg + '%';
+          $('simple-icon').checked = !!state.simpleIcon;
+          $('simple-outline').checked = !!state.simpleOutline;
           $('rec-field').hidden = isRecord;
           document.querySelectorAll('[data-show-design]').forEach(function (el) {
             el.hidden = el.getAttribute('data-show-design') !== state.design;

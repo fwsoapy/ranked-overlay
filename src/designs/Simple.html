@@ -12,6 +12,9 @@
             --accent: #3d8bff;
             --accent-rgb: 61, 139, 255;
             --accent-light: color-mix(in srgb, var(--accent) 60%, white);
+            /* Card look, set from the link (see the top of the script). */
+            --radius: 20px;
+            --bg-alpha: 0.84;
             /* Unreal Legend: the colours of its icon, cyan through purple to red-orange. */
             --legend: linear-gradient(135deg, #63e6ff 0%, #6d8dff 28%, #b35cff 52%, #ff4f7a 76%, #ffad6b 100%);
         }
@@ -38,10 +41,10 @@
             display: flex;
             align-items: center;
             gap: 18px;
-            background: rgba(14, 16, 22, 0.84);
+            background: rgba(14, 16, 22, var(--bg-alpha));
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.07);
-            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, calc(var(--bg-alpha) * 0.08));
+            border-radius: var(--radius);
             padding: 16px 24px 16px 16px;
             min-width: 470px;
             user-select: none;
@@ -261,6 +264,23 @@
         /* Set when OliTracker has no ELO for this account (see elo_unavailable). */
         .elo-na { display: none !important; }
 
+        /* ?outline=1: a ring in the rank's colour. */
+        html.outline .overlay-container { border: 2px solid rgba(var(--accent-rgb), 0.9); }
+        /* ?icon=0: no rank icon. */
+        html.no-icon .rank-icon { display: none !important; }
+        html.no-icon .overlay-container { padding-left: 24px; }
+        /* A see-through card: a shadow under the text keeps it readable on gameplay. */
+        html.clear .overlay-container { backdrop-filter: none; }
+        html.clear .info { text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.9); }
+        html.clear .bar { background: rgba(0, 0, 0, 0.45); }
+        /* Gradient text is see-through itself, so a text-shadow would show
+           through it: shadow the shape instead. */
+        html.clear.legend .rank-text,
+        html.clear.legend .elo-text {
+            text-shadow: none;
+            filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.85));
+        }
+
         /* Nothing below the rank (?show=none): no stats, no creator code. */
         html.bare #statsRow,
         html.bare #creatorRow { display: none !important; }
@@ -318,6 +338,22 @@
                     window.ACCENT_FROM_LINK = true;
                 }
             }
+
+            // Card look: round= corner rounding and bg= background opacity,
+            // both 0 to 100; icon=0 hides the rank icon; outline=1 adds a ring.
+            var q = new URLSearchParams(location.search), root = document.documentElement;
+            function pct(name) {
+                var v = parseInt(q.get(name), 10);
+                return isFinite(v) ? Math.max(0, Math.min(100, v)) : null;
+            }
+            var round = pct('round'), bg = pct('bg');
+            if (round !== null) root.style.setProperty('--radius', (round * 0.4) + 'px');
+            if (bg !== null) {
+                root.style.setProperty('--bg-alpha', String(bg / 100));
+                root.classList.toggle('clear', bg < 40);
+            }
+            if (q.get('icon') === '0') root.classList.add('no-icon');
+            if (q.get('outline') === '1') root.classList.add('outline');
         })();
 
         var POLL_MS      = __POLL_MS__;
