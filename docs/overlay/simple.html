@@ -93,6 +93,10 @@
         html.legend .rank-text,
         html.legend .elo-text {
             display: inline-block;
+            /* Room for the g's tail and the last letter's edge, which
+               background-clip would otherwise cut off. */
+            padding: 0 0.08em 0.14em 0;
+            margin: 0 -0.08em -0.14em 0;
             background: var(--legend);
             -webkit-background-clip: text;
             background-clip: text;
@@ -125,14 +129,17 @@
             transition: width 0.4s ease;
         }
         .bar-note {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
             margin-top: 6px;
-            text-align: right;
             font-weight: 600;
             font-size: 16px;
             white-space: nowrap;
             color: rgba(255, 255, 255, 0.60);
         }
         .bar-note b { color: #ffffff; font-weight: 700; }
+        .bar-note .have { color: var(--accent-light); font-weight: 700; }
 
         /* Unreal: the ELO, and the gap to the next spot. */
         .elo-row {
@@ -532,7 +539,8 @@
             $('#barFill').style.width = hasProg ? Math.max(0, Math.min(100, Number(prog))) + '%' : '0';
             var note = $('#barNote');
             if (hasProg && d.pct_to_next !== null && d.pct_to_next !== undefined) {
-                note.innerHTML = '<b>' + d.pct_to_next + '%</b> to ' + esc(d.next_rank_name ? titleCase(d.next_rank_name) : 'next rank');
+                note.innerHTML = '<span class="have">' + Math.round(Number(prog)) + '%</span>'
+                    + '<span><b>' + d.pct_to_next + '%</b> to ' + esc(d.next_rank_name ? titleCase(d.next_rank_name) : 'next rank') + '</span>';
                 note.style.display = '';
             } else {
                 note.style.display = 'none';
