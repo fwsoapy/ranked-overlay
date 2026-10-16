@@ -57,9 +57,9 @@ There are 9 designs. Every one can show season stats, a creator code or nothing 
 <td align="center" width="40%"><img src="images/classic-code.png" width="300" alt="Classic Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
-<td width="20%"><b>Sharp</b><br>Big stacked text and clipped corners. Structured and aggressive.</td>
-<td align="center" width="40%"><img src="images/sharp-stats.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, stats"></td>
-<td align="center" width="40%"><img src="images/sharp-code.png" width="300" alt="Sharp Fortnite ranked overlay design for OBS, creator code"></td>
+<td width="20%"><b>Simple</b><br>Your rank icon, a progress bar and today's gain, in your rank's colour. The top 500 get Unreal Legend.</td>
+<td align="center" width="40%"><img src="images/simple-stats.png" width="300" alt="Simple Fortnite ranked overlay design for OBS, stats"></td>
+<td align="center" width="40%"><img src="images/simple-code.png" width="300" alt="Simple Fortnite ranked overlay design for OBS, creator code"></td>
 </tr>
 <tr>
 <td width="20%"><b>Wide</b><br>Spread out sideways with a glowing bar on the left. Good for wide layouts.</td>

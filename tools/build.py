@@ -31,10 +31,10 @@ import re
 import shutil
 import sys
 
-DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse", "Record"]
-# Built and hosted, but not on the setup page yet: only reachable through the
-# preview pages in src/web/preview/.
-UNLISTED = ["Simple"]
+DESIGNS = ["Minimal", "Classic", "Simple", "Wide", "Slash", "Rainbow", "Modern", "Pulse", "Record"]
+# Built and hosted, but not on the setup page any more: Sharp was replaced by
+# Simple, and is kept so OBS links people already made keep working.
+UNLISTED = ["Sharp"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
@@ -60,7 +60,7 @@ OBS_SIZES = {
     "Modern":  (540, 194),
     "Pulse":   (660, 230),
     "Record":   (560, 210),
-    "Simple":  (700, 230),
+    "Simple":  (700, 245),
 }
 
 # The hooks a design's script is rewired through on the website. Each must be

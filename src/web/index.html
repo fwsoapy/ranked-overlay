@@ -801,8 +801,8 @@
             blurb: 'Clean single row with rank and ELO side by side and a bold left border.' },
           { id: 'classic', name: 'Classic', accent: '#3b82f6',
             blurb: 'Dark card with a thin top accent line and subtle dividers.' },
-          { id: 'sharp', name: 'Sharp', accent: '#cc1111',
-            blurb: 'Big stacked text with clipped corners. Structured and aggressive.' },
+          { id: 'simple', name: 'Simple', accent: '#9b5cff',
+            blurb: 'Your rank icon, a progress bar and today\'s gain. Takes your rank\'s colour.' },
           { id: 'wide', name: 'Wide', accent: '#38bdf8',
             blurb: 'Spread out sideways with a glowing bar on the left. For wide layouts.' },
           { id: 'slash', name: 'Slash', accent: '#a855f7',
@@ -923,7 +923,7 @@
           var d = BY_ID[state.design];
           // The wins and losses footer makes the card taller, by a different
           // amount in each design.
-          var REC_EXTRA = { minimal: 10, classic: 20, sharp: 26, wide: 20, slash: 32, rainbow: 10, modern: 40, pulse: 28 };
+          var REC_EXTRA = { minimal: 10, classic: 20, simple: 38, wide: 20, slash: 32, rainbow: 10, modern: 40, pulse: 28 };
           var h = d.h + (state.rec && REC_EXTRA[state.design] ? REC_EXTRA[state.design] : 0);
           // Some modes make a card taller than the others (Reload and Boxfights
           // have a progress bar row), so also take the real card's size from
@@ -1404,8 +1404,13 @@
           document.querySelectorAll('[data-design]').forEach(function (b) {
             b.classList.toggle('on', b.getAttribute('data-design') === state.design);
           });
-          defaultSwatch.style.background = state.design === 'rainbow' ? RAINBOW_STRIPES : d.accent;
-          defaultSwatch.title = state.design === 'rainbow' ? 'Design default (rainbow)' : 'Design default (' + d.accent + ')';
+          // Simple takes the colour of whatever rank is showing.
+          var TIER_STRIPES = 'linear-gradient(135deg, #d08a4e 0 12.5%, #9fb0d0 12.5% 25%, #f2b320 25% 37.5%, ' +
+            '#2fc9c4 37.5% 50%, #4c7dff 50% 62.5%, #d94fe0 62.5% 75%, #ff4a2a 75% 87.5%, #9b5cff 87.5%)';
+          defaultSwatch.style.background = state.design === 'rainbow' ? RAINBOW_STRIPES
+            : state.design === 'simple' ? TIER_STRIPES : d.accent;
+          defaultSwatch.title = state.design === 'rainbow' ? 'Design default (rainbow)'
+            : state.design === 'simple' ? 'Design default (your rank\'s colour)' : 'Design default (' + d.accent + ')';
           swatchBox.querySelectorAll('.swatch').forEach(function (b) {
             b.classList.toggle('on', b.getAttribute('data-val') === state.color);
           });
