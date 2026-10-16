@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Simple preview</title>
+    <link rel="icon" href="../../favicon-32.png">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+    <!-- Not linked from the setup page: a look at the Simple design before it
+         goes live. The top three are real players, fetched live like any
+         overlay; the bottom three are made up. -->
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: #2a2d35 radial-gradient(circle at 20% 0%, #3a3f4c 0%, #23262d 60%);
+            min-height: 100vh;
+            color: #e8eaf0;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            padding: 28px 16px 60px;
+        }
+        main { max-width: 1300px; margin: 0 auto; }
+        h1 { font-size: 26px; font-weight: 800; }
+        .lead { margin-top: 6px; color: rgba(255,255,255,0.6); font-size: 15px; }
+        .opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; align-items: center; }
+        .opts span { font-size: 14px; color: rgba(255,255,255,0.6); margin-right: 4px; }
+        .opts button {
+            font: 700 14px 'Plus Jakarta Sans', sans-serif;
+            color: rgba(255,255,255,0.7);
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+        .opts button.on { color: #fff; background: #3d8bff; border-color: #3d8bff; }
+        h2 { margin-top: 34px; font-size: 18px; font-weight: 800; }
+        h2 small { font-weight: 500; color: rgba(255,255,255,0.5); font-size: 14px; margin-left: 8px; }
+        .grid { display: flex; flex-wrap: wrap; gap: 18px 24px; margin-top: 12px; }
+        figure { display: flex; flex-direction: column; gap: 4px; }
+        figcaption { font-size: 14px; color: rgba(255,255,255,0.65); padding-left: 16px; }
+        figcaption b { color: #fff; }
+        .frame { max-width: calc(100vw - 32px); overflow: hidden; }
+        iframe { display: block; width: 700px; height: 230px; border: 0; background: transparent; }
+        iframe.wait { opacity: 0; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Simple</h1>
+    <p class="lead">Preview of the new design. Not on the setup page yet.</p>
+    <div class="opts" id="opts">
+        <span>Below the rank:</span>
+        <button data-show="stats" class="on">Season stats</button>
+        <button data-show="code">Creator code</button>
+        <button data-show="none">Nothing</button>
+    </div>
+
+    <h2>Real players <small>live from OliTracker, BR</small></h2>
+    <div class="grid" id="real"></div>
+
+    <h2>Made up <small>fake numbers</small></h2>
+    <div class="grid" id="fake"></div>
+</main>
+
+<script>
+    var REAL = [
+        { who: 'Unreal', name: 'itsbald_', id: '448e4dc2677c4617a7daf8f1f5459825' },
+        { who: 'Unreal Legend', name: 'buttermilk', id: '186542fb4533412fa15eb03e4bc3c07e' },
+        { who: 'Not Unreal', name: 'Bugha', id: '33f85e8ed7124d15ae29cfaf53340239' }
+    ];
+
+    // Snapshots in the shape engine.js hands the designs.
+    function fakeUnreal(place, elo, gap, change) {
+        return {
+            rank_display: '#' + place + ' UNREAL', rank_label: 'UNREAL', rank_number: place, is_unreal: true,
+            elo: elo, elo_text: elo + ' ELO', next_gap: String(gap), next_pos: String(place - 1),
+            session_text: (change >= 0 ? '+' : '') + change + ' ELO TODAY', session_sign: change > 0 ? 'pos' : (change < 0 ? 'neg' : 'zero')
+        };
+    }
+    var FAKE = [
+        { who: 'Unreal', name: 'FakePlayer1', d: fakeUnreal(2318, 3982, 6, 41),
+          stats: ['2.84', '9.7%', 1420, 61] },
+        { who: 'Unreal Legend', name: 'FakePlayer2', d: fakeUnreal(87, 8420, 11, -18),
+          stats: ['5.12', '18.3%', 2960, 142] },
+        { who: 'Not Unreal', name: 'FakePlayer3',
+          d: { rank_display: 'ELITE III', rank_label: 'ELITE III', rank_number: null, is_unreal: false,
+               progression_pct: 72, pct_to_next: 28, next_rank_name: 'CHAMPION I',
+               session_text: '+18% TODAY', session_sign: 'pos' },
+          stats: ['1.63', '4.1%', 512, 14] }
+    ];
+
+    var show = 'stats';
+
+    function query(extra) {
+        var q = 'mode=br' + (show === 'code' ? '&code=FWSOAPY' : '') + (show === 'none' ? '&show=none' : '');
+        return '../../overlay/simple.html?' + q + extra;
+    }
+
+    function card(list, p, src, onload) {
+        var fig = document.createElement('figure');
+        fig.innerHTML = '<div class="frame"><iframe class="wait" scrolling="no"></iframe></div>'
+            + '<figcaption><b>' + p.who + '</b> · ' + p.name + '</figcaption>';
+        var frame = fig.querySelector('iframe');
+        frame.addEventListener('load', function () { onload(frame); fit(frame); });
+        frame.src = src;
+        list.appendChild(fig);
+    }
+
+    // A made-up player: the overlay runs in demo mode (no requests), with its
+    // data source swapped for the fake snapshot.
+    function inject(frame, p) {
+        var w = frame.contentWindow;
+        var d = Object.assign({ season_kd: p.stats[0], season_wr: p.stats[1], season_kills: p.stats[2], season_wins: p.stats[3] }, p.d);
+        function feed() {
+            if (!w.RankedOverlay || !w.tick) return;
+            w.RankedOverlay.fetchData = function () {
+                return Promise.resolve(new Response(JSON.stringify(d), { headers: { 'Content-Type': 'application/json' } }));
+            };
+            w.tick();
+        }
+        feed();
+        // The demo's own first answer can land after ours; answer again.
+        setTimeout(feed, 300);
+        setTimeout(function () { frame.classList.remove('wait'); }, 450);
+    }
+
+    // Crop each frame to its card (the mode buttons under it stay hidden, as in OBS).
+    function fit(frame) {
+        try {
+            var c = frame.contentDocument.querySelector('.overlay-container');
+            if (c) {
+                var r = c.getBoundingClientRect();
+                if (r.width && r.height) {
+                    frame.style.width = Math.ceil(r.right + 16) + 'px';
+                    frame.style.height = Math.ceil(r.bottom + 16) + 'px';
+                }
+            }
+        } catch (e) { /* not loaded yet */ }
+    }
+    setInterval(function () { document.querySelectorAll('iframe').forEach(fit); }, 500);
+
+    function render() {
+        var real = document.getElementById('real'), fake = document.getElementById('fake');
+        real.innerHTML = fake.innerHTML = '';
+        REAL.forEach(function (p) {
+            card(real, p, query('&id=' + p.id), function (f) { f.classList.remove('wait'); });
+        });
+        FAKE.forEach(function (p, i) {
+            card(fake, p, query('&demo=1&fake=' + i), function (f) { inject(f, p); });
+        });
+    }
+
+    document.getElementById('opts').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        show = b.dataset.show;
+        document.querySelectorAll('#opts button').forEach(function (x) { x.classList.toggle('on', x === b); });
+        render();
+    });
+
+    render();
+</script>
+</body>
+</html>

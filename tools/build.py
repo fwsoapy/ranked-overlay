@@ -32,6 +32,9 @@ import shutil
 import sys
 
 DESIGNS = ["Minimal", "Classic", "Sharp", "Wide", "Slash", "Rainbow", "Modern", "Pulse", "Record"]
+# Built and hosted, but not on the setup page yet: only reachable through the
+# preview pages in src/web/preview/.
+UNLISTED = ["Simple"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
@@ -57,6 +60,7 @@ OBS_SIZES = {
     "Modern":  (540, 194),
     "Pulse":   (660, 230),
     "Record":   (560, 210),
+    "Simple":  (700, 230),
 }
 
 # The hooks a design's script is rewired through on the website. Each must be
@@ -135,7 +139,7 @@ def web_outputs():
     for hook in ("__ENGINE_GUARD__", "__OBS_SIZES__"):
         if index.count(hook) != 1:
             raise SystemExit(f"src/web/index.html: expected one {hook}")
-    sizes = "{" + ", ".join(f"{d.lower()}: [{w}, {h}]" for d, (w, h) in OBS_SIZES.items()) + "}"
+    sizes = "{" + ", ".join(f"{d.lower()}: [{w}, {h}]" for d, (w, h) in OBS_SIZES.items() if d in DESIGNS) + "}"
     files[os.path.join(DOCS, "index.html")] = (
         index.replace("__ENGINE_VERSION__", version)
              .replace("__ENGINE_GUARD__", ENGINE_GUARD)
@@ -151,6 +155,19 @@ def web_outputs():
         slug = design.lower()
         files[os.path.join(DOCS, "overlay", slug + ".html")] = render_web_overlay(design, version)
         binaries[os.path.join(DOCS, "previews", slug + ".png")] = os.path.join(ROOT, "images", slug + ".png")
+    for design in UNLISTED:
+        files[os.path.join(DOCS, "overlay", design.lower() + ".html")] = render_web_overlay(design, version)
+
+    # Fortnite's rank icons (0 is Bronze I, 21 Unreal), for designs that show them.
+    ranks = os.path.join(WEB, "ranks")
+    for name in sorted(os.listdir(ranks)):
+        binaries[os.path.join(DOCS, "ranks", name)] = os.path.join(ranks, name)
+
+    # Unlisted preview pages: src/web/preview/<name>.html -> docs/preview/<name>/.
+    preview = os.path.join(WEB, "preview")
+    for name in sorted(os.listdir(preview)):
+        if name.endswith(".html"):
+            files[os.path.join(DOCS, "preview", name[:-5], "index.html")] = read(os.path.join(preview, name))
     return files, binaries
 
 
@@ -214,7 +231,7 @@ def main():
         shutil.copyfile(src, dst)
     for p in orphans:
         os.remove(p)
-    print(f"Wrote {total} files for {len(DESIGNS)} designs into docs/.")
+    print(f"Wrote {total} files for {len(DESIGNS) + len(UNLISTED)} designs into docs/.")
     if stale:
         print(f"{len(stale)} of them changed.")
     if orphans:
