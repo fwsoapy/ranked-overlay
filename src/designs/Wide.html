@@ -599,7 +599,7 @@
                 if (hasGap) {
                     $('#nextGap').textContent   = d.next_gap;
                     $('#nextUnit').textContent  = d.next_unit || ' ELO';
-                    $('#nextArrow').textContent = 'TO';
+                    $('#nextArrow').textContent = (d.next_word || 'TO');
                     $('#nextPos').textContent   = '#' + d.next_pos;
                     nextRow.classList.remove('hidden');
                 } else {

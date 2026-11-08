@@ -320,7 +320,7 @@
                     <div class="sub-text left-sub">
                         <span id="nextContainer" style="display:inline-flex;align-items:center;gap:5px;">
                             <span class="next-gap-val" id="nextGap">-</span>
-                            <span class="next-to">TO</span>
+                            <span class="next-to" id="nextArrow">TO</span>
                             <span class="next-hash" id="nextPos">#-</span>
                         </span>
                     </div>
@@ -355,7 +355,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=eefe2d9b41"></script>
+    <script src="../engine.js?v=3e5a0e2ab6"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -550,6 +550,7 @@
                     }
                     gapEl.textContent = gapStr;
                     posEl.textContent = posStr;
+                    $('#nextArrow').textContent = d.is_unreal ? (d.next_word || 'TO') : 'TO';
 
                     var sessEl = $('#sessionText');
                     sessEl.textContent = d.session_text || '+0 ELO TODAY';

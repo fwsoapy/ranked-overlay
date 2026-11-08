@@ -580,7 +580,7 @@
             $('#eloText').textContent = d.elo_text ? commas(d.elo_text) : '-- ELO';
             var gapEl = $('#gapText');
             if (d.is_unreal && d.next_gap && d.next_pos) {
-                gapEl.innerHTML = '<b>' + esc(d.next_gap) + esc(d.next_unit || ' ELO') + '</b> to <b>#' + esc(d.next_pos) + '</b>';
+                gapEl.innerHTML = '<b>' + esc(d.next_gap) + esc(d.next_unit || ' ELO') + '</b> ' + (d.next_word || 'TO').toLowerCase() + ' <b>#' + esc(d.next_pos) + '</b>';
             } else {
                 gapEl.innerHTML = '';
             }

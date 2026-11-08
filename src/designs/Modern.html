@@ -328,7 +328,7 @@
             <div class="mid-row" id="midRow">
                 <div class="next-target">
                     <span class="hi" id="nextGap">-</span>
-                    <span class="arrow">TO</span>
+                    <span class="arrow" id="nextArrow">TO</span>
                     <span class="hi" id="nextPos">#-</span>
                 </div>
                 <span class="session-zero" id="sessionText">+0 TODAY</span>
@@ -534,7 +534,9 @@
                 if (d.is_unreal) {
                     $('#nextGap').textContent = d.next_gap ? d.next_gap + (d.next_unit || ' ELO') : '-';
                     $('#nextPos').textContent = d.next_pos ? '#' + d.next_pos : '#-';
+                    $('#nextArrow').textContent = (d.next_word || 'TO');
                 } else {
+                    $('#nextArrow').textContent = 'TO';
                     $('#nextGap').textContent = d.next_gap || '-';
                     $('#nextPos').textContent = d.next_pos || '-';
                 }

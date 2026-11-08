@@ -316,7 +316,7 @@
                     <div class="sub-text left-sub">
                         <span id="nextContainer" style="display:inline-flex;align-items:center;gap:5px;">
                             <span class="next-gap-val" id="nextGap">-</span>
-                            <span class="next-to">TO</span>
+                            <span class="next-to" id="nextArrow">TO</span>
                             <span class="next-hash" id="nextPos">#-</span>
                         </span>
                     </div>
@@ -543,6 +543,7 @@
                     }
                     gapEl.textContent = gapStr;
                     posEl.textContent = posStr;
+                    $('#nextArrow').textContent = d.is_unreal ? (d.next_word || 'TO') : 'TO';
 
                     var sessEl = $('#sessionText');
                     sessEl.textContent = d.session_text || '+0 ELO TODAY';

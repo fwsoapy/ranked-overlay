@@ -151,7 +151,17 @@ async function websiteChecks() {
   {
     const rows = [{ placement: 15, elo: 3322, account_id: 'b' }, { placement: 16, elo: 3300, account_id: 'c' }, { placement: 17, elo: 3266, account_id: 'me' }];
     const got = await C.lookupLeaderboardElo(['ranked_stats', 'ranked_blastberry_build'], 16, 'me', true, async () => rows);
-    check('next target is above the player even when the board lags', got, [3266, 15, 34]);
+    check('next target is above the player even when the board lags', got, [3266, 15, 34, null, null]);
+  }
+
+  // #1: no one to chase, so the lead over #2 instead.
+  {
+    const rows = [{ placement: 1, elo: 5210, account_id: 'me' }, { placement: 2, elo: 5158, account_id: 'b' }, { placement: 3, elo: 5100, account_id: 'c' }];
+    const got = await C.lookupLeaderboardElo(['ranked_stats', 'ranked-br-combined'], 1, 'me', true, async () => rows);
+    check('#1 gets its lead over #2', got, [5210, null, null, 2, 52]);
+    const lag = [{ placement: 1, elo: 5300, account_id: 'b' }, { placement: 2, elo: 5210, account_id: 'me' }];
+    const got2 = await C.lookupLeaderboardElo(['ranked_stats', 'ranked-br-combined'], 1, 'me', true, async () => lag);
+    check('#1 on a lagging board shows no lead', got2, [5210, null, null, null, null]);
   }
 
   // Unreal with no ELO anywhere (profile has none, leaderboard unreadable):
@@ -198,6 +208,24 @@ async function websiteChecks() {
     const d = await (await eng.fetchData('/data?window=session')).json();
     check('#1053 gets its ELO and the gap from page 11', [d.elo_text, d.next_gap, d.next_pos, d.elo_unavailable, d.spots_text], ['4604 ELO', '2', '1052', false, null]);
     check('...and only asked for page 11', asked.filter((u) => !u.includes('/stats/')), ['battle-royale?page=11']);
+  }
+  // #1: the answer carries the lead over #2 from page 1.
+  {
+    const me = '448e4dc2677c4617a7daf8f1f5459825';
+    const rows = [];
+    for (let i = 1; i <= 100; i++) rows.push('<tr class="leaderboard-player-row"><td class="leaderboard-rank-cell ">#' + i +
+      '</td><td><a href="/stats/' + (i === 1 ? me : String(i).padStart(32, '0')) + '">p</a></td>' +
+      '<td class="leaderboard-wins-cell"><p>' + (i === 1 ? 5210 : 5158 - i) + '</p></td></tr>');
+    const html = '<table>' + rows.join('') + '</table>';
+    const eng = E.createEngine({ cfg: E.parseConfig('?id=' + me + '&elo=session'), store: E.makeStore(memoryStorage()),
+      fetchText: async (u) => {
+        if (u.includes('/stats/')) return JSON.stringify({ user_id: 'a', public: true, stats: {}, match_history: [],
+          ranked_stats: { 'ranked-br-combined': { division: 21, promotion_progression: 50, current_unreal_placement: 1, elo: null } } });
+        return /\/ranked\/battle-royale$/.test(u) ? html : '[]';
+      }, now: () => 1.79e12 });
+    await eng.init();
+    const d = await (await eng.fetchData('/data?window=session')).json();
+    check('#1 gets its lead over #2', [d.elo_text, d.lead_gap, d.lead_pos, d.next_gap, d.next_pos], ['5210 ELO', '54', '2', null, null]);
   }
   {
     const eng = E.createEngine({ cfg: E.parseConfig('?id=0123456789abcdef0123456789abcdef'), store: E.makeStore(memoryStorage()),

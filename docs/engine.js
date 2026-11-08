@@ -679,9 +679,11 @@
     return nearest;
   }
 
-  // lookup_leaderboard_elo(): [own ELO, target placement, ELO gap]
+  // lookup_leaderboard_elo(): [own ELO, target placement, ELO gap], plus
+  // (website only) [lead placement, ELO lead] when the player is #1: how far
+  // ahead of the next player down they are.
   function lookupLeaderboardElo(path, placement, accountId, enabled, getPage) {
-    var none = [null, null, null];
+    var none = [null, null, null, null, null];
     if (!enabled || !placement || placement < 1) return Promise.resolve(none);
     var slug = slugForMode(path);
     if (slug === null) return Promise.resolve(none);
@@ -692,6 +694,17 @@
       if (me === null) return none;
       var myElo = me.elo, myPlace = me.placement;
 
+      // #1 on the profile: nobody to chase, so measure the lead over the
+      // best of the rest. If the board still has someone higher (it can lag
+      // the profile by a few minutes), say nothing rather than a wrong lead.
+      if (placement === 1) {
+        var rest = rows.filter(function (r) { return r !== me; });
+        if (!rest.length) return [myElo, null, null, null, null];
+        var second = maxBy(rest, function (r) { return [r.elo, -r.placement]; });
+        if (second.elo > myElo) return [myElo, null, null, null, null];
+        return [myElo, null, null, 2, myElo - second.elo];
+      }
+
       function step(i, rows) {
         var above = rows.filter(function (r) { return r.placement < myPlace && r.elo > myElo; });
         if (above.length) {
@@ -699,12 +712,12 @@
           // The board can lag the profile by a few minutes, so the row above
           // may carry the player's own new placement: aim one spot higher.
           var pos = placement > 1 ? Math.min(target.placement, placement - 1) : target.placement;
-          return Promise.resolve([myElo, pos, target.elo - myElo]);
+          return Promise.resolve([myElo, pos, target.elo - myElo, null, null]);
         }
-        if (page - 1 < 1 || i === LEADERBOARD_PAGES_BACK - 1) return Promise.resolve([myElo, null, null]);
+        if (page - 1 < 1 || i === LEADERBOARD_PAGES_BACK - 1) return Promise.resolve([myElo, null, null, null, null]);
         page -= 1;
         return getPage(slug, page).then(function (prev) {
-          if (!prev.length) return [myElo, null, null];
+          if (!prev.length) return [myElo, null, null, null, null];
           return step(i + 1, prev);
         });
       }
@@ -1113,6 +1126,8 @@
       is_unreal: false,
       next_position: null,
       elo_to_next: null,
+      lead_position: null,
+      elo_lead: null,
       session_delta: 0,
       prog_delta: 0,
       updated_at: null,
@@ -1446,6 +1461,8 @@
         elo: elo,
         next_pos: hasOwn.call(cached, 'next_pos') && cached.next_pos !== undefined ? cached.next_pos : null,
         next_gap: hasOwn.call(cached, 'gap') && cached.gap !== undefined ? cached.gap : null,
+        lead_pos: typeof cached.lead_pos === 'number' ? cached.lead_pos : null,
+        lead_gap: typeof cached.lead === 'number' ? cached.lead : null,
         points: progressPoints(obj)
       };
     }
@@ -1640,6 +1657,8 @@
           elo: apiElo !== null ? apiElo : res[0] !== null ? res[0] : latestHistoryElo(raw, key),
           next_pos: res[1],
           gap: res[2],
+          lead_pos: res[3],
+          lead: res[4],
           at: clock(),
           sig: sig,
           placement: placement,
@@ -1696,6 +1715,8 @@
       STATE.is_unreal = v.is_unreal;
       STATE.next_position = v.next_pos;
       STATE.elo_to_next = v.next_gap;
+      STATE.lead_position = v.lead_pos;
+      STATE.elo_lead = v.lead_gap;
       STATE.session_delta = d[0];
       STATE.prog_delta = d[1];
       STATE.updated_at = Math.floor(rawAt / 1000);
@@ -1879,6 +1900,8 @@
           elo: s.elo,
           next_pos: s.next_position,
           next_gap: s.elo_to_next,
+          lead_pos: s.lead_position,
+          lead_gap: s.elo_lead,
           points: null
         };
         delta = s.session_delta || 0;
@@ -1935,6 +1958,12 @@
         s.next_gap = null;
         s.next_pos = null;
       }
+
+      // #1 in Unreal: how far ahead of #2. Website only; fetchDataShown puts
+      // it in the next-target line as "52 ELO OVER #2".
+      var leading = isUnreal && placement === 1 && v.lead_gap !== null && v.lead_gap !== undefined && v.lead_pos;
+      s.lead_gap = leading ? String(v.lead_gap) : null;
+      s.lead_pos = leading ? String(v.lead_pos) : null;
 
       // The ELO change row. "today" counts from midnight Central Time, 12h and
       // 24h from that long ago, all from OliTracker's match history so games
@@ -2386,6 +2415,13 @@
             d.session_text = d.spots_text;
             d.session_sign = d.spots_sign;
             d.gap_unavailable = true;
+          }
+          // #1 in Unreal: the next-target line shows the lead over #2.
+          if (d && d.lead_gap && !d.next_pos) {
+            d.next_gap = d.lead_gap;
+            d.next_pos = d.lead_pos;
+            d.next_word = 'OVER';
+            d.gap_unavailable = false;
           }
           var empty = !!d && (d.rank_display === emptyReason({ 'public': false }) || d.rank_display === emptyReason({}));
           // After the design has drawn this answer.

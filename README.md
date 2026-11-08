@@ -109,7 +109,7 @@ Everything is on the setup page, and the link it gives you remembers all of it.
 | **Mode** | Auto, BR, Reload or Boxfights, the mode the overlay starts on. Modes your account hasn't played are greyed out. |
 | **ELO change** | What "+23 ELO TODAY" counts. **Session** (the default) counts from when you press **Reset ELO gain** in OBS, and starts over by itself after 3 hours with no ELO change, so each stream opens on +0. Or pick **Last 12h** or **Last 24h**. |
 | **Update speed** | Auto checks right after OliTracker refreshes your profile (about every 3 minutes). You can slow it to every 5 or 10 minutes. |
-| **Leaderboard** | Shows your ELO and the gap to the next spot ("14 ELO TO #65"). Turn it off to hide ELO when OliTracker doesn't include it. |
+| **Leaderboard** | Shows your ELO and the gap to the next spot ("14 ELO TO #65"). At #1 it shows your lead over #2 instead ("52 ELO OVER #2"). Turn it off to hide ELO when OliTracker doesn't include it. |
 | **Background** | Only changes the setup page preview (transparent, gameplay or green screen). Your stream sees a transparent overlay. |
 | **Edit a link you made before** | Paste an old link under *More options* to load all its settings back. |
 

@@ -428,7 +428,7 @@
                 if (d.next_gap && d.next_pos) {
                     nextCont.innerHTML =
                         '<span class="highlight">' + d.next_gap + (d.next_unit || ' ELO') + '</span>' +
-                        ' to <span class="purple">#</span><span class="highlight">' + d.next_pos + '</span>';
+                        ' ' + (d.next_word || 'TO').toLowerCase() + ' <span class="purple">#</span><span class="highlight">' + d.next_pos + '</span>';
                 } else {
                     nextCont.innerHTML =
                         '<span class="highlight">-</span> to ' +

@@ -332,7 +332,7 @@
             <div class="mid-row" id="midRow">
                 <div class="next-target">
                     <span class="hi" id="nextGap">-</span>
-                    <span class="arrow">TO</span>
+                    <span class="arrow" id="nextArrow">TO</span>
                     <span class="hi" id="nextPos">#-</span>
                 </div>
                 <span class="session-zero" id="sessionText">+0 TODAY</span>
@@ -369,7 +369,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=eefe2d9b41"></script>
+    <script src="../engine.js?v=3e5a0e2ab6"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -541,7 +541,9 @@
                 if (d.is_unreal) {
                     $('#nextGap').textContent = d.next_gap ? d.next_gap + (d.next_unit || ' ELO') : '-';
                     $('#nextPos').textContent = d.next_pos ? '#' + d.next_pos : '#-';
+                    $('#nextArrow').textContent = (d.next_word || 'TO');
                 } else {
+                    $('#nextArrow').textContent = 'TO';
                     $('#nextGap').textContent = d.next_gap || '-';
                     $('#nextPos').textContent = d.next_pos || '-';
                 }

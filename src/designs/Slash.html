@@ -588,7 +588,7 @@
                 if (d.next_gap && d.next_pos) {
                     nextText.innerHTML =
                         '<span class="hl">' + d.next_gap + (d.next_unit || ' ELO') + '</span>' +
-                        ' TO <span class="accent">#</span><span class="hl">' + d.next_pos + '</span>';
+                        ' ' + (d.next_word || 'TO') + ' <span class="accent">#</span><span class="hl">' + d.next_pos + '</span>';
                 } else {
                     nextText.innerHTML = '<span class="hl">- ELO</span> TO <span class="accent">#</span><span class="hl">-</span>';
                 }

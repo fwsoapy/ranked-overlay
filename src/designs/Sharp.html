@@ -521,6 +521,7 @@
                 if (d.next_gap && d.next_pos) {
                     gapEl.textContent = d.next_gap + (d.next_unit || ' ELO');
                     posEl.textContent = '#' + d.next_pos;
+                    $('#nextToLabel').textContent = (d.next_word || 'TO');
                     nextLeft.style.visibility = 'visible';
                 } else {
                     gapEl.textContent = '-';

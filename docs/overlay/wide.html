@@ -429,7 +429,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=eefe2d9b41"></script>
+    <script src="../engine.js?v=3e5a0e2ab6"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -606,7 +606,7 @@
                 if (hasGap) {
                     $('#nextGap').textContent   = d.next_gap;
                     $('#nextUnit').textContent  = d.next_unit || ' ELO';
-                    $('#nextArrow').textContent = 'TO';
+                    $('#nextArrow').textContent = (d.next_word || 'TO');
                     $('#nextPos').textContent   = '#' + d.next_pos;
                     nextRow.classList.remove('hidden');
                 } else {

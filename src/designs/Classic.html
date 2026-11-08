@@ -534,7 +534,7 @@
 
             if (d.is_unreal) {
                 $('#nextGap').textContent   = d.next_gap ? d.next_gap + (d.next_unit || ' ELO') : '-';
-                $('#nextArrow').textContent = 'TO';
+                $('#nextArrow').textContent = (d.next_word || 'TO');
                 $('#nextPos').textContent   = d.next_pos ? '#' + d.next_pos : '#-';
                 var sessEl = $('#sessionText');
                 sessEl.textContent = d.session_text || '+0 TODAY';
