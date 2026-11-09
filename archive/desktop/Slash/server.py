@@ -1222,7 +1222,7 @@ def _set_error(msg):
         STATE["error"] = msg
         if STATE.get("elo") is None:
             STATE["ok"] = False
-    print("[overlay] " + msg)
+    print("[overlay] " + str(msg))
 
 
 def refresh_once():
@@ -1779,11 +1779,20 @@ def update_loop(server=None):
             print(f"[overlay] update check skipped: {e}")
 
 
+def _refresh_safely():
+    # Anything unexpected in an answer used to kill this thread, leaving the
+    # overlay frozen on old numbers with no error showing.
+    try:
+        refresh_once()
+    except Exception as e:
+        _set_error(f"refresh failed: {type(e).__name__}")
+
+
 def poll_loop():
-    refresh_once()
+    _refresh_safely()
     while True:
         time.sleep(POLL_SECONDS)
-        refresh_once()
+        _refresh_safely()
 
 
 def _empty_reason(data, long=False):
@@ -2754,8 +2763,10 @@ def render_overlay():
                 .replace("__CURRENT__", VERSION)
                 .replace("__REPO__", UPDATE_REPO))
     html = OVERLAY_HTML.replace("__POLL_MS__", str(OVERLAY_POLL_MS))
-    html = html.replace("__INITIAL_CREATOR_CODE__",
-                        CREATOR_CODE.strip().replace('"', '\\"'))
+    # A JSON string is a valid JS string; "</" is split so a code can never
+    # close the <script> it sits in.
+    html = html.replace('"__INITIAL_CREATOR_CODE__"',
+                        json.dumps(CREATOR_CODE.strip()).replace("</", "<\\/"))
     override = _accent_override()
     if override:
         html = html.replace("</head>", override + "</head>", 1)
@@ -2771,7 +2782,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         try:
@@ -2817,7 +2827,9 @@ def _bind(port, attempts=20):
     last = None
     for _ in range(attempts):
         try:
-            return ThreadingHTTPServer(("0.0.0.0", port), Handler)
+            # This PC only: OBS reads it from localhost, and nothing on the
+            # network (or any web page you visit) needs your stats from here.
+            return ThreadingHTTPServer(("127.0.0.1", port), Handler)
         except OSError as e:
             last = e
             time.sleep(1)

@@ -1214,7 +1214,7 @@ def _set_error(msg):
         STATE["error"] = msg
         if STATE.get("elo") is None:
             STATE["ok"] = False
-    print("[overlay] " + msg)
+    print("[overlay] " + str(msg))
 
 
 def refresh_once():
@@ -1771,11 +1771,20 @@ def update_loop(server=None):
             print(f"[overlay] update check skipped: {e}")
 
 
+def _refresh_safely():
+    # Anything unexpected in an answer used to kill this thread, leaving the
+    # overlay frozen on old numbers with no error showing.
+    try:
+        refresh_once()
+    except Exception as e:
+        _set_error(f"refresh failed: {type(e).__name__}")
+
+
 def poll_loop():
-    refresh_once()
+    _refresh_safely()
     while True:
         time.sleep(POLL_SECONDS)
-        refresh_once()
+        _refresh_safely()
 
 
 def _empty_reason(data, long=False):
