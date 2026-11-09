@@ -17,7 +17,12 @@
 // Requests from web pages are only answered for the sites in ALLOWED_ORIGINS,
 // so nobody else can build their site on top of this Worker and spend its
 // daily request allowance. Requests with no Origin at all (typing a URL into
-// the address bar, curl) still work, which keeps testing easy.
+// the address bar, curl) still work, which keeps testing easy. That also means
+// the Origin check only stops other websites, not scripts, so each visitor
+// (IP address) is also held to a pace no overlay comes near (RATE_LIMITS).
+// That keeps one script from hammering OliTracker through this Worker and
+// getting it blocked for everyone. It can't save the daily allowance itself:
+// Cloudflare counts a request even when it's turned away here.
 
 const OLI = "https://olitracker.com";
 
@@ -54,6 +59,41 @@ const CORS = {
   "Access-Control-Max-Age": "86400",
 };
 
+// The leaderboard route can pass along OliTracker's HTML. Nothing in it
+// should ever run on this Worker's address if someone opens it in a browser.
+const SAFE = {
+  "X-Content-Type-Options": "nosniff",
+  "Content-Security-Policy": "default-src 'none'; sandbox",
+  "Referrer-Policy": "no-referrer",
+};
+
+// Requests per visitor per minute. An overlay asks about once every three
+// minutes, a fresh start on Unreal reads a dozen or so leaderboard pages at
+// once, and five overlays share one cache, so these are far above any real
+// use. Counted per Worker instance (there are several), so it's a rough cap,
+// which is all it needs to be.
+const RATE_LIMITS = { data: 60, lookup: 15 };
+const RATE_WINDOW_MS = 60 * 1000;
+const seen = new Map();   // "route ip" -> { start, count }
+
+function overLimit(kind, request) {
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (!ip) return false;
+  const now = Date.now();
+  if (seen.size > 10000) {
+    for (const [k, v] of seen) if (now - v.start >= RATE_WINDOW_MS) seen.delete(k);
+    if (seen.size > 10000) seen.clear();
+  }
+  const key = kind + " " + ip;
+  let e = seen.get(key);
+  if (!e || now - e.start >= RATE_WINDOW_MS) {
+    e = { start: now, count: 0 };
+    seen.set(key, e);
+  }
+  e.count++;
+  return e.count > RATE_LIMITS[kind];
+}
+
 function originAllowed(origin, env) {
   if (origin === null) return true;   // not a cross-site page request
   if (LOCAL_ORIGIN.test(origin)) return true;
@@ -67,6 +107,7 @@ function reply(body, status, type, maxAge) {
     status,
     headers: {
       ...CORS,
+      ...SAFE,
       "Content-Type": type,
       "Cache-Control": maxAge > 0 ? `public, max-age=${maxAge}` : "no-store",
     },
@@ -98,8 +139,9 @@ async function forward(url, accept, type, maxAge) {
     }
     if (r.ok) return reply(r.body, 200, type, maxAge);
     status = r.status;
-    // 4xx (bad id, not found) won't change by asking again.
-    if (status < 500 && status !== 429) break;
+    // 4xx (bad id, not found) won't change by asking again, and a 429 means
+    // OliTracker wants fewer requests, not more.
+    if (status < 500) break;
   }
   if (status === 502) return error(502, "Couldn't reach OliTracker");
   return error(status, `OliTracker returned ${status}`);
@@ -142,8 +184,9 @@ async function leaderboard(slug, page) {
       if (r.ok && src.good(text)) return reply(text, 200, src.type, MAX_AGE.ranked);
       status = r.ok ? 404 : r.status;
       // A page that doesn't exist (or a Cloudflare check) won't change by
-      // asking again straight away: move on to the next source.
-      if (r.ok || (r.status < 500 && r.status !== 429)) break;
+      // asking again straight away: move on to the next source. A 429 means
+      // OliTracker wants fewer requests, so that one isn't retried either.
+      if (r.ok || r.status < 500) break;
     }
   }
   return error(status, status === 404 ? "No leaderboard rows on that page" : `OliTracker returned ${status}`);
@@ -163,11 +206,11 @@ async function lookup(name, env) {
       });
       if (!r.ok) continue;
       const d = await r.json();
-      const id =
+      const id = String(
         d.accountId || d.account_id || d.id ||
-        (d.data && (d.data.accountId || d.data.account_id));
-      if (id) {
-        return reply(JSON.stringify({ accountId: id }), 200, "application/json", MAX_AGE.lookup);
+        (d.data && (d.data.accountId || d.data.account_id)) || "");
+      if (ACCOUNT_ID.test(id)) {
+        return reply(JSON.stringify({ accountId: id.toLowerCase() }), 200, "application/json", MAX_AGE.lookup);
       }
     } catch (e) {
       // try the next endpoint
@@ -200,11 +243,15 @@ export default {
     if (!originAllowed(request.headers.get("Origin"), env)) {
       return error(403, "This site isn't allowed to use this proxy");
     }
-    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...CORS, ...SAFE } });
     if (request.method !== "GET") return error(405, "GET only");
 
     const url = new URL(request.url);
     const parts = url.pathname.split("/").filter(Boolean);
+    const known = parts[0] === "stats" || parts[0] === "ranked" || parts[0] === "lookup";
+    if (known && overLimit(parts[0] === "lookup" ? "lookup" : "data", request)) {
+      return error(429, "Too many requests, slow down");
+    }
 
     if (parts[0] === "stats" && parts.length === 2 && ACCOUNT_ID.test(parts[1])) {
       return forward(`${OLI}/api/stats/${parts[1].toLowerCase()}`,
@@ -219,7 +266,12 @@ export default {
 
     if (parts[0] === "lookup" && parts.length === 1) {
       const name = (url.searchParams.get("name") || "").trim();
-      if (!name || name.length > 64) return error(400, "Pass ?name=<epic display name>");
+      // The name goes into api-fortnite.com's URL path, where "." or ".."
+      // would point at a different endpoint; control characters are never
+      // part of a real name.
+      if (!name || name.length > 64 || /^\.+$/.test(name) || /[\u0000-\u001f\u007f]/.test(name)) {
+        return error(400, "Pass ?name=<epic display name>");
+      }
       return lookup(name, env);
     }
 

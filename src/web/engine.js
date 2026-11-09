@@ -957,7 +957,15 @@
    * The engine: state, refreshing, and the /data answer
    * ---------------------------------------------------------------- */
 
-  function parseConfig(search) {
+  // Pages served from this PC (python -m http.server, a local file): a fork
+  // testing its own Worker. Only there does ?proxy= count.
+  var LOCAL_PAGE = /^(localhost|127\.0\.0\.1|\[::1\]|)$/;
+
+  // pageHost: location.hostname of the overlay page. Everywhere else the
+  // Worker is always DEFAULT_PROXY, so a link someone hands a streamer can't
+  // point their overlay at a server that feeds it made-up numbers or logs
+  // their IP. Forks set DEFAULT_PROXY instead.
+  function parseConfig(search, pageHost) {
     var q = new URLSearchParams(search || '');
     var refreshSec = parseInt(q.get('refresh') || '', 10);
     var refreshMs = isFinite(refreshSec) ? refreshSec * 1000 : REFRESH_MIN_MS;
@@ -967,7 +975,8 @@
       return /^[0-9a-fA-F]{6}$/.test(v) ? v.toLowerCase() : null;
     };
     var proxy = String(q.get('proxy') || '').trim().replace(/\/+$/, '');
-    if (!/^https:\/\/[^\s/]+(\/[^\s]*)?$/.test(proxy)) proxy = DEFAULT_PROXY;
+    var local = typeof pageHost === 'string' && LOCAL_PAGE.test(pageHost);
+    if (!local || !/^https:\/\/[^\s/?#]+(\/[^\s?#]*)?$/.test(proxy)) proxy = DEFAULT_PROXY;
     var change = String(q.get('elo') || 'today').toLowerCase();
     if (!hasOwn.call(CHANGE_WINDOWS, change)) change = 'today';
     return {
@@ -2232,7 +2241,7 @@
    * ---------------------------------------------------------------- */
 
   function startOverlay(search) {
-    var cfg = parseConfig(search);
+    var cfg = parseConfig(search, location.hostname);
     // Nothing below the rank: a class each design lays itself out for.
     if (cfg.bare) document.documentElement.classList.add('bare');
     var storage = null;

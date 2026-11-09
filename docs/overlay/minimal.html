@@ -258,7 +258,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=eefe2d9b41"></script>
+    <script src="../engine.js?v=e75edee388"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -281,6 +281,14 @@
         var modeBarBuilt = false;
 
         function $(s) { return document.querySelector(s); }
+
+        // Anything put into innerHTML goes through this, so a value that ever
+        // carries text can't turn into markup.
+        function esc(s) {
+            return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(ch) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+            });
+        }
 
         // "3 WINS, 1 LOSS" under the card when the link has ?rec=1.
         var SHOW_REC = new URLSearchParams(location.search).get('rec') === '1';
@@ -370,12 +378,12 @@
 
         function purpleNumeral(text) {
             if (!text) return '';
-            var parts = text.split(' ');
+            var parts = String(text).split(' ');
             var last  = parts[parts.length - 1];
             if (ROMAN[last]) {
-                return parts.slice(0, -1).join(' ') + ' <span class="purple">' + last + '</span>';
+                return esc(parts.slice(0, -1).join(' ')) + ' <span class="purple">' + esc(last) + '</span>';
             }
-            return text;
+            return esc(text);
         }
 
         function buildModeBar(modes) {
@@ -425,7 +433,7 @@
             if (d.is_unreal) {
                 var m = d.rank_display.match(/^(#\d+)\s+(.+)$/);
                 if (m) {
-                    rankEl.innerHTML = '<span class="purple">' + m[1] + '</span> ' + m[2];
+                    rankEl.innerHTML = '<span class="purple">' + esc(m[1]) + '</span> ' + esc(m[2]);
                 } else {
                     rankEl.textContent = d.rank_display;
                 }
@@ -434,8 +442,8 @@
 
                 if (d.next_gap && d.next_pos) {
                     nextCont.innerHTML =
-                        '<span class="highlight">' + d.next_gap + (d.next_unit || ' ELO') + '</span>' +
-                        ' to <span class="purple">#</span><span class="highlight">' + d.next_pos + '</span>';
+                        '<span class="highlight">' + esc(d.next_gap) + esc(d.next_unit || ' ELO') + '</span>' +
+                        ' to <span class="purple">#</span><span class="highlight">' + esc(d.next_pos) + '</span>';
                 } else {
                     nextCont.innerHTML =
                         '<span class="highlight">-</span> to ' +
@@ -453,11 +461,11 @@
 
                 if (d.pct_to_next !== null && d.pct_to_next !== undefined && d.next_rank_name) {
                     nextCont.innerHTML =
-                        '<span class="highlight">' + d.pct_to_next + '%</span>' +
+                        '<span class="highlight">' + esc(d.pct_to_next) + '%</span>' +
                         ' TO ' + purpleNumeral(d.next_rank_name);
                 } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
                     nextCont.innerHTML =
-                        '<span class="highlight">' + d.pct_to_next + '%</span> TO NEXT';
+                        '<span class="highlight">' + esc(d.pct_to_next) + '%</span> TO NEXT';
                 } else {
                     nextCont.textContent = '-';
                 }

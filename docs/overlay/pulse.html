@@ -404,7 +404,7 @@
         </div>
     </div>
 
-    <script src="../engine.js?v=eefe2d9b41"></script>
+    <script src="../engine.js?v=e75edee388"></script>
     <script>if (!window.RankedEngine) { var n = 0; try { n = +sessionStorage.getItem('ro-reloads') || 0; sessionStorage.setItem('ro-reloads', n + 1); } catch (e) {} setTimeout(function () { location.reload(); }, Math.min(60000, 5000 * Math.pow(2, n))); } else { try { sessionStorage.removeItem('ro-reloads'); } catch (e) {} }</script>
     <script>window.RankedOverlay = RankedEngine.startOverlay(location.search);</script>
     <script>
@@ -428,6 +428,14 @@
         var RING_CIRC    = 364.4;
 
         function $(s) { return document.querySelector(s); }
+
+        // Anything put into innerHTML goes through this, so a value that ever
+        // carries text can't turn into markup.
+        function esc(s) {
+            return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(ch) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+            });
+        }
 
         // "3 WINS, 1 LOSS" under the card when the link has ?rec=1.
         var SHOW_REC = new URLSearchParams(location.search).get('rec') === '1';
@@ -554,16 +562,16 @@
             if (isUnreal) {
                 var m = rankDisplay.match(/^(#\d+)\s+(.+)$/);
                 if (m) {
-                    el.innerHTML = '<span class="rank-num">' + m[1] + '</span> <span class="rank-name">' + m[2] + '</span>';
+                    el.innerHTML = '<span class="rank-num">' + esc(m[1]) + '</span> <span class="rank-name">' + esc(m[2]) + '</span>';
                 } else {
-                    el.innerHTML = '<span class="rank-name">' + rankDisplay + '</span>';
+                    el.innerHTML = '<span class="rank-name">' + esc(rankDisplay) + '</span>';
                 }
             } else {
                 var m2 = rankDisplay.match(/^(.+?)\s+(I{1,3}|IV|V?I{0,3})$/);
                 if (m2 && m2[2]) {
-                    el.innerHTML = '<span class="rank-name">' + m2[1] + '</span> <span class="rank-num">' + m2[2] + '</span>';
+                    el.innerHTML = '<span class="rank-name">' + esc(m2[1]) + '</span> <span class="rank-num">' + esc(m2[2]) + '</span>';
                 } else {
-                    el.innerHTML = '<span class="rank-name">' + rankDisplay + '</span>';
+                    el.innerHTML = '<span class="rank-name">' + esc(rankDisplay) + '</span>';
                 }
             }
         }

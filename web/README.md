@@ -29,7 +29,18 @@ can't read past #1000: paste the current `worker.js` in again (steps below).
    (exact name matches only).
 
 If you fork the repo, add your own GitHub Pages address to `ALLOWED_ORIGINS` in `worker.js`, and point
-`DEFAULT_PROXY` in `src/web/engine.js` at your Worker (then run `python tools/build.py`).
+`DEFAULT_PROXY` in `src/web/engine.js` at your Worker (then run `python tools/build.py`). An overlay link's
+`?proxy=<worker url>` only counts when the overlay page itself is served from your own PC (localhost or a local
+file), for trying out a Worker before you change `DEFAULT_PROXY`. On the real site it's ignored, so nobody can
+hand a streamer a link that feeds their overlay from somewhere else.
+
+## Limits
+
+Each visitor (IP address) gets 60 stats and leaderboard requests a minute and 15 name lookups, far more than any
+overlay uses. Past that the Worker answers 429 and the overlay backs off. This stops one script from hammering
+OliTracker through the Worker and getting it blocked for everyone. It doesn't protect the daily allowance below,
+because Cloudflare counts a request even when the Worker turns it away. If it ever runs out regularly, the
+Workers Paid plan ($5 a month) has no daily cap: 10 million requests a month included, then $0.30 per million.
 
 ## How many requests it uses
 

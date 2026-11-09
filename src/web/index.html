@@ -1559,7 +1559,24 @@
 
         /* --- boot --- */
         // An overlay link opened here (e.g. /?id=...) loads straight into the editor.
-        if (location.search && importLink(location.href)) {
+        // Someone else's link would quietly replace your saved account or
+        // creator code (and the next Copy OBS link would carry theirs), so
+        // that asks first. A first visit with nothing saved just loads it.
+        function linkReplacesYours(href) {
+          if (!hasAccount()) return false;
+          var q;
+          try { q = new URL(href).searchParams; } catch (e) { return false; }
+          var id = String(q.get('id') || '').toLowerCase();
+          var newAccount = RankedEngine.validAccountId(id) && id !== state.accountId;
+          var newCode = cleanCode(q.get('code') || '') !== '' && cleanCode(q.get('code')) !== cleanCode(state.code);
+          return newAccount || newCode;
+        }
+        if (location.search) {
+          var askFirst = linkReplacesYours(location.href);
+          if (!askFirst || window.confirm('This link has different settings from the ones you saved here ' +
+              '(another account or creator code). Load them and replace yours?')) {
+            importLink(location.href);
+          }
           history.replaceState(null, '', location.pathname);
         }
         accountInput.value = state.input || (hasAccount() ? state.accountId : '');

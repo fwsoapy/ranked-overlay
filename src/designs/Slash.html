@@ -429,6 +429,14 @@
 
         function $(s) { return document.querySelector(s); }
 
+        // Anything put into innerHTML goes through this, so a value that ever
+        // carries text can't turn into markup.
+        function esc(s) {
+            return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(ch) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+            });
+        }
+
         // "3 WINS, 1 LOSS" under the card when the link has ?rec=1.
         var SHOW_REC = new URLSearchParams(location.search).get('rec') === '1';
         function renderRecordLine(d) {
@@ -518,12 +526,12 @@
 
         function purpleNumeral(text) {
             if (!text) return '';
-            var parts = text.split(' ');
+            var parts = String(text).split(' ');
             var last  = parts[parts.length - 1];
             if (ROMAN[last]) {
-                return parts.slice(0, -1).join(' ') + ' <span class="accent">' + last + '</span>';
+                return esc(parts.slice(0, -1).join(' ')) + ' <span class="accent">' + esc(last) + '</span>';
             }
-            return text;
+            return esc(text);
         }
 
         function buildModeBar(modes) {
@@ -575,7 +583,7 @@
             if (d.is_unreal) {
                 var m = d.rank_display.match(/^(#\d+)\s+(.+)$/);
                 if (m) {
-                    rankEl.innerHTML = '<span class="accent">' + m[1] + '</span> ' + m[2];
+                    rankEl.innerHTML = '<span class="accent">' + esc(m[1]) + '</span> ' + esc(m[2]);
                 } else {
                     rankEl.textContent = d.rank_display;
                 }
@@ -587,8 +595,8 @@
 
                 if (d.next_gap && d.next_pos) {
                     nextText.innerHTML =
-                        '<span class="hl">' + d.next_gap + (d.next_unit || ' ELO') + '</span>' +
-                        ' TO <span class="accent">#</span><span class="hl">' + d.next_pos + '</span>';
+                        '<span class="hl">' + esc(d.next_gap) + esc(d.next_unit || ' ELO') + '</span>' +
+                        ' TO <span class="accent">#</span><span class="hl">' + esc(d.next_pos) + '</span>';
                 } else {
                     nextText.innerHTML = '<span class="hl">- ELO</span> TO <span class="accent">#</span><span class="hl">-</span>';
                 }
@@ -610,10 +618,10 @@
 
                 if (d.pct_to_next !== null && d.pct_to_next !== undefined && d.next_rank_name) {
                     nextText.innerHTML =
-                        '<span class="hl">' + d.pct_to_next + '%</span> TO ' +
+                        '<span class="hl">' + esc(d.pct_to_next) + '%</span> TO ' +
                         purpleNumeral(d.next_rank_name);
                 } else if (d.pct_to_next !== null && d.pct_to_next !== undefined) {
-                    nextText.innerHTML = '<span class="hl">' + d.pct_to_next + '%</span> TO NEXT';
+                    nextText.innerHTML = '<span class="hl">' + esc(d.pct_to_next) + '%</span> TO NEXT';
                 } else {
                     nextText.textContent = '-';
                 }
